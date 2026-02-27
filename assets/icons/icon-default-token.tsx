@@ -12,7 +12,7 @@ export const IconDefaultToken = (props: React.SVGProps<SVGSVGElement>) => {
         width="40"
         height="40"
         rx="20"
-        fill="#4F4F4F"
+        fill="#1A2535"
       />
     </svg>
   );

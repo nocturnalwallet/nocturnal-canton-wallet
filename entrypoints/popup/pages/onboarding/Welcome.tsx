@@ -98,8 +98,8 @@ export function Welcome({ onSuccess }: Props) {
   return (
     <div className="flex flex-col items-center justify-between h-full p-6 bg-background">
       <div className="flex-1 flex flex-col items-center justify-center gap-6">
-        <IconLogo className="w-32 h-12" />
-        <h1 className="text-2xl font-bold text-foreground">Canton Wallet</h1>
+        <IconLogo className="w-20 h-20" />
+        <h1 className="text-2xl font-bold text-foreground">Ginkgo</h1>
         <p className="text-sm text-muted-foreground text-center">
           Securely manage your Canton Network tokens
         </p>
@@ -115,7 +115,7 @@ export function Welcome({ onSuccess }: Props) {
           <button
             onClick={() => setNetworkOpen(!networkOpen)}
             disabled={isSwitching}
-            className="w-full flex items-center justify-center gap-2 rounded-xl border border-border py-2.5 px-4 text-sm font-medium text-muted-foreground hover:bg-secondary transition-colors disabled:opacity-50"
+            className="w-full flex items-center justify-center gap-2 rounded-xl border border-primary/30 bg-primary/5 py-2.5 px-4 text-sm font-medium text-foreground/70 hover:bg-primary/10 transition-colors disabled:opacity-50"
           >
             <span className={`w-2 h-2 rounded-full ${network ? NETWORK_DOT_COLORS[network] : 'bg-gray-400'}`} />
             {network ? NETWORKS[network].label : '...'}
@@ -123,15 +123,15 @@ export function Welcome({ onSuccess }: Props) {
           </button>
 
           {networkOpen && (
-            <div className="absolute left-0 right-0 bottom-full mb-1 z-50 rounded-lg border border-border bg-popover shadow-lg">
+            <div className="absolute left-0 right-0 bottom-full mb-1 z-50 rounded-lg border border-primary/20 bg-card shadow-lg shadow-black/30">
               {NETWORK_IDS.map((id) => (
                 <button
                   key={id}
                   onClick={() => handleSwitchNetwork(id)}
                   className={`w-full flex items-center gap-2 px-3 py-2 text-sm transition-colors first:rounded-t-lg last:rounded-b-lg ${
                     id === network
-                      ? 'bg-secondary text-foreground font-medium'
-                      : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+                      ? 'bg-primary/10 text-foreground font-medium'
+                      : 'text-muted-foreground hover:bg-primary/5 hover:text-foreground'
                   }`}
                 >
                   <span className={`w-2 h-2 rounded-full ${NETWORK_DOT_COLORS[id]}`} />

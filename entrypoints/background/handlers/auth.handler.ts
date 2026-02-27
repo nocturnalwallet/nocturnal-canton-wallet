@@ -37,7 +37,7 @@ export async function handleGoogleAuth(): Promise<MessageResponse<GoogleAuthData
     if (!GOOGLE_CLIENT_SECRET) return err('VITE_GOOGLE_CLIENT_SECRET is not configured');
 
     const redirectUri = chrome.identity.getRedirectURL();
-    console.log('[Canton Wallet] OAuth redirect URI:', redirectUri);
+    console.log('[Ginkgo] OAuth redirect URI:', redirectUri);
 
     // PKCE: generate verifier + challenge
     const codeVerifier = generateCodeVerifier();
@@ -88,7 +88,7 @@ export async function handleGoogleAuth(): Promise<MessageResponse<GoogleAuthData
 
     if (!tokenRes.ok) {
       const errBody = await tokenRes.text();
-      console.error('[Canton Wallet] Token exchange failed:', errBody);
+      console.error('[Ginkgo] Token exchange failed:', errBody);
       return err('Token exchange failed');
     }
 

@@ -63,7 +63,7 @@ import {
 } from './background/handlers/approval.handler';
 
 export default defineBackground(() => {
-  console.log('[Canton Wallet] Background service worker started');
+  console.log('[Ginkgo] Background service worker started');
 
   // Initialize network: migrate legacy data, set prefix & API URL, set user scope
   (async () => {

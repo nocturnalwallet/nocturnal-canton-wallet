@@ -59,8 +59,8 @@ export function KeySetup({ existingPublicKey, onNext, onBack }: Props) {
         <h1 className="text-xl font-bold text-foreground mb-2">Import Key</h1>
 
         {isExistingUser && (
-          <div className="flex gap-3 rounded-xl bg-yellow-500/10 border border-yellow-500/30 p-3 mb-4">
-            <AlertTriangleIcon className="w-5 h-5 text-yellow-500 shrink-0 mt-0.5" />
+          <div className="flex gap-3 rounded-xl bg-amber-400/10 border border-amber-400/30 p-3 mb-4">
+            <AlertTriangleIcon className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
             <div className="text-sm">
               <p className="font-medium text-foreground mb-1">
                 This account is already onboarded

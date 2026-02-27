@@ -83,7 +83,7 @@ export function DappApproval({ requestId }: Props) {
     <div className="flex flex-col h-full bg-background">
       {/* Header */}
       <div className="flex items-center justify-center gap-2 p-4 border-b border-border">
-        <IconLogo className="w-24 h-8" />
+        <IconLogo className="w-10 h-10" />
       </div>
 
       {/* Content */}

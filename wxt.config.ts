@@ -5,13 +5,13 @@ export default defineConfig({
   modules: ['@wxt-dev/module-react'],
   outDir: 'build',
   manifest: {
-    name: 'Canton Wallet',
-    description: 'Canton Network (Kairo) wallet browser extension with CIP-0103 dApp API support',
+    name: 'Ginkgo',
+    description: 'Ginkgo — Canton Network wallet browser extension with CIP-0103 dApp API support',
     version: '0.2.0',
     // Stable key pins the extension ID so the OAuth redirect URI stays consistent.
     // The redirect URI will be: https://<extension-id>.chromiumapp.org/
     // Register this URI in Google Cloud Console → OAuth 2.0 Client → Authorized redirect URIs.
-    key: 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEArtTfy73YDG/256XT2uWXrnqsVLPy3NogEEcK3AEoJobWtEqGbpn3xsizhbLDKYNf6v5IaEu1I2pyru8Wxd/ubx4fzONaOlImkRrNOS42ouuz7MZOqKvovphpAVEZ0A1EhFmlu3mVHJjAlzmq6nhMvt9uNhsNQkOmRG0aoks6mas3CsfH6Sr7BgkpWFcrGixzFvrnJt8A9BefpjHQmfWozGXEBlKEYc1ShZ2oz9rVpfmDb8oH03wZvlkuVkG/Iwjb028XObBn6BNkj2NRzHW6DfuGCG9H2NHEmbVkUT3mTy5T5jB0+yO47jfdo0dwpUVmBZJXRMsg+Roo01H6kbxUNwIDAQAB',
+    key: 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA1wm7Jt0cFnGf9ecUzFcSNx2NjY6ayMNQw8d4xgjW41L5ue7FRcODaFWngjxsdgiomU01LMgGHRD5eLbM7mi/iqKs0jYKooKRQk5TaDnZyAHtluDTzeCLBa+QXBJbx3qC88vWRSoDkmEIq6EQ0KlAk3o120IXRY6UYdn6TXXvqLo4vhWya8WfBTLorQtJJo7ByghgIFXDkSYiAvaSeiPAf2bxGU8l+HXJHIYouKECJHPoBW3CB626HXUWVeFeysEl4i/JNgdL5TAmb8KmaSly2T0q2KG7vXn+Dax2yUwGv2Y9X30Nw+8BZAAXd8N2goETWtXeZtgLZ5lxHCS6kkgksQIDAQAB',
     permissions: ['storage', 'identity', 'alarms'],
     host_permissions: [
       'https://accounts.google.com/*',

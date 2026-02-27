@@ -58,14 +58,14 @@ export function Transfer() {
           senderPartyId: partyId,
           receiverPartyId: recipient,
           amount,
-          reason: 'Transfer from Canton Wallet',
+          reason: 'Transfer from Ginkgo',
         });
       } else {
         result = await prepareStandard.mutateAsync({
           assetId: tokenId,
           assetAmount: amount,
           receiverPartyId: recipient,
-          reason: 'Transfer from Canton Wallet',
+          reason: 'Transfer from Ginkgo',
           maxTimeToExecute: 24,
         });
       }
@@ -101,7 +101,7 @@ export function Transfer() {
   if (step === 'success') {
     return (
       <div className="flex flex-col items-center justify-center h-full p-6 gap-4">
-        <CheckCircleIcon className="w-16 h-16 text-green-500" />
+        <CheckCircleIcon className="w-16 h-16 text-positive" />
         <h2 className="text-lg font-bold text-foreground">Transfer Sent</h2>
         <p className="text-sm text-muted-foreground text-center">
           {amount} {tokenId} sent to recipient
@@ -194,7 +194,7 @@ export function Transfer() {
           <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground">
             <span>Available: <span className="text-foreground font-medium">{availableBalance.toFormat()}</span></span>
             {lockedBalance.gt(0) && (
-              <span>Locked: <span className="text-yellow-500 font-medium">{lockedBalance.toFormat()}</span></span>
+              <span>Locked: <span className="text-amber-400 font-medium">{lockedBalance.toFormat()}</span></span>
             )}
           </div>
         )}

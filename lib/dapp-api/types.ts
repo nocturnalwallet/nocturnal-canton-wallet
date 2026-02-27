@@ -1,5 +1,5 @@
 /**
- * CIP-0103 dApp API types for Canton wallet extension.
+ * CIP-0103 dApp API types for Ginkgo wallet extension.
  *
  * Minimal inline definitions matching @canton-network/core-types SpliceMessage format.
  * This avoids pulling in the full @canton-network/core-types package and its transitive

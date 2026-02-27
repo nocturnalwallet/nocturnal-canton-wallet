@@ -20,7 +20,7 @@ function App() {
   return (
     <div className="min-h-screen bg-background">
       <div className="max-w-3xl mx-auto py-8 px-6">
-        <h1 className="text-2xl font-bold text-foreground mb-8">Canton Wallet Settings</h1>
+        <h1 className="text-2xl font-bold text-foreground mb-8">Ginkgo Settings</h1>
 
         <div className="flex gap-6">
           {/* Sidebar */}
@@ -189,7 +189,7 @@ function ExportKeySection() {
                 onClick={handleCopy}
                 className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
               >
-                {copied ? <CheckIcon className="w-3.5 h-3.5 text-green-500" /> : <CopyIcon className="w-3.5 h-3.5" />}
+                {copied ? <CheckIcon className="w-3.5 h-3.5 text-positive" /> : <CopyIcon className="w-3.5 h-3.5" />}
                 {copied ? 'Copied' : 'Copy'}
               </button>
             </div>
@@ -303,11 +303,11 @@ function AboutSection() {
   useEffect(() => {
     sendMessage<NetworkData>({ action: MSG.GET_NETWORK })
       .then((data) => {
-        setNetworkLabel(`Canton (Kairo) — ${data.config.label}`);
+        setNetworkLabel(`Canton — ${data.config.label}`);
         setApiUrl(data.config.apiBaseUrl);
       })
       .catch(() => {
-        setNetworkLabel('Canton (Kairo)');
+        setNetworkLabel('Canton');
         setApiUrl('Unknown');
       });
   }, []);
@@ -315,7 +315,7 @@ function AboutSection() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-semibold text-foreground mb-1">About Canton Wallet</h2>
+        <h2 className="text-lg font-semibold text-foreground mb-1">About Ginkgo</h2>
         <p className="text-sm text-muted-foreground">
           A secure browser extension wallet for the Canton Network.
         </p>

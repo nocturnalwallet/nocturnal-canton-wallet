@@ -57,11 +57,11 @@ export function Activity() {
             key={`${item.updateId}-${i}`}
             className="rounded-xl bg-secondary p-3 flex items-center gap-3"
           >
-            <div className={`rounded-full p-2 ${isSender ? 'bg-red-500/20' : 'bg-green-500/20'}`}>
+            <div className={`rounded-full p-2 ${isSender ? 'bg-red-500/20' : 'bg-positive/20'}`}>
               {isSender ? (
                 <ArrowUpRightIcon className="w-4 h-4 text-red-400" />
               ) : (
-                <ArrowDownLeftIcon className="w-4 h-4 text-green-400" />
+                <ArrowDownLeftIcon className="w-4 h-4 text-positive" />
               )}
             </div>
 
@@ -75,7 +75,7 @@ export function Activity() {
             </div>
 
             <div className="text-right flex items-center gap-1">
-              <p className={`text-sm font-medium ${isSender ? 'text-red-400' : 'text-green-400'}`}>
+              <p className={`text-sm font-medium ${isSender ? 'text-red-400' : 'text-positive'}`}>
                 {isSender ? '-' : '+'}
                 {new BigNumber(item.amount).toFormat()}
               </p>

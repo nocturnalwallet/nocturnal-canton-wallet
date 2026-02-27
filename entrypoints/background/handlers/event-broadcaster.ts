@@ -22,7 +22,7 @@ async function buildStatusEvent() {
 
   return {
     provider: {
-      id: 'canton-wallet',
+      id: 'ginkgo',
       version: '0.2.0',
       providerType: 'browser',
     },

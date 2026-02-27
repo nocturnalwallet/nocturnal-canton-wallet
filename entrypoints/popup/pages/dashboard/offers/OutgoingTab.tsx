@@ -42,7 +42,7 @@ export function OutgoingTab() {
             <p className="text-sm font-medium text-foreground">
               {new BigNumber(item.amount).toFormat()} {item.tokenName}
             </p>
-            <div className="flex items-center gap-1 text-xs text-blue-400">
+            <div className="flex items-center gap-1 text-xs text-amber-400">
               <LockIcon className="w-3 h-3" /> Locked
             </div>
           </div>

@@ -101,7 +101,7 @@ export function Dashboard({ onLock, onLogout }: Props) {
     <div className="flex flex-col h-full bg-background">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-        <h1 className="text-sm font-bold text-foreground">Canton Wallet</h1>
+        <h1 className="text-sm font-bold text-foreground">Ginkgo</h1>
 
         <div className="flex items-center gap-1.5">
           {/* Network selector */}
@@ -167,7 +167,7 @@ export function Dashboard({ onLock, onLogout }: Props) {
                   className="shrink-0 p-0.5 text-muted-foreground hover:text-foreground transition-colors"
                 >
                   {copiedPartyId ? (
-                    <CheckIcon className="w-3 h-3 text-green-500" />
+                    <CheckIcon className="w-3 h-3 text-positive" />
                   ) : (
                     <CopyIcon className="w-3 h-3" />
                   )}

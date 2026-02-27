@@ -79,8 +79,8 @@ export function CreatePassword({ onNext, onReset, isLocalnet }: Props) {
         <div className="space-y-1">
           {PASSWORD_RULES.map((rule) => (
             <div key={rule.label} className="flex items-center gap-2 text-xs">
-              <div className={`w-1.5 h-1.5 rounded-full ${rule.test(password) ? 'bg-green-500' : 'bg-muted-foreground'}`} />
-              <span className={rule.test(password) ? 'text-green-500' : 'text-muted-foreground'}>
+              <div className={`w-1.5 h-1.5 rounded-full ${rule.test(password) ? 'bg-positive' : 'bg-muted-foreground'}`} />
+              <span className={rule.test(password) ? 'text-positive' : 'text-muted-foreground'}>
                 {rule.label}
               </span>
             </div>

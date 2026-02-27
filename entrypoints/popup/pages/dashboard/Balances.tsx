@@ -75,10 +75,10 @@ export function Balances() {
     <div className="p-4 space-y-3">
       {/* Transfer pre-approval banner — always visible when no active preapproval */}
       {showPreapprovalBanner && (
-        <div className="rounded-xl bg-yellow-500/10 border border-yellow-500/30 p-3">
+        <div className="rounded-xl bg-amber-400/10 border border-amber-400/30 p-3">
           <div className="flex items-center gap-2 mb-2">
-            <ShieldCheckIcon className="w-4 h-4 text-yellow-500 shrink-0" />
-            <p className="text-xs font-medium text-yellow-500">
+            <ShieldCheckIcon className="w-4 h-4 text-amber-400 shrink-0" />
+            <p className="text-xs font-medium text-amber-400">
               Transfer pre-approval not active
             </p>
           </div>
@@ -91,7 +91,7 @@ export function Balances() {
           <button
             onClick={handleRegisterPreapproval}
             disabled={registerPreapproval.isPending}
-            className="w-full rounded-lg bg-yellow-500 text-black py-1.5 text-xs font-medium disabled:opacity-50 transition-opacity"
+            className="w-full rounded-lg bg-primary text-primary-foreground py-1.5 text-xs font-medium disabled:opacity-50 transition-opacity"
           >
             {registerPreapproval.isPending ? (
               <Loader2Icon className="w-3.5 h-3.5 animate-spin mx-auto" />
@@ -104,9 +104,9 @@ export function Balances() {
 
       {/* Success message after registration */}
       {showSuccess && (
-        <div className="rounded-xl bg-green-500/10 border border-green-500/30 p-3 flex items-center gap-2">
-          <CheckCircle2Icon className="w-4 h-4 text-green-500 shrink-0" />
-          <p className="text-xs font-medium text-green-500">
+        <div className="rounded-xl bg-positive/10 border border-positive/30 p-3 flex items-center gap-2">
+          <CheckCircle2Icon className="w-4 h-4 text-positive shrink-0" />
+          <p className="text-xs font-medium text-positive">
             Transfer pre-approval registered successfully!
           </p>
         </div>
@@ -149,7 +149,7 @@ export function Balances() {
               <div className="text-right">
                 <p className="font-medium text-foreground">{total.toFormat()}</p>
                 {new BigNumber(b.locked ?? '0').gt(0) && (
-                  <p className="text-xs text-yellow-500">
+                  <p className="text-xs text-amber-400">
                     Locked: {new BigNumber(b.locked ?? '0').toFormat()}
                   </p>
                 )}

@@ -31,7 +31,7 @@ export function Unlock({ onSuccess, onLogout }: Props) {
   return (
     <div className="flex flex-col items-center justify-between h-full p-6 bg-background">
       <div className="flex-1 flex flex-col items-center justify-center gap-4">
-        <IconLogo className="w-28 h-10" />
+        <IconLogo className="w-16 h-16" />
         <div className="rounded-full bg-secondary p-4">
           <LockIcon className="w-8 h-8 text-primary" />
         </div>

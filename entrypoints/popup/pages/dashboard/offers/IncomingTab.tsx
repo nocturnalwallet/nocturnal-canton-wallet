@@ -122,7 +122,7 @@ export function IncomingTab() {
               <button
                 onClick={() => handlePrepare(item.contractId, item.instrumentId?.id ?? '', 'approve')}
                 disabled={prepareApprove.isPending}
-                className="flex-1 flex items-center justify-center gap-1 rounded-lg bg-green-600 text-white py-2 text-xs font-medium"
+                className="flex-1 flex items-center justify-center gap-1 rounded-lg bg-primary text-primary-foreground py-2 text-xs font-medium"
               >
                 <CheckIcon className="w-3.5 h-3.5" /> Approve
               </button>

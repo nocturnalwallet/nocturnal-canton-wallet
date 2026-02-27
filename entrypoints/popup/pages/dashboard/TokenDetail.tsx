@@ -70,7 +70,7 @@ export function TokenDetail({ balance, onBack }: Props) {
         <div className="rounded-xl bg-secondary p-4 space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <UnlockIcon className="w-4 h-4 text-green-400" />
+              <UnlockIcon className="w-4 h-4 text-positive" />
               <span className="text-sm text-muted-foreground">Available</span>
             </div>
             <span className="text-sm font-medium text-foreground">{unlocked.toFormat()}</span>
@@ -80,7 +80,7 @@ export function TokenDetail({ balance, onBack }: Props) {
 
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <LockIcon className="w-4 h-4 text-yellow-500" />
+              <LockIcon className="w-4 h-4 text-amber-400" />
               <span className="text-sm text-muted-foreground">Locked</span>
             </div>
             <span className="text-sm font-medium text-foreground">{locked.toFormat()}</span>
@@ -123,7 +123,7 @@ export function TokenDetail({ balance, onBack }: Props) {
                   className="rounded-lg bg-background p-3 flex items-center justify-between"
                 >
                   <div className="flex items-center gap-2">
-                    <LockIcon className="w-3.5 h-3.5 text-yellow-500 shrink-0" />
+                    <LockIcon className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                     <span className="text-sm font-medium text-foreground">
                       {new BigNumber(detail.amount).toFormat()}
                     </span>
@@ -182,7 +182,7 @@ export function TokenDetail({ balance, onBack }: Props) {
               {faucetLoading ? 'Requesting...' : `Request ${faucetAmount || '0'} Amulet`}
             </button>
             {faucetSuccess && (
-              <p className="text-xs text-green-400 text-center">Faucet request sent!</p>
+              <p className="text-xs text-positive text-center">Faucet request sent!</p>
             )}
             {faucetError && (
               <p className="text-xs text-red-400 text-center">{faucetError}</p>

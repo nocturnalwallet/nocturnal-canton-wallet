@@ -5,10 +5,10 @@ import { format } from '@lib/format';
 import BigNumber from 'bignumber.js';
 
 const STATUS_CONFIG: Record<string, { color: string; icon: React.FC<{ className?: string }> }> = {
-  APPROVED: { color: 'text-green-500', icon: CheckCircleIcon },
+  APPROVED: { color: 'text-positive', icon: CheckCircleIcon },
   CANCELLED: { color: 'text-red-500', icon: XCircleIcon },
   REJECTED: { color: 'text-red-500', icon: XCircleIcon },
-  LOCKED: { color: 'text-yellow-500', icon: LockIcon },
+  LOCKED: { color: 'text-amber-400', icon: LockIcon },
   EXPIRED: { color: 'text-gray-400', icon: AlertTriangleIcon },
 };
 

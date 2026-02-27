@@ -112,27 +112,27 @@ export async function handleCompleteOnboarding(payload: {
 
     // Re-fetch partyId from backend (it may have been assigned during onboarding submit)
     let partyId = await sessionStore.get('partyId');
-    console.log('[Canton Wallet] Transfer preapproval: partyId from session =', partyId);
+    console.log('[Ginkgo] Transfer preapproval: partyId from session =', partyId);
     if (!partyId) {
       try {
         const { data: meData } = await apiClient.get('/auth/me');
         partyId = meData.data?.party?.partyId ?? null;
-        console.log('[Canton Wallet] Transfer preapproval: partyId from /auth/me =', partyId);
+        console.log('[Ginkgo] Transfer preapproval: partyId from /auth/me =', partyId);
         if (partyId) await sessionStore.set('partyId', partyId);
       } catch (e) {
-        console.warn('[Canton Wallet] Transfer preapproval: failed to fetch partyId', e);
+        console.warn('[Ginkgo] Transfer preapproval: failed to fetch partyId', e);
       }
     }
 
     // Set up transfer preapproval: prepare → sign → submit (both new and existing users)
     if (partyId) {
       try {
-        console.log('[Canton Wallet] Transfer preapproval: preparing for partyId =', partyId);
+        console.log('[Ginkgo] Transfer preapproval: preparing for partyId =', partyId);
         const { data: prepareData } = await apiClient.post(
           '/transfer-preapproval/prepare',
           { partyId },
         );
-        console.log('[Canton Wallet] Transfer preapproval: prepare response =', prepareData);
+        console.log('[Ginkgo] Transfer preapproval: prepare response =', prepareData);
         const sig = signTransactionHash(
           prepareData.data.preparedTransactionHash,
           privateKey,
@@ -146,12 +146,12 @@ export async function handleCompleteOnboarding(payload: {
           preparedTransactionHash: prepareData.data.preparedTransactionHash,
           partyId,
         });
-        console.log('[Canton Wallet] Transfer preapproval: submitted successfully');
+        console.log('[Ginkgo] Transfer preapproval: submitted successfully');
       } catch (e) {
-        console.warn('[Canton Wallet] Transfer preapproval: failed', e);
+        console.warn('[Ginkgo] Transfer preapproval: failed', e);
       }
     } else {
-      console.warn('[Canton Wallet] Transfer preapproval: skipped — no partyId available');
+      console.warn('[Ginkgo] Transfer preapproval: skipped — no partyId available');
     }
 
     // Cache the private key in memory so dashboard features (like preapproval) work without re-entering password

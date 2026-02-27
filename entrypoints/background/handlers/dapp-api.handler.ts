@@ -1,5 +1,5 @@
 /**
- * CIP-0103 dApp API handler for Canton Wallet extension.
+ * CIP-0103 dApp API handler for Ginkgo wallet extension.
  *
  * Implements the subset of the CIP-0103 dApp API methods needed for the prototype:
  * - connect / disconnect / isConnected / status
@@ -74,7 +74,7 @@ export async function buildDappAccount(): Promise<DappAccount | null> {
     publicKey,
     namespace: namespace || '',
     networkId,
-    signingProviderId: 'canton-wallet',
+    signingProviderId: 'ginkgo',
   };
 }
 
@@ -117,7 +117,7 @@ async function handleStatus(): Promise<unknown> {
 
   return {
     provider: {
-      id: 'canton-wallet',
+      id: 'ginkgo',
       version: '0.2.0',
       providerType: 'browser',
     },
@@ -210,7 +210,7 @@ async function handleSignTransaction(params: unknown): Promise<{
 
 function notImplemented(methodName: string): () => Promise<never> {
   return async () => {
-    throw new Error(`${methodName} is not yet implemented by canton-wallet`);
+    throw new Error(`${methodName} is not yet implemented by Ginkgo`);
   };
 }
 

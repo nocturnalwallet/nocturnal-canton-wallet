@@ -438,7 +438,7 @@ OAuth redirect URIs, party IDs, and transaction flow data are logged to the cons
 
 **File:** `wxt.config.ts` (lines 11–14)
 
-The RSA public key is hardcoded to pin the extension ID to `hkhgclidlnedbeohbpljglnofmepecdo`. If the corresponding private key is leaked, an attacker can publish a malicious extension with the same ID.
+The RSA public key is hardcoded to pin the extension ID to `nedmfnmjfdneopknpheohpcngdaeipec`. If the corresponding private key is leaked, an attacker can publish a malicious extension with the same ID.
 
 ---
 

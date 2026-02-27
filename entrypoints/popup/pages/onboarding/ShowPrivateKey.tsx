@@ -77,7 +77,7 @@ export function ShowPrivateKey({ privateKey, onNext, onBack }: Props) {
             onClick={handleCopy}
             className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
           >
-            {copied ? <CheckIcon className="w-3.5 h-3.5 text-green-500" /> : <CopyIcon className="w-3.5 h-3.5" />}
+            {copied ? <CheckIcon className="w-3.5 h-3.5 text-positive" /> : <CopyIcon className="w-3.5 h-3.5" />}
             {copied ? 'Copied' : 'Copy'}
           </button>
         </div>
