@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { WalletIcon, SendIcon, InboxIcon, HistoryIcon, SettingsIcon, ChevronDownIcon, CopyIcon, CheckIcon } from 'lucide-react';
+import { IconLogo } from '@assets/icons/icon-logo';
 import { Balances } from './Balances';
 import { Transfer } from './Transfer';
 import { Offers } from './offers';
@@ -100,8 +101,11 @@ export function Dashboard({ onLock, onLogout }: Props) {
   return (
     <div className="flex flex-col h-full bg-background">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-        <h1 className="text-sm font-bold text-foreground">Ginkgo</h1>
+      <div className="flex items-center justify-between px-4 py-3 border-b border-primary/15 bg-primary/5">
+        <div className="flex items-center gap-1.5">
+          <IconLogo className="w-5 h-5" />
+          <h1 className="text-sm font-bold text-primary">Ginkgo</h1>
+        </div>
 
         <div className="flex items-center gap-1.5">
           {/* Network selector */}
@@ -117,15 +121,15 @@ export function Dashboard({ onLock, onLogout }: Props) {
             </button>
 
             {networkDropdownOpen && (
-              <div className="absolute right-0 top-full mt-1 z-50 w-36 rounded-lg border border-border bg-popover shadow-lg">
+              <div className="absolute right-0 top-full mt-1 z-50 w-36 rounded-lg border border-primary/20 bg-card shadow-lg shadow-black/30">
                 {NETWORK_IDS.map((id) => (
                   <button
                     key={id}
                     onClick={() => handleSwitchNetwork(id)}
                     className={`w-full flex items-center gap-2 px-3 py-2 text-xs transition-colors first:rounded-t-lg last:rounded-b-lg ${
                       id === network
-                        ? 'bg-secondary text-foreground font-medium'
-                        : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+                        ? 'bg-primary/10 text-foreground font-medium'
+                        : 'text-muted-foreground hover:bg-primary/5 hover:text-foreground'
                     }`}
                   >
                     <span className={`w-2 h-2 rounded-full ${NETWORK_DOT_COLORS[id]}`} />
