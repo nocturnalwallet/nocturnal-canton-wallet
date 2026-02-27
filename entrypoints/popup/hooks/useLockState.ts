@@ -1,8 +1,22 @@
+import { useEffect } from 'react';
 import { sendMessage, MSG } from '@lib/messaging';
 import type { LockStateData } from '@lib/messaging';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 export function useLockState() {
+  const queryClient = useQueryClient();
+
+  // Listen for background auto-lock (session storage change)
+  useEffect(() => {
+    const listener = (changes: Record<string, chrome.storage.StorageChange>) => {
+      if ('unlocked' in changes) {
+        queryClient.invalidateQueries({ queryKey: ['lockState'] });
+      }
+    };
+    chrome.storage.session.onChanged.addListener(listener);
+    return () => chrome.storage.session.onChanged.removeListener(listener);
+  }, [queryClient]);
+
   return useQuery({
     queryKey: ['lockState'],
     queryFn: () => sendMessage<LockStateData>({ action: MSG.GET_LOCK_STATE }),

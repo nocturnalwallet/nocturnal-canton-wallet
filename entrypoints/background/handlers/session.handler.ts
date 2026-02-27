@@ -20,6 +20,7 @@ export function getCachedPrivateKey(): string | null {
 export function setupAutoLock(): void {
   chrome.alarms.onAlarm.addListener(async (alarm) => {
     if (alarm.name === ALARM_NAME) {
+      _cachedPrivateKey = null;
       await sessionStore.set('unlocked', false);
     }
   });

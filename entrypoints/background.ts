@@ -13,6 +13,7 @@ import {
 } from './background/handlers/auth.handler';
 import {
   setupAutoLock,
+  resetAutoLockTimer,
   handleUnlock,
   handleLock,
   handleGetLockState,
@@ -124,6 +125,12 @@ export default defineBackground(() => {
 });
 
 async function routeMessage(message: MessageRequest) {
+  // Reset auto-lock timer on user activity (skip read-only state checks)
+  const skipReset = [MSG.GET_AUTH_STATE, MSG.GET_LOCK_STATE, MSG.GET_NETWORK, MSG.GET_DAPP_APPROVAL];
+  if (!skipReset.includes(message.action as (typeof skipReset)[number])) {
+    resetAutoLockTimer();
+  }
+
   switch (message.action) {
     // Auth
     case MSG.GOOGLE_AUTH:
