@@ -10,6 +10,7 @@
  * 3. On 'sign-request': show approval popup, sign, sendSignResponse
  * 4. On lock/disconnect: disconnect()
  */
+import { signTransactionHash, getPublicKeyFromPrivate } from '@canton-network/core-signing-lib';
 import { io, type Socket } from 'socket.io-client';
 import { getCachedPrivateKey, resetAutoLockTimer } from '../handlers/session.handler';
 import { requestApproval } from '../handlers/approval.handler';
@@ -119,10 +120,6 @@ class SigningRelayClient {
         });
         return;
       }
-
-      const { signTransactionHash, getPublicKeyFromPrivate } = await import(
-        '@canton-network/core-signing-lib'
-      );
 
       const signature = signTransactionHash(request.txHash, privateKey);
       const publicKey = getPublicKeyFromPrivate(privateKey);

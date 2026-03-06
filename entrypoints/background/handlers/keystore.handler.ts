@@ -1,3 +1,4 @@
+import { createKeyPair, getPublicKeyFromPrivate } from '@canton-network/core-signing-lib';
 import { ok, err } from '@lib/messaging';
 import type { MessageResponse, KeyPairData, OnboardingPrepareData, PreapprovalStatusData } from '@lib/messaging';
 import { localStore, sessionStore } from '@lib/storage';
@@ -10,8 +11,6 @@ import type { CreateWalletParams, CreateWalletResult } from '@lib/dapp-api/gatew
 
 export async function handleCreateKeypair(): Promise<MessageResponse<KeyPairData>> {
   try {
-    // Dynamic import to avoid bundling in popup
-    const { createKeyPair } = await import('@canton-network/core-signing-lib');
     const keypair = createKeyPair();
 
     return ok({
@@ -31,9 +30,6 @@ export async function handleValidateImportKey(
     // Accept both hex and base64 — normalize to base64 for the signing lib
     const privateKey = isHex(rawKey) ? hexToBase64(rawKey) : rawKey;
 
-    const { getPublicKeyFromPrivate } = await import(
-      '@canton-network/core-signing-lib'
-    );
     const publicKey = getPublicKeyFromPrivate(privateKey);
 
     // If an expected public key is provided, verify the imported key matches.

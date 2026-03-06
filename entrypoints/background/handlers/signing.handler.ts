@@ -1,3 +1,4 @@
+import { signTransactionHash, getPublicKeyFromPrivate } from '@canton-network/core-signing-lib';
 import { ok, err } from '@lib/messaging';
 import type { MessageResponse } from '@lib/messaging';
 import type {
@@ -32,10 +33,7 @@ async function verifyCurrentParty(expectedPartyId?: string): Promise<string> {
  *
  * Fingerprint = hex(0x1220 || SHA256(int32_be(12) || raw_pubkey_bytes))
  */
-async function verifyKeyFingerprint(privateKey: string, partyId: string): Promise<void> {
-  const { getPublicKeyFromPrivate } = await import('@canton-network/core-signing-lib');
-  const publicKeyBase64 = getPublicKeyFromPrivate(privateKey);
-
+async function verifyKeyFingerprint(publicKeyBase64: string, partyId: string): Promise<void> {
   // Decode base64 public key to raw bytes
   const raw = atob(publicKeyBase64);
   const pubKeyBytes = new Uint8Array(raw.length);
@@ -69,26 +67,39 @@ async function verifyKeyFingerprint(privateKey: string, partyId: string): Promis
   }
 }
 
+/**
+ * Decrypt the private key, derive public key, verify fingerprint, and sign the hash.
+ * Returns { signature, publicKey } for inclusion in submit requests.
+ */
+async function signAndVerify(
+  password: string,
+  partyId: string,
+  preparedTransactionHash: string,
+): Promise<{ signature: string; publicKey: string }> {
+  const privateKey = await decryptKey(password);
+  const publicKey = getPublicKeyFromPrivate(privateKey);
+  await verifyKeyFingerprint(publicKey, partyId);
+  const signature = signTransactionHash(preparedTransactionHash, privateKey);
+  return { signature, publicKey };
+}
+
 export async function handleSignAndSubmitTransferPreapproval(payload: {
   password: string;
   preparedData: PrepareTransferResponse;
 }): Promise<MessageResponse<{ success: boolean }>> {
   try {
     const { password, preparedData } = payload;
-    await verifyCurrentParty(preparedData.senderPartyId);
-    const privateKey = await decryptKey(password);
-    await verifyKeyFingerprint(privateKey, preparedData.senderPartyId);
-
-    const { signTransactionHash } = await import(
-      '@canton-network/core-signing-lib'
+    const partyId = await verifyCurrentParty(preparedData.senderPartyId);
+    const { signature, publicKey } = await signAndVerify(
+      password, partyId, preparedData.preparedTransactionHash,
     );
-
-    const signature = signTransactionHash(preparedData.preparedTransactionHash, privateKey);
 
     await apiClient.post('/external-party/transfer-amulet/submit', {
       preparedTransaction: preparedData.preparedTransaction,
+      preparedTransactionHash: preparedData.preparedTransactionHash,
       hashingSchemeVersion: preparedData.hashingSchemeVersion,
       signature,
+      publicKey,
       senderPartyId: preparedData.senderPartyId,
       receiverPartyId: preparedData.receiverPartyId,
       amount: preparedData.amount,
@@ -108,21 +119,15 @@ export async function handleSignAndSubmitTransferTokenStandard(payload: {
   try {
     const { password, preparedData } = payload;
     const partyId = await verifyCurrentParty();
-    const privateKey = await decryptKey(password);
-    await verifyKeyFingerprint(privateKey, partyId);
-
-    const { signTransactionHash } = await import(
-      '@canton-network/core-signing-lib'
-    );
-
-    const signature = signTransactionHash(
-      preparedData.preparedTransactionHash,
-      privateKey,
+    const { signature, publicKey } = await signAndVerify(
+      password, partyId, preparedData.preparedTransactionHash,
     );
 
     await apiClient.post('/offers/submit', {
       preparedTransaction: preparedData.preparedTransaction,
+      preparedTransactionHash: preparedData.preparedTransactionHash,
       signature,
+      publicKey,
     });
 
     resetAutoLockTimer();
@@ -140,20 +145,15 @@ export async function handleSignAndSubmitApprove(payload: {
   try {
     const { password, preparedData, contractId } = payload;
     const partyId = await verifyCurrentParty();
-    const privateKey = await decryptKey(password);
-    await verifyKeyFingerprint(privateKey, partyId);
-
-    const { signTransactionHash } = await import(
-      '@canton-network/core-signing-lib'
-    );
-    const signature = signTransactionHash(
-      preparedData.preparedTransactionHash,
-      privateKey,
+    const { signature, publicKey } = await signAndVerify(
+      password, partyId, preparedData.preparedTransactionHash,
     );
 
     await apiClient.post('/offers/approve/submit', {
       preparedTransaction: preparedData.preparedTransaction,
+      preparedTransactionHash: preparedData.preparedTransactionHash,
       signature,
+      publicKey,
       contractId,
     });
 
@@ -172,20 +172,15 @@ export async function handleSignAndSubmitReject(payload: {
   try {
     const { password, preparedData, contractId } = payload;
     const partyId = await verifyCurrentParty();
-    const privateKey = await decryptKey(password);
-    await verifyKeyFingerprint(privateKey, partyId);
-
-    const { signTransactionHash } = await import(
-      '@canton-network/core-signing-lib'
-    );
-    const signature = signTransactionHash(
-      preparedData.preparedTransactionHash,
-      privateKey,
+    const { signature, publicKey } = await signAndVerify(
+      password, partyId, preparedData.preparedTransactionHash,
     );
 
     await apiClient.post('/offers/reject/submit', {
       preparedTransaction: preparedData.preparedTransaction,
+      preparedTransactionHash: preparedData.preparedTransactionHash,
       signature,
+      publicKey,
       contractId,
     });
 
@@ -204,20 +199,15 @@ export async function handleSignAndSubmitWithdraw(payload: {
   try {
     const { password, preparedData, contractId } = payload;
     const partyId = await verifyCurrentParty();
-    const privateKey = await decryptKey(password);
-    await verifyKeyFingerprint(privateKey, partyId);
-
-    const { signTransactionHash } = await import(
-      '@canton-network/core-signing-lib'
-    );
-    const signature = signTransactionHash(
-      preparedData.preparedTransactionHash,
-      privateKey,
+    const { signature, publicKey } = await signAndVerify(
+      password, partyId, preparedData.preparedTransactionHash,
     );
 
     await apiClient.post('/offers/withdraw/submit', {
       preparedTransaction: preparedData.preparedTransaction,
+      preparedTransactionHash: preparedData.preparedTransactionHash,
       signature,
+      publicKey,
       contractId,
     });
 
@@ -227,4 +217,3 @@ export async function handleSignAndSubmitWithdraw(payload: {
     return err(e instanceof Error ? e.message : 'Withdraw failed');
   }
 }
-

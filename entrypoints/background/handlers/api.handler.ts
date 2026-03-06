@@ -1,3 +1,4 @@
+import { signTransactionHash, getPublicKeyFromPrivate } from '@canton-network/core-signing-lib';
 import { ok, err } from '@lib/messaging';
 import type {
   MessageResponse,
@@ -222,15 +223,15 @@ export async function handleRequestFaucet(
     }
 
     // Step 2: Sign locally
-    const { signTransactionHash } = await import(
-      '@canton-network/core-signing-lib'
-    );
     const signature = signTransactionHash(prepared.preparedTransactionHash, privateKey);
+    const publicKey = getPublicKeyFromPrivate(privateKey);
 
     // Step 3: Submit signed transaction to dapp-core
     await apiClient.post('/external-party/devnet-tap/submit', {
       preparedTransaction: prepared.preparedTransaction,
+      preparedTransactionHash: prepared.preparedTransactionHash,
       signature,
+      publicKey,
       partyId,
     });
 

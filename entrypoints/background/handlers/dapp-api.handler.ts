@@ -8,6 +8,7 @@
  * - prepareExecute / prepareExecuteAndWait (via Wallet Gateway)
  * - ledgerApi (proxy to Wallet Gateway)
  */
+import { signTransactionHash, getPublicKeyFromPrivate } from '@canton-network/core-signing-lib';
 import {
   type SpliceMessage,
   WalletEvent,
@@ -67,7 +68,6 @@ export async function buildDappAccount(): Promise<DappAccount | null> {
   try {
     const privateKey = getCachedPrivateKey();
     if (privateKey) {
-      const { getPublicKeyFromPrivate } = await import('@canton-network/core-signing-lib');
       publicKey = getPublicKeyFromPrivate(privateKey);
     }
   } catch {
@@ -179,7 +179,6 @@ async function handleSignMessage(params: unknown): Promise<string> {
   const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', msgBytes));
   const hexHash = Array.from(digest).map((b) => b.toString(16).padStart(2, '0')).join('');
 
-  const { signTransactionHash } = await import('@canton-network/core-signing-lib');
   const signature = signTransactionHash(hexHash, privateKey);
 
   resetAutoLockTimer();
@@ -199,10 +198,6 @@ async function handleSignTransaction(params: unknown): Promise<{
 
   const privateKey = getCachedPrivateKey();
   if (!privateKey) throw new Error('Private key not available — unlock wallet');
-
-  const { signTransactionHash, getPublicKeyFromPrivate } = await import(
-    '@canton-network/core-signing-lib'
-  );
 
   const signature = signTransactionHash(transactionHash, privateKey);
   const publicKey = getPublicKeyFromPrivate(privateKey);

@@ -1,3 +1,4 @@
+import { getPublicKeyFromPrivate } from '@canton-network/core-signing-lib';
 import { ok, err } from '@lib/messaging';
 import type { MessageResponse, LockStateData } from '@lib/messaging';
 import { localStore, sessionStore, networkStore } from '@lib/storage';
@@ -94,7 +95,6 @@ export async function connectSigningRelay(): Promise<void> {
 
     // Register the party's public key with the relay
     if (_cachedPrivateKey) {
-      const { getPublicKeyFromPrivate } = await import('@canton-network/core-signing-lib');
       const publicKey = getPublicKeyFromPrivate(_cachedPrivateKey);
       const [hint, fingerprint] = partyId.split('::');
       signingRelay.registerKeys([{ id: fingerprint, name: hint, publicKey }]);
@@ -122,7 +122,6 @@ export async function connectSigningRelayForOnboarding(privateKey: string): Prom
       apiKey: config.signingRelayApiKey || undefined,
     });
 
-    const { getPublicKeyFromPrivate } = await import('@canton-network/core-signing-lib');
     const publicKey = getPublicKeyFromPrivate(privateKey);
 
     // Wait briefly for the socket connection to establish before registering keys
