@@ -6,7 +6,7 @@ import { IconUSDC } from '@assets/icons/icon-usdc';
 import { IconDefaultToken } from '@assets/icons/icon-default-token';
 import { SUPPORTED_TOKENS } from '@lib/constants';
 import { format } from '@lib/format';
-import type { BalanceSwapResponse } from '@lib/types';
+import type { TokenBalance } from '@lib/types';
 import { useNetwork } from '../../hooks/useNetwork';
 import { useFaucet } from '../../hooks/useFaucet';
 import BigNumber from 'bignumber.js';
@@ -18,7 +18,7 @@ const TOKEN_ICONS: Record<string, React.FC<React.SVGProps<SVGSVGElement>>> = {
 };
 
 interface Props {
-  balance: BalanceSwapResponse;
+  balance: TokenBalance;
   onBack: () => void;
 }
 

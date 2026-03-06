@@ -60,7 +60,7 @@ export function Unlock({ onSuccess, onLogout }: Props) {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleUnlock()}
-            className="w-full rounded-lg bg-secondary text-foreground px-4 py-3 pr-10 text-sm outline-none focus:ring-2 focus:ring-primary"
+            className="w-full rounded-lg border border-primary/20 bg-primary/5 text-foreground px-4 py-3 pr-10 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
             placeholder="Enter password"
             autoFocus
           />

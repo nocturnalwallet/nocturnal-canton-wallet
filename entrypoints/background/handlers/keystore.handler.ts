@@ -3,7 +3,10 @@ import type { MessageResponse, KeyPairData, OnboardingPrepareData, PreapprovalSt
 import { localStore, sessionStore } from '@lib/storage';
 import { getEncryptionProvider } from '../encryption';
 import apiClient from '../api-client';
-import { setCachedPrivateKey, getCachedPrivateKey } from './session.handler';
+import { setCachedPrivateKey, connectSigningRelay, connectSigningRelayForOnboarding } from './session.handler';
+import { signingRelay } from '../signing-relay/relay-client';
+import { gatewayUserRpc } from '../gateway-client';
+import type { CreateWalletParams, CreateWalletResult } from '@lib/dapp-api/gateway-types';
 
 export async function handleCreateKeypair(): Promise<MessageResponse<KeyPairData>> {
   try {
@@ -46,25 +49,65 @@ export async function handleValidateImportKey(
       }
     }
 
+    // Verify the key's fingerprint matches the partyId (hint::fingerprint).
+    // This catches mismatches even when the backend doesn't store the public key.
+    const partyId = await sessionStore.get('partyId');
+    if (partyId) {
+      const expectedFingerprint = partyId.split('::')[1];
+      if (expectedFingerprint) {
+        const fingerprint = await computeFingerprint(publicKey);
+        if (fingerprint !== expectedFingerprint) {
+          return err(
+            'The imported private key does not match your party ID. ' +
+            'Please use the key that was originally created for this account.',
+          );
+        }
+      }
+    }
+
     return ok({ privateKey, publicKey });
   } catch (e: unknown) {
     return err(e instanceof Error ? e.message : 'Invalid private key');
   }
 }
 
-export async function handlePrepareOnboarding(
-  publicKey: string,
-): Promise<MessageResponse<OnboardingPrepareData>> {
-  try {
-    const { data: res } = await apiClient.post(
-      '/external-party/onboarding/prepare',
-      { publicKey },
-    );
-    const preparedParty: OnboardingPrepareData = res.data;
-    return ok(preparedParty);
-  } catch (e: unknown) {
-    return err(e instanceof Error ? e.message : 'Onboarding prepare failed');
+/**
+ * Compute Canton fingerprint from a base64 public key.
+ * Fingerprint = hex(0x1220 || SHA256(int32_be(12) || raw_pubkey_bytes))
+ */
+async function computeFingerprint(publicKeyBase64: string): Promise<string> {
+  const raw = atob(publicKeyBase64);
+  const pubKeyBytes = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) {
+    pubKeyBytes[i] = raw.charCodeAt(i);
   }
+
+  // Prepend int32_be(12) = [0x00, 0x00, 0x00, 0x0c]
+  const prefixed = new Uint8Array(4 + pubKeyBytes.length);
+  prefixed[0] = 0x00;
+  prefixed[1] = 0x00;
+  prefixed[2] = 0x00;
+  prefixed[3] = 0x0c;
+  prefixed.set(pubKeyBytes, 4);
+
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', prefixed));
+
+  return (
+    '1220' +
+    Array.from(digest)
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('')
+  );
+}
+
+/**
+ * Stub — no longer needed since Gateway handles topology internally.
+ * Kept for backward compatibility with the popup message handler.
+ */
+export async function handlePrepareOnboarding(
+  _publicKey: string,
+): Promise<MessageResponse<OnboardingPrepareData>> {
+  return ok({} as OnboardingPrepareData);
 }
 
 export async function handleCompleteOnboarding(payload: {
@@ -74,89 +117,56 @@ export async function handleCompleteOnboarding(payload: {
   preparedParty?: OnboardingPrepareData;
 }): Promise<MessageResponse<{ success: boolean }>> {
   try {
-    const { password, privateKey, publicKey, preparedParty } = payload;
+    const { password, privateKey, publicKey } = payload;
     const provider = await getEncryptionProvider();
 
-    // Encrypt and store the key
+    // 1. Encrypt and store the key
     const bundle = await provider.encryptKey(privateKey, password);
     bundle.walletKey = publicKey;
     await localStore.set('keystore', bundle);
 
-    // Import signing lib (needed for both onboarding and transfer preapproval)
-    const { signTransactionHash, getPublicKeyFromPrivate } = await import(
-      '@canton-network/core-signing-lib'
-    );
+    // 2. Cache private key in memory (needed for relay signing)
+    setCachedPrivateKey(privateKey);
 
     // Only run onboarding if the user is new (not already registered on the backend)
     const partyStatus = await sessionStore.get('partyStatus');
     if (partyStatus !== 'SUCCESSFULLY') {
-      // Use pre-fetched prepare data, or call prepare now as fallback
-      let prepared: OnboardingPrepareData;
-      if (preparedParty) {
-        prepared = preparedParty;
-      } else {
-        const { data: res } = await apiClient.post(
-          '/external-party/onboarding/prepare',
-          { publicKey },
-        );
-        prepared = res.data;
-      }
+      // 3. Connect to relay + register key (before partyId exists)
+      await connectSigningRelayForOnboarding(privateKey);
 
-      const signedHash = signTransactionHash(prepared.multiHash, privateKey);
+      // 4. Enable autoApprove so the relay sign-request from Gateway is auto-signed
+      signingRelay.setAutoApprove(true);
 
-      await apiClient.post('/external-party/onboarding/submit', {
-        signedHash,
-        preparedParty: prepared,
-      });
-    }
-
-    // Re-fetch partyId from backend (it may have been assigned during onboarding submit)
-    let partyId = await sessionStore.get('partyId');
-    console.log('[Ginkgo] Transfer preapproval: partyId from session =', partyId);
-    if (!partyId) {
       try {
-        const { data: meData } = await apiClient.get('/auth/me');
-        partyId = meData.data?.party?.partyId ?? null;
-        console.log('[Ginkgo] Transfer preapproval: partyId from /auth/me =', partyId);
-        if (partyId) await sessionStore.set('partyId', partyId);
-      } catch (e) {
-        console.warn('[Ginkgo] Transfer preapproval: failed to fetch partyId', e);
+        // 5. Call Gateway createWallet — this triggers relay signing internally
+        const partyHint = import.meta.env.VITE_PARTY_HINT || 'ginkgo-wallet';
+        console.log(`[Ginkgo] Calling createWallet with partyHint: ${partyHint}`);
+
+        const result = await gatewayUserRpc<CreateWalletResult>('createWallet', {
+          partyHint,
+          signingProviderId: 'blockdaemon',
+          primary: true,
+        } satisfies CreateWalletParams);
+
+        console.log(`[Ginkgo] createWallet result: ${result.wallet.partyId} ${result.wallet.status}`);
+
+        // 6. Store partyId from response
+        const partyId = result.wallet.partyId;
+        await sessionStore.set('partyId', partyId);
+
+        // 7. Register partyId + publicKey with dapp-core backend
+        await apiClient.post('/auth/register-party', { partyId, publicKey });
+        console.log('[Ginkgo] Registered party with dapp-core backend');
+
+        // 8. Reconnect relay with real partyId
+        await connectSigningRelay();
+      } finally {
+        // 9. Disable autoApprove
+        signingRelay.setAutoApprove(false);
       }
     }
 
-    // Set up transfer preapproval: prepare → sign → submit (both new and existing users)
-    if (partyId) {
-      try {
-        console.log('[Ginkgo] Transfer preapproval: preparing for partyId =', partyId);
-        const { data: prepareData } = await apiClient.post(
-          '/transfer-preapproval/prepare',
-          { partyId },
-        );
-        console.log('[Ginkgo] Transfer preapproval: prepare response =', prepareData);
-        const sig = signTransactionHash(
-          prepareData.data.preparedTransactionHash,
-          privateKey,
-        );
-        const derivedPublicKey = getPublicKeyFromPrivate(privateKey);
-        await apiClient.post('/transfer-preapproval/submit', {
-          commandId: prepareData.data.commandId,
-          publicKey: derivedPublicKey,
-          signature: sig,
-          preparedTransaction: prepareData.data.preparedTransaction,
-          preparedTransactionHash: prepareData.data.preparedTransactionHash,
-          partyId,
-        });
-        console.log('[Ginkgo] Transfer preapproval: submitted successfully');
-      } catch (e) {
-        console.warn('[Ginkgo] Transfer preapproval: failed', e);
-      }
-    } else {
-      console.warn('[Ginkgo] Transfer preapproval: skipped — no partyId available');
-    }
-
-    // Cache the private key in memory so dashboard features (like preapproval) work without re-entering password
-    setCachedPrivateKey(privateKey);
-
+    // 10. Mark onboarding complete
     await localStore.set('onboardingComplete', true);
     await sessionStore.set('unlocked', true);
 
@@ -182,76 +192,25 @@ export async function handleExportPrivateKey(
   }
 }
 
+/**
+ * Transfer preapproval via Gateway is not yet implemented.
+ * The dapp-core endpoints have been removed. This will be implemented
+ * in a future phase using Gateway's prepareExecute with the appropriate Daml command.
+ */
 export async function handleRegisterTransferPreapproval(): Promise<
   MessageResponse<{ success: boolean }>
 > {
-  try {
-    // Ensure we have a partyId — re-fetch from backend if not cached
-    let partyId = await sessionStore.get('partyId');
-    if (!partyId) {
-      try {
-        const { data: meData } = await apiClient.get('/auth/me');
-        partyId = meData.data?.party?.partyId ?? null;
-        if (partyId) await sessionStore.set('partyId', partyId);
-      } catch {
-        // ignore
-      }
-    }
-    if (!partyId) return err('No party ID found. Please try again later.');
-
-    // Use cached key if available
-    const privateKey = getCachedPrivateKey();
-    if (!privateKey) {
-      return err('Wallet is locked. Please unlock first.');
-    }
-
-    const { signTransactionHash, getPublicKeyFromPrivate } = await import(
-      '@canton-network/core-signing-lib'
-    );
-
-    const { data: prepareRes } = await apiClient.post(
-      '/transfer-preapproval/prepare',
-      { partyId },
-    );
-    const signature = signTransactionHash(
-      prepareRes.data.preparedTransactionHash,
-      privateKey,
-    );
-    const publicKey = getPublicKeyFromPrivate(privateKey);
-    await apiClient.post('/transfer-preapproval/submit', {
-      commandId: prepareRes.data.commandId,
-      publicKey,
-      signature,
-      preparedTransaction: prepareRes.data.preparedTransaction,
-      preparedTransactionHash: prepareRes.data.preparedTransactionHash,
-      partyId,
-    });
-
-    return ok({ success: true });
-  } catch (e: unknown) {
-    return err(
-      e instanceof Error ? e.message : 'Transfer pre-approval failed',
-    );
-  }
+  return err(
+    'Transfer preapproval is not yet available via Gateway. This feature will be added in a future update.',
+  );
 }
 
 export async function handleGetPreapprovalStatus(): Promise<
   MessageResponse<PreapprovalStatusData>
 > {
-  try {
-    const partyId = await sessionStore.get('partyId');
-    if (!partyId) return ok({ hasPreapproval: false });
-
-    const { data: res } = await apiClient.get(`/transfer-preapproval/status`, {
-      params: { partyId },
-    });
-    const hasPreapproval = !!res.data?.exists;
-
-    return ok({ hasPreapproval });
-  } catch {
-    // If 404 or similar, treat as no preapproval
-    return ok({ hasPreapproval: false });
-  }
+  // Transfer preapproval status check via dapp-core is no longer available.
+  // Return false until Gateway-based preapproval is implemented.
+  return ok({ hasPreapproval: false });
 }
 
 export async function handleDeleteKeystore(): Promise<MessageResponse<void>> {

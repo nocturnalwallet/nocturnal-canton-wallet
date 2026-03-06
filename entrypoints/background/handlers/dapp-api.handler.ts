@@ -1,12 +1,12 @@
 /**
  * CIP-0103 dApp API handler for Ginkgo wallet extension.
  *
- * Implements the subset of the CIP-0103 dApp API methods needed for the prototype:
+ * Implements the CIP-0103 dApp API methods:
  * - connect / disconnect / isConnected / status
  * - listAccounts / getPrimaryAccount
- * - signMessage
- *
- * These reuse the existing session, keystore, and signing infrastructure.
+ * - signMessage / signTransaction
+ * - prepareExecute / prepareExecuteAndWait (via Wallet Gateway)
+ * - ledgerApi (proxy to Wallet Gateway)
  */
 import {
   type SpliceMessage,
@@ -15,10 +15,18 @@ import {
   jsonRpcError,
   RpcErrorCodes,
 } from '@lib/dapp-api/types';
+import type {
+  PrepareExecuteParams,
+  PrepareExecuteResponse,
+  GatewayTransaction,
+  LedgerApiParams,
+  PrepareExecuteAndWaitResult,
+} from '@lib/dapp-api/gateway-types';
 import { sessionStore, localStore, networkStore } from '@lib/storage';
 import { NETWORKS } from '@lib/network';
 import { getCachedPrivateKey, resetAutoLockTimer } from './session.handler';
 import { APPROVAL_REQUIRED_METHODS, requestApproval } from './approval.handler';
+import { gatewayDappRpc, gatewayUserRpc, getGatewayBaseUrl } from '../gateway-client';
 
 // -- CIP-0103 Account type (matches @canton-network/dapp-sdk Wallet) --
 
@@ -204,14 +212,157 @@ async function handleSignTransaction(params: unknown): Promise<{
   return { signature, publicKey, fingerprint };
 }
 
-// -- Stub handlers for unimplemented CIP-0103 methods --
-// Return descriptive INTERNAL_ERROR instead of METHOD_NOT_FOUND so dApp developers
-// know the method is recognized but not yet supported.
+// -- Gateway-mediated CIP-0103 handlers --
 
-function notImplemented(methodName: string): () => Promise<never> {
-  return async () => {
-    throw new Error(`${methodName} is not yet implemented by Ginkgo`);
+/**
+ * prepareExecute: Full transaction lifecycle via Wallet Gateway.
+ *
+ * Flow:
+ * 1. Forward command to Gateway dApp API → receive { userUrl } with commandId
+ * 2. Show approval popup to user
+ * 3. If approved: sign preparedTransactionHash locally, call Gateway execute
+ * 4. Return result to dApp
+ *
+ * The extension signs locally (not via relay) since the private key is in memory.
+ * The signing relay handles Gateway-initiated signing independently.
+ */
+async function handlePrepareExecute(params: unknown): Promise<unknown> {
+  if (!getGatewayBaseUrl()) {
+    throw new Error('Wallet Gateway not configured for this network');
+  }
+
+  const { partyId, isReady } = await getWalletState();
+  if (!isReady || !partyId) throw new Error('Wallet must be unlocked and onboarded');
+
+  const privateKey = getCachedPrivateKey();
+  if (!privateKey) throw new Error('Private key not available — unlock wallet');
+
+  const typedParams = params as PrepareExecuteParams;
+
+  // 1. Forward to Gateway dApp API
+  const { userUrl } = await gatewayDappRpc<PrepareExecuteResponse>('prepareExecute', typedParams);
+
+  // 2. Extract commandId from userUrl
+  const url = new URL(userUrl);
+  const commandId = url.searchParams.get('commandId');
+  if (!commandId) throw new Error('No commandId in Gateway response');
+
+  // 3. Show approval popup
+  const approved = await requestApproval('prepareExecute', 'dApp', {
+    commandId,
+    commands: typedParams.commands,
+  });
+
+  if (!approved) {
+    // Clean up the pending transaction from Gateway
+    try {
+      await gatewayUserRpc('deleteTransaction', { commandId });
+    } catch {
+      // Best-effort cleanup
+    }
+    throw new Error('User rejected the transaction');
+  }
+
+  // 4. Get prepared transaction details from Gateway
+  const tx = await gatewayUserRpc<GatewayTransaction>('getTransaction', { commandId });
+
+  // 5. Sign locally
+  const { signTransactionHash, getPublicKeyFromPrivate } = await import(
+    '@canton-network/core-signing-lib'
+  );
+  const signature = signTransactionHash(tx.preparedTransactionHash, privateKey);
+  const fingerprint = partyId.split('::')[1];
+
+  // 6. Execute via Gateway
+  const result = await gatewayUserRpc('execute', {
+    commandId,
+    signature,
+    signedBy: fingerprint,
+    partyId,
+  });
+
+  resetAutoLockTimer();
+  return result;
+}
+
+/**
+ * prepareExecuteAndWait: Same as prepareExecute but returns the full execution result.
+ */
+async function handlePrepareExecuteAndWait(params: unknown): Promise<PrepareExecuteAndWaitResult> {
+  if (!getGatewayBaseUrl()) {
+    throw new Error('Wallet Gateway not configured for this network');
+  }
+
+  const { partyId, isReady } = await getWalletState();
+  if (!isReady || !partyId) throw new Error('Wallet must be unlocked and onboarded');
+
+  const privateKey = getCachedPrivateKey();
+  if (!privateKey) throw new Error('Private key not available — unlock wallet');
+
+  const typedParams = params as PrepareExecuteParams;
+
+  const { userUrl } = await gatewayDappRpc<PrepareExecuteResponse>('prepareExecute', typedParams);
+
+  const url = new URL(userUrl);
+  const commandId = url.searchParams.get('commandId');
+  if (!commandId) throw new Error('No commandId in Gateway response');
+
+  const approved = await requestApproval('prepareExecuteAndWait', 'dApp', {
+    commandId,
+    commands: typedParams.commands,
+  });
+
+  if (!approved) {
+    try {
+      await gatewayUserRpc('deleteTransaction', { commandId });
+    } catch {
+      // Best-effort cleanup
+    }
+    throw new Error('User rejected the transaction');
+  }
+
+  const tx = await gatewayUserRpc<GatewayTransaction>('getTransaction', { commandId });
+
+  const { signTransactionHash, getPublicKeyFromPrivate } = await import(
+    '@canton-network/core-signing-lib'
+  );
+  const signature = signTransactionHash(tx.preparedTransactionHash, privateKey);
+  const fingerprint = partyId.split('::')[1];
+
+  const executeResult = await gatewayUserRpc('execute', {
+    commandId,
+    signature,
+    signedBy: fingerprint,
+    partyId,
+  });
+
+  resetAutoLockTimer();
+
+  return {
+    tx: {
+      status: 'executed',
+      commandId,
+      payload: executeResult,
+    },
   };
+}
+
+/**
+ * ledgerApi: Proxy to the Wallet Gateway's Ledger API.
+ */
+async function handleLedgerApi(params: unknown): Promise<unknown> {
+  if (!getGatewayBaseUrl()) {
+    throw new Error('Wallet Gateway not configured for this network');
+  }
+
+  const { isReady } = await getWalletState();
+  if (!isReady) throw new Error('Wallet must be unlocked and onboarded');
+
+  const typedParams = params as LedgerApiParams;
+  const result = await gatewayDappRpc('ledgerApi', typedParams);
+
+  resetAutoLockTimer();
+  return result;
 }
 
 // -- Main dispatcher --
@@ -228,9 +379,9 @@ const methods: Record<string, MethodHandler> = {
   getPrimaryAccount: handleGetPrimaryAccount,
   signMessage: handleSignMessage,
   signTransaction: handleSignTransaction,
-  prepareExecute: notImplemented('prepareExecute'),
-  prepareExecuteAndWait: notImplemented('prepareExecuteAndWait'),
-  ledgerApi: notImplemented('ledgerApi'),
+  prepareExecute: handlePrepareExecute,
+  prepareExecuteAndWait: handlePrepareExecuteAndWait,
+  ledgerApi: handleLedgerApi,
 };
 
 /**

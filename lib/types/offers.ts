@@ -27,6 +27,8 @@ export interface GetApproveRequestsResponse {
   createdAt: string;
   tokenName: string;
   status: 'LOCKED' | 'CANCELLED' | 'REJECTED' | 'APPROVED';
+  requestedAt?: string;
+  executeBefore?: string;
 }
 
 export interface GetIncomingRequestsQuery {

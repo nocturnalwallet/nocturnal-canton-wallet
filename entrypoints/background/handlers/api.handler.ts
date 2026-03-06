@@ -2,7 +2,6 @@ import { ok, err } from '@lib/messaging';
 import type {
   MessageResponse,
   BalancesData,
-  PricesData,
   PaginatedOffersData,
   PaginatedActivityData,
   AboutMeData,
@@ -16,6 +15,7 @@ import type {
 } from '@lib/types';
 import { localStore, sessionStore } from '@lib/storage';
 import apiClient from '../api-client';
+import { getCachedPrivateKey } from './session.handler';
 
 export async function handleFetchBalances(): Promise<
   MessageResponse<BalancesData>
@@ -27,21 +27,9 @@ export async function handleFetchBalances(): Promise<
     const { data } = await apiClient.get('/wallet/token-balance', {
       params: { partyId },
     });
-
     return ok({ balances: data.data ?? [] });
   } catch (e: unknown) {
     return err(e instanceof Error ? e.message : 'Failed to fetch balances');
-  }
-}
-
-export async function handleFetchPrices(): Promise<
-  MessageResponse<PricesData>
-> {
-  try {
-    const { data } = await apiClient.get('/wallet/token-prices');
-    return ok({ prices: data.data });
-  } catch (e: unknown) {
-    return err(e instanceof Error ? e.message : 'Failed to fetch prices');
   }
 }
 
@@ -64,7 +52,7 @@ export async function handlePrepareTransferTokenStandard(
 ): Promise<MessageResponse<PrepareData>> {
   try {
     const { data } = await apiClient.post(
-      '/transfer-token-standard/prepare',
+      '/offers/prepare',
       payload,
     );
     return ok({ preparedData: data.data });
@@ -78,7 +66,7 @@ export async function handleFetchIncomingOffers(
 ): Promise<MessageResponse<PaginatedOffersData>> {
   try {
     const { data } = await apiClient.get(
-      '/transfer-token-standard/incoming-requests',
+      '/offers/incoming-requests',
       { params: payload },
     );
     const result = data.data;
@@ -100,7 +88,7 @@ export async function handleFetchOutgoingOffers(
 ): Promise<MessageResponse<PaginatedOffersData>> {
   try {
     const { data } = await apiClient.get(
-      '/transfer-token-standard/outgoing-requests',
+      '/offers/outgoing-requests',
       { params: payload },
     );
     const result = data.data;
@@ -122,7 +110,7 @@ export async function handleFetchHistoryOffers(
 ): Promise<MessageResponse<PaginatedOffersData>> {
   try {
     const { data } = await apiClient.get(
-      '/transfer-token-standard/history',
+      '/offers/history',
       { params: payload },
     );
     const result = data.data;
@@ -145,7 +133,7 @@ export async function handlePrepareApprove(payload: {
 }): Promise<MessageResponse<PrepareData>> {
   try {
     const { data } = await apiClient.post(
-      '/transfer-token-standard/approve/prepare',
+      '/offers/approve/prepare',
       payload,
     );
     return ok({ preparedData: data.data });
@@ -160,7 +148,7 @@ export async function handlePrepareReject(payload: {
 }): Promise<MessageResponse<PrepareData>> {
   try {
     const { data } = await apiClient.post(
-      '/transfer-token-standard/reject/prepare',
+      '/offers/reject/prepare',
       payload,
     );
     return ok({ preparedData: data.data });
@@ -213,32 +201,33 @@ export async function handleRequestFaucet(
     const partyId = await sessionStore.get('partyId');
     if (!partyId) return err('No party ID');
 
-    // Step 1: Prepare the faucet tap (returns preparedTransaction + hash)
-    const { data: prepareResp } = await apiClient.post(
+    // Use cached private key (preferred) or decrypt from keystore
+    let privateKey = getCachedPrivateKey();
+    if (!privateKey) {
+      const keystore = await localStore.get('keystore');
+      if (!keystore) return err('No keystore found');
+      const { getEncryptionProvider } = await import('../encryption');
+      const provider = await getEncryptionProvider();
+      privateKey = await provider.decryptKey(keystore, password);
+    }
+
+    // Step 1: Call dapp-core to prepare the DevNet Tap
+    const { data: prepareRes } = await apiClient.post(
       '/external-party/devnet-tap/prepare',
       { partyId, amount },
     );
-    const prepared = prepareResp.data;
-    if (!prepared?.preparedTransactionHash || !prepared?.preparedTransaction) {
-      return err('Faucet prepare returned invalid data');
+    const prepared = prepareRes.data;
+    if (!prepared?.preparedTransactionHash) {
+      return err('Faucet prepare returned no transaction hash');
     }
 
-    // Step 2: Decrypt private key and sign the transaction hash
-    const keystore = await localStore.get('keystore');
-    if (!keystore) return err('No keystore found');
-    const { getEncryptionProvider } = await import('../encryption');
-    const provider = await getEncryptionProvider();
-    const privateKey = await provider.decryptKey(keystore, password);
-
+    // Step 2: Sign locally
     const { signTransactionHash } = await import(
       '@canton-network/core-signing-lib'
     );
-    const signature = signTransactionHash(
-      prepared.preparedTransactionHash,
-      privateKey,
-    );
+    const signature = signTransactionHash(prepared.preparedTransactionHash, privateKey);
 
-    // Step 3: Submit the signed transaction
+    // Step 3: Submit signed transaction to dapp-core
     await apiClient.post('/external-party/devnet-tap/submit', {
       preparedTransaction: prepared.preparedTransaction,
       signature,
@@ -248,5 +237,20 @@ export async function handleRequestFaucet(
     return ok({ success: true });
   } catch (e: unknown) {
     return err(e instanceof Error ? e.message : 'Faucet request failed');
+  }
+}
+
+export async function handlePrepareWithdraw(payload: {
+  contractId: string;
+  tokenId: string;
+}): Promise<MessageResponse<PrepareData>> {
+  try {
+    const { data } = await apiClient.post(
+      '/offers/withdraw/prepare',
+      payload,
+    );
+    return ok({ preparedData: data.data });
+  } catch (e: unknown) {
+    return err(e instanceof Error ? e.message : 'Prepare withdraw failed');
   }
 }

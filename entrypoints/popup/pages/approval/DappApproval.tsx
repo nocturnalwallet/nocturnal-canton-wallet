@@ -12,6 +12,9 @@ const METHOD_LABELS: Record<string, { label: string; icon: typeof ShieldCheckIco
   connect: { label: 'Connect', icon: LinkIcon },
   signMessage: { label: 'Sign Message', icon: PenLineIcon },
   signTransaction: { label: 'Sign Transaction', icon: PenLineIcon },
+  prepareExecute: { label: 'Execute Transaction', icon: ShieldCheckIcon },
+  prepareExecuteAndWait: { label: 'Execute Transaction', icon: ShieldCheckIcon },
+  'signTransaction (Gateway)': { label: 'Sign for Gateway', icon: PenLineIcon },
 };
 
 export function DappApproval({ requestId }: Props) {

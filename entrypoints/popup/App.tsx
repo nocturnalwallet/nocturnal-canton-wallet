@@ -150,7 +150,7 @@ function App() {
               setOnboarding((prev) => ({ ...prev, password }));
               setScreen('key-setup');
             } else {
-              // Truly new user (no public key yet) — auto-generate keypair, fire prepare in background, skip to show-key
+              // Truly new user (no public key yet) — auto-generate keypair, skip to show-key
               try {
                 const data = await sendMessage<KeyPairData>({ action: MSG.CREATE_KEYPAIR });
                 setOnboarding((prev) => ({
@@ -161,15 +161,6 @@ function App() {
                   isImport: false,
                 }));
                 setScreen('show-key');
-                // Fire onboarding prepare in background while user goes through confirmation screens
-                sendMessage<OnboardingPrepareData>({
-                  action: MSG.PREPARE_ONBOARDING,
-                  payload: { publicKey: data.publicKey },
-                }).then((prepared) => {
-                  setOnboarding((prev) => ({ ...prev, preparedParty: prepared }));
-                }).catch(() => {
-                  // Will be retried in handleCompleteOnboarding if needed
-                });
               } catch {
                 // Fallback to key-setup if generation fails
                 setOnboarding((prev) => ({ ...prev, password }));
@@ -184,6 +175,7 @@ function App() {
       return (
         <KeySetup
           existingPublicKey={onboarding.existingPublicKey}
+          partyStatus={onboarding.partyStatus}
           onNext={(data) => {
             setOnboarding((prev) => ({
               ...prev,

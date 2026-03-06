@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { EyeIcon, EyeOffIcon, LogOutIcon } from 'lucide-react';
+import { EyeIcon, EyeOffIcon, LogOutIcon, AlertTriangleIcon } from 'lucide-react';
 
 interface Props {
   onNext: (password: string) => void;
@@ -40,7 +40,7 @@ export function CreatePassword({ onNext, onReset, isLocalnet }: Props) {
               type={showPassword ? 'text' : 'password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-lg bg-secondary text-foreground px-4 py-3 pr-10 text-sm outline-none focus:ring-2 focus:ring-primary"
+              className="w-full rounded-lg border border-primary/20 bg-primary/5 text-foreground px-4 py-3 pr-10 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
               placeholder="Enter password"
             />
             <button
@@ -60,7 +60,7 @@ export function CreatePassword({ onNext, onReset, isLocalnet }: Props) {
               type={showConfirm ? 'text' : 'password'}
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
-              className="w-full rounded-lg bg-secondary text-foreground px-4 py-3 pr-10 text-sm outline-none focus:ring-2 focus:ring-primary"
+              className="w-full rounded-lg border border-primary/20 bg-primary/5 text-foreground px-4 py-3 pr-10 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
               placeholder="Confirm password"
             />
             <button
@@ -72,7 +72,10 @@ export function CreatePassword({ onNext, onReset, isLocalnet }: Props) {
             </button>
           </div>
           {confirm && !passwordsMatch && (
-            <p className="text-xs text-destructive mt-1">Passwords do not match</p>
+            <div className="flex gap-2 items-center rounded-lg bg-red-500/10 border border-red-500/30 px-3 py-2 mt-1">
+              <AlertTriangleIcon className="w-4 h-4 text-red-400 shrink-0" />
+              <p className="text-sm text-red-400">Passwords do not match</p>
+            </div>
           )}
         </div>
 

@@ -7,7 +7,6 @@ import { IconCBTCCoin } from '@assets/icons/icon-yield-coin';
 import { IconUSDC } from '@assets/icons/icon-usdc';
 import { IconDefaultToken } from '@assets/icons/icon-default-token';
 import { TokenDetail } from './TokenDetail';
-import type { BalanceSwapResponse } from '@lib/types';
 import BigNumber from 'bignumber.js';
 
 const TOKEN_ICONS: Record<string, React.FC<React.SVGProps<SVGSVGElement>>> = {
@@ -25,7 +24,7 @@ export function Balances() {
   const registerPreapproval = useRegisterPreapproval();
   const [preapprovalError, setPreapprovalError] = useState('');
   const [showSuccess, setShowSuccess] = useState(false);
-  const [selectedToken, setSelectedToken] = useState<BalanceSwapResponse | null>(null);
+  const [selectedTokenId, setSelectedTokenId] = useState<string | null>(null);
 
   const handleRegisterPreapproval = async () => {
     setPreapprovalError('');
@@ -67,8 +66,12 @@ export function Balances() {
     !registerPreapproval.isSuccess &&
     (!preapprovalData || !preapprovalData.hasPreapproval);
 
+  const selectedToken = selectedTokenId
+    ? balances.find((b) => (b.instrumentId?.id ?? 'Unknown') === selectedTokenId) ?? null
+    : null;
+
   if (selectedToken) {
-    return <TokenDetail balance={selectedToken} onBack={() => setSelectedToken(null)} />;
+    return <TokenDetail balance={selectedToken} onBack={() => setSelectedTokenId(null)} />;
   }
 
   return (
@@ -86,7 +89,9 @@ export function Balances() {
             Register transfer pre-approval to enable receiving Amulet transfers.
           </p>
           {preapprovalError && (
-            <p className="text-xs text-destructive mb-2">{preapprovalError}</p>
+            <div className="flex gap-2 items-center rounded-lg bg-red-500/10 border border-red-500/30 px-3 py-2 mb-2">
+              <p className="text-sm text-red-400">{preapprovalError}</p>
+            </div>
           )}
           <button
             onClick={handleRegisterPreapproval}
@@ -147,7 +152,7 @@ export function Balances() {
           return (
             <button
               key={tokenId}
-              onClick={() => setSelectedToken(b)}
+              onClick={() => setSelectedTokenId(tokenId)}
               className="w-full rounded-xl bg-primary/5 border border-primary/10 p-4 flex items-center gap-3 hover:bg-primary/10 hover:border-primary/25 transition-colors text-left"
             >
               <div className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center bg-background">

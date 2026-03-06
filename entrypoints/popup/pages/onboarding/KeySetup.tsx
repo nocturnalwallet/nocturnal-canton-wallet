@@ -4,12 +4,13 @@ import { KeyRoundIcon, ImportIcon, ArrowLeftIcon, Loader2Icon, AlertTriangleIcon
 
 interface Props {
   existingPublicKey?: string;
+  partyStatus?: string;
   onNext: (data: { privateKey: string; publicKey: string; isImport: boolean }) => void;
   onBack: () => void;
 }
 
-export function KeySetup({ existingPublicKey, onNext, onBack }: Props) {
-  const isExistingUser = !!existingPublicKey;
+export function KeySetup({ existingPublicKey, partyStatus, onNext, onBack }: Props) {
+  const isExistingUser = !!existingPublicKey || partyStatus === 'SUCCESSFULLY';
   const [mode, setMode] = useState<'choose' | 'import'>(isExistingUser ? 'import' : 'choose');
   const [importKey, setImportKey] = useState('');
   const [error, setError] = useState('');
@@ -82,11 +83,16 @@ export function KeySetup({ existingPublicKey, onNext, onBack }: Props) {
         <textarea
           value={importKey}
           onChange={(e) => setImportKey(e.target.value)}
-          className="w-full flex-1 rounded-lg bg-secondary text-foreground p-4 text-sm font-mono outline-none focus:ring-2 focus:ring-primary resize-none"
+          className="w-full flex-1 rounded-lg border border-primary/20 bg-primary/5 text-foreground p-4 text-sm font-mono outline-none focus:border-primary focus:ring-1 focus:ring-primary resize-none"
           placeholder="Paste private key here..."
         />
 
-        {error && <p className="text-xs text-destructive mt-2">{error}</p>}
+        {error && (
+          <div className="flex gap-3 rounded-xl bg-red-500/10 border border-red-500/30 p-3 mt-3">
+            <AlertTriangleIcon className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+            <p className="text-sm text-red-400">{error}</p>
+          </div>
+        )}
 
         <button
           onClick={handleImport}
@@ -139,7 +145,12 @@ export function KeySetup({ existingPublicKey, onNext, onBack }: Props) {
         </button>
       </div>
 
-      {error && <p className="text-xs text-destructive">{error}</p>}
+      {error && (
+        <div className="flex gap-3 rounded-xl bg-red-500/10 border border-red-500/30 p-3 mt-3">
+          <AlertTriangleIcon className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+          <p className="text-sm text-red-400">{error}</p>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowLeftIcon, Loader2Icon } from 'lucide-react';
+import { ArrowLeftIcon, Loader2Icon, AlertTriangleIcon } from 'lucide-react';
 import { TYPO_TEXT } from '@lib/constants';
 import type { OnboardingPrepareData } from '@lib/messaging';
 import { useCompleteOnboarding } from '../../hooks/useWallet';
@@ -55,11 +55,16 @@ export function TypedConfirm({ password, privateKey, publicKey, preparedParty, o
       <textarea
         value={typed}
         onChange={(e) => setTyped(e.target.value)}
-        className="w-full rounded-lg bg-secondary text-foreground p-4 text-sm outline-none focus:ring-2 focus:ring-primary resize-none h-24"
+        className="w-full rounded-lg border border-primary/20 bg-primary/5 text-foreground p-4 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary resize-none h-24"
         placeholder="Type the phrase here..."
       />
 
-      {error && <p className="text-xs text-destructive mt-2">{error}</p>}
+      {error && (
+        <div className="flex gap-3 rounded-xl bg-red-500/10 border border-red-500/30 p-3 mt-2">
+          <AlertTriangleIcon className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+          <p className="text-sm text-red-400">{error}</p>
+        </div>
+      )}
 
       <div className="flex-1" />
 

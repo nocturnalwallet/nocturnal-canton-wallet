@@ -176,7 +176,11 @@ export function Settings({ onBack, onLock, onLogout }: Props) {
                     placeholder="Enter password to decrypt"
                     autoFocus
                   />
-                  {error && <p className="text-xs text-destructive">{error}</p>}
+                  {error && (
+                    <div className="flex gap-2 items-center rounded-lg bg-red-500/10 border border-red-500/30 px-3 py-2">
+                      <p className="text-sm text-red-400">{error}</p>
+                    </div>
+                  )}
                   <button
                     onClick={handleExportKey}
                     disabled={!password || exportKey.isPending}

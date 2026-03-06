@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Loader2Icon, CheckCircleIcon } from 'lucide-react';
+import { Loader2Icon, CheckCircleIcon, AlertTriangleIcon } from 'lucide-react';
 import { SUPPORTED_TOKENS } from '@lib/constants';
 import {
   usePrepareTransferPreapproval,
@@ -147,12 +147,17 @@ export function Transfer() {
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full mt-1 rounded-lg bg-secondary text-foreground px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary"
+            className="w-full mt-1 rounded-lg border border-primary/20 bg-primary/5 text-foreground px-4 py-3 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
             placeholder="Enter password"
           />
         </div>
 
-        {error && <p className="text-xs text-destructive">{error}</p>}
+        {error && (
+          <div className="flex gap-2 items-center rounded-lg bg-red-500/10 border border-red-500/30 px-3 py-2">
+            <AlertTriangleIcon className="w-4 h-4 text-red-400 shrink-0" />
+            <p className="text-sm text-red-400">{error}</p>
+          </div>
+        )}
 
         <div className="flex gap-2">
           <button
@@ -182,7 +187,7 @@ export function Transfer() {
         <select
           value={tokenId}
           onChange={(e) => setTokenId(e.target.value)}
-          className="w-full mt-1 rounded-lg bg-secondary text-foreground px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary"
+          className="w-full mt-1 rounded-lg border border-primary/20 bg-primary/5 text-foreground px-4 py-3 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
         >
           {SUPPORTED_TOKENS.map((t) => (
             <option key={t.id} value={t.id}>
@@ -206,7 +211,7 @@ export function Transfer() {
           type="text"
           value={recipient}
           onChange={(e) => setRecipient(e.target.value)}
-          className="w-full mt-1 rounded-lg bg-secondary text-foreground px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary"
+          className="w-full mt-1 rounded-lg border border-primary/20 bg-primary/5 text-foreground px-4 py-3 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
           placeholder="Enter party ID"
         />
       </div>
@@ -220,7 +225,7 @@ export function Transfer() {
             type="text"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
-            className="w-full rounded-lg bg-secondary text-foreground px-4 py-3 pr-16 text-sm outline-none focus:ring-2 focus:ring-primary"
+            className="w-full rounded-lg border border-primary/20 bg-primary/5 text-foreground px-4 py-3 pr-16 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
             placeholder="0.00"
           />
           {availableBalance.gt(0) && (
@@ -235,7 +240,12 @@ export function Transfer() {
         </div>
       </div>
 
-      {error && <p className="text-xs text-destructive">{error}</p>}
+      {error && (
+          <div className="flex gap-2 items-center rounded-lg bg-red-500/10 border border-red-500/30 px-3 py-2">
+            <AlertTriangleIcon className="w-4 h-4 text-red-400 shrink-0" />
+            <p className="text-sm text-red-400">{error}</p>
+          </div>
+        )}
 
       <button
         onClick={handlePrepare}

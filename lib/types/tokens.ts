@@ -20,21 +20,10 @@ export interface LockedDetails {
   etaUnlockAt: string;
 }
 
-export interface BalanceSwapResponse {
+export interface TokenBalance {
   instrumentId: InstrumentBalanceResponse;
   locked: string;
   unlocked: string;
   lockedDetails: LockedDetails[];
 }
 
-export interface PricesResponse {
-  baseSymbolId: string;
-  quoteSymbolId: string;
-  price: string;
-  id: number;
-  tokenId: string;
-}
-
-export interface PriceFeedResponse {
-  prices: PricesResponse[];
-}

@@ -3,7 +3,9 @@ import type { MessageResponse, NetworkData } from '@lib/messaging';
 import { NETWORKS, NETWORK_IDS, type NetworkId } from '@lib/network';
 import { networkStore, sessionStore, setNetworkPrefix, setUserScope } from '@lib/storage';
 import { setApiBaseUrl } from '../api-client';
+import { setGatewayBaseUrl, setGatewayAuth, resetGatewaySession } from '../gateway-client';
 import { setCachedPrivateKey } from './session.handler';
+import { signingRelay } from '../signing-relay/relay-client';
 
 export async function handleGetNetwork(): Promise<MessageResponse<NetworkData>> {
   try {
@@ -31,8 +33,14 @@ export async function handleSwitchNetwork(
     // Update local storage namespace
     setNetworkPrefix(network);
 
-    // Update API client base URL
+    // Update API client base URLs
     setApiBaseUrl(NETWORKS[network].apiBaseUrl);
+    setGatewayBaseUrl(NETWORKS[network].gatewayUrl);
+    setGatewayAuth(NETWORKS[network].gatewayAuth);
+    resetGatewaySession();
+
+    // Disconnect signing relay (will reconnect on next unlock)
+    signingRelay.disconnect();
 
     // Clear session — auth tokens are network-specific
     await sessionStore.clear();

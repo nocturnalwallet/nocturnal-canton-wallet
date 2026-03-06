@@ -90,6 +90,8 @@ export async function handleSignAndSubmitTransferPreapproval(payload: {
       hashingSchemeVersion: preparedData.hashingSchemeVersion,
       signature,
       senderPartyId: preparedData.senderPartyId,
+      receiverPartyId: preparedData.receiverPartyId,
+      amount: preparedData.amount,
     });
 
     resetAutoLockTimer();
@@ -118,7 +120,7 @@ export async function handleSignAndSubmitTransferTokenStandard(payload: {
       privateKey,
     );
 
-    await apiClient.post('/transfer-token-standard/submit', {
+    await apiClient.post('/offers/submit', {
       preparedTransaction: preparedData.preparedTransaction,
       signature,
     });
@@ -133,9 +135,10 @@ export async function handleSignAndSubmitTransferTokenStandard(payload: {
 export async function handleSignAndSubmitApprove(payload: {
   password: string;
   preparedData: PrepareTransferTokenStandardResponse;
+  contractId?: string;
 }): Promise<MessageResponse<{ success: boolean }>> {
   try {
-    const { password, preparedData } = payload;
+    const { password, preparedData, contractId } = payload;
     const partyId = await verifyCurrentParty();
     const privateKey = await decryptKey(password);
     await verifyKeyFingerprint(privateKey, partyId);
@@ -148,9 +151,10 @@ export async function handleSignAndSubmitApprove(payload: {
       privateKey,
     );
 
-    await apiClient.post('/transfer-token-standard/approve/submit', {
+    await apiClient.post('/offers/approve/submit', {
       preparedTransaction: preparedData.preparedTransaction,
       signature,
+      contractId,
     });
 
     resetAutoLockTimer();
@@ -163,9 +167,10 @@ export async function handleSignAndSubmitApprove(payload: {
 export async function handleSignAndSubmitReject(payload: {
   password: string;
   preparedData: PrepareTransferTokenStandardResponse;
+  contractId?: string;
 }): Promise<MessageResponse<{ success: boolean }>> {
   try {
-    const { password, preparedData } = payload;
+    const { password, preparedData, contractId } = payload;
     const partyId = await verifyCurrentParty();
     const privateKey = await decryptKey(password);
     await verifyKeyFingerprint(privateKey, partyId);
@@ -178,15 +183,48 @@ export async function handleSignAndSubmitReject(payload: {
       privateKey,
     );
 
-    await apiClient.post('/transfer-token-standard/reject/submit', {
+    await apiClient.post('/offers/reject/submit', {
       preparedTransaction: preparedData.preparedTransaction,
       signature,
+      contractId,
     });
 
     resetAutoLockTimer();
     return ok({ success: true });
   } catch (e: unknown) {
     return err(e instanceof Error ? e.message : 'Reject failed');
+  }
+}
+
+export async function handleSignAndSubmitWithdraw(payload: {
+  password: string;
+  preparedData: PrepareTransferTokenStandardResponse;
+  contractId?: string;
+}): Promise<MessageResponse<{ success: boolean }>> {
+  try {
+    const { password, preparedData, contractId } = payload;
+    const partyId = await verifyCurrentParty();
+    const privateKey = await decryptKey(password);
+    await verifyKeyFingerprint(privateKey, partyId);
+
+    const { signTransactionHash } = await import(
+      '@canton-network/core-signing-lib'
+    );
+    const signature = signTransactionHash(
+      preparedData.preparedTransactionHash,
+      privateKey,
+    );
+
+    await apiClient.post('/offers/withdraw/submit', {
+      preparedTransaction: preparedData.preparedTransaction,
+      signature,
+      contractId,
+    });
+
+    resetAutoLockTimer();
+    return ok({ success: true });
+  } catch (e: unknown) {
+    return err(e instanceof Error ? e.message : 'Withdraw failed');
   }
 }
 

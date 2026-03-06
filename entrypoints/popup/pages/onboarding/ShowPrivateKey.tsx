@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { ArrowLeftIcon, CopyIcon, CheckIcon, EyeIcon, EyeOffIcon } from 'lucide-react';
+import { ArrowLeftIcon, CopyIcon, CheckIcon, EyeIcon, EyeOffIcon, TriangleAlertIcon } from 'lucide-react';
 import { onCopyText, convertBase64ToHex } from '@lib/utils';
 
 type KeyFormat = 'base64' | 'hex';
@@ -33,9 +33,12 @@ export function ShowPrivateKey({ privateKey, onNext, onBack }: Props) {
       </button>
 
       <h1 className="text-xl font-bold text-foreground mb-2">Your Private Key</h1>
-      <p className="text-sm text-destructive mb-6">
-        Save this key securely. You will need it to recover your wallet. Never share it with anyone.
-      </p>
+      <div className="flex items-start gap-3 rounded-xl border border-amber-400/30 bg-amber-400/10 p-3 mb-6">
+        <TriangleAlertIcon className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+        <p className="text-sm font-medium text-amber-400">
+          Save this key securely. You will need it to recover your wallet. Never share it with anyone.
+        </p>
+      </div>
 
       {/* Format toggle */}
       <div className="flex rounded-lg bg-secondary p-1 mb-4">

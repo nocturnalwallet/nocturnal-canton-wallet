@@ -5,6 +5,11 @@ import { format } from '@lib/format';
 import type { PrepareTransferTokenStandardResponse } from '@lib/types';
 import BigNumber from 'bignumber.js';
 
+function isExpired(executeBefore?: string): boolean {
+  if (!executeBefore) return false;
+  return new Date() > new Date(executeBefore);
+}
+
 export function IncomingTab() {
   const [page, setPage] = useState(1);
   const { data, isLoading } = useIncomingOffers({ page, limit: 5 });
@@ -40,7 +45,7 @@ export function IncomingTab() {
     setError('');
     try {
       const fn = pendingAction === 'approve' ? signApprove : signReject;
-      await fn.mutateAsync({ password, preparedData });
+      await fn.mutateAsync({ password, preparedData, contractId: activeContract ?? undefined });
       setActiveContract(null);
       setPreparedData(null);
       setPassword('');
@@ -66,70 +71,102 @@ export function IncomingTab() {
 
   return (
     <div className="p-3 space-y-3">
-      {items.map((item) => (
-        <div key={item.contractId} className="rounded-xl bg-secondary p-3 space-y-2">
-          <div className="flex justify-between items-center">
-            <p className="text-sm font-medium text-foreground">
-              {new BigNumber(item.amount).toFormat()} {item.tokenName}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {item.createdAt ? format.date(new Date(item.createdAt)) : ''}
-            </p>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            From: {format.truncatePartyId(item.sender, 5)}
-          </p>
+      {items.map((item) => {
+        const expired = isExpired(item.executeBefore);
 
-          {activeContract === item.contractId && preparedData ? (
-            <div className="space-y-2 pt-2 border-t border-border">
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full rounded-lg bg-background text-foreground px-3 py-2 text-sm outline-none"
-                placeholder="Enter password to sign"
-              />
-              {error && <p className="text-xs text-destructive">{error}</p>}
-              <div className="flex gap-2">
-                <button
-                  onClick={() => { setActiveContract(null); setPreparedData(null); setPassword(''); }}
-                  className="flex-1 rounded-lg bg-background text-foreground py-2 text-xs"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleSign}
-                  disabled={!password || signApprove.isPending || signReject.isPending}
-                  className="flex-1 rounded-lg bg-primary text-primary-foreground py-2 text-xs disabled:opacity-40"
-                >
-                  {(signApprove.isPending || signReject.isPending) ? (
-                    <Loader2Icon className="w-4 h-4 animate-spin mx-auto" />
-                  ) : (
-                    `Confirm ${pendingAction === 'approve' ? 'Approve' : 'Reject'}`
-                  )}
-                </button>
-              </div>
+        return (
+          <div key={item.contractId} className="rounded-xl bg-secondary p-3 space-y-2">
+            <div className="flex justify-between items-center">
+              <p className="text-sm font-medium text-foreground">
+                {new BigNumber(item.amount).toFormat()} {item.tokenName}
+              </p>
+              {expired ? (
+                <span className="text-xs font-semibold text-red-500 bg-red-500/10 px-2 py-0.5 rounded">
+                  Expired
+                </span>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  {item.createdAt ? format.date(new Date(item.createdAt)) : ''}
+                </p>
+              )}
             </div>
-          ) : (
-            <div className="flex gap-2">
-              <button
-                onClick={() => handlePrepare(item.contractId, item.instrumentId?.id ?? '', 'reject')}
-                disabled={prepareReject.isPending}
-                className="flex-1 flex items-center justify-center gap-1 rounded-lg bg-destructive/20 text-destructive py-2 text-xs font-medium"
-              >
-                <XIcon className="w-3.5 h-3.5" /> Reject
-              </button>
-              <button
-                onClick={() => handlePrepare(item.contractId, item.instrumentId?.id ?? '', 'approve')}
-                disabled={prepareApprove.isPending}
-                className="flex-1 flex items-center justify-center gap-1 rounded-lg bg-primary text-primary-foreground py-2 text-xs font-medium"
-              >
-                <CheckIcon className="w-3.5 h-3.5" /> Approve
-              </button>
-            </div>
-          )}
-        </div>
-      ))}
+            <p className="text-xs text-muted-foreground">
+              From: {format.truncatePartyId(item.sender, 5)}
+            </p>
+            {item.requestedAt && (
+              <p className="text-xs text-muted-foreground">
+                Requested: {format.date(new Date(item.requestedAt))}
+              </p>
+            )}
+            {item.executeBefore && (
+              <p className={`text-xs ${expired ? 'text-red-400' : 'text-muted-foreground'}`}>
+                Expires: {format.date(new Date(item.executeBefore))}
+              </p>
+            )}
+
+            {!expired && (
+              <>
+                {activeContract === item.contractId && preparedData ? (
+                  <div className="space-y-2 pt-2 border-t border-border">
+                    <input
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="w-full rounded-lg border border-primary/20 bg-primary/5 text-foreground px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                      placeholder="Enter password to sign"
+                    />
+                    {error && (
+                      <div className="flex gap-2 items-center rounded-lg bg-red-500/10 border border-red-500/30 px-3 py-2">
+                        <p className="text-sm text-red-400">{error}</p>
+                      </div>
+                    )}
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => { setActiveContract(null); setPreparedData(null); setPassword(''); }}
+                        className="flex-1 rounded-lg border border-muted-foreground/40 bg-muted-foreground/15 text-foreground py-2 text-xs font-medium"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleSign}
+                        disabled={!password || signApprove.isPending || signReject.isPending}
+                        className={`flex-1 flex items-center justify-center gap-1 rounded-lg py-2 text-xs font-medium disabled:opacity-40 ${
+                          pendingAction === 'reject'
+                            ? 'bg-red-500/20 border border-red-500/30 text-red-400'
+                            : 'bg-primary text-primary-foreground'
+                        }`}
+                      >
+                        {(signApprove.isPending || signReject.isPending) ? (
+                          <Loader2Icon className="w-4 h-4 animate-spin mx-auto" />
+                        ) : (
+                          `Confirm ${pendingAction === 'approve' ? 'Approve' : 'Reject'}`
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handlePrepare(item.contractId, item.instrumentId?.id ?? '', 'reject')}
+                      disabled={prepareReject.isPending}
+                      className="flex-1 flex items-center justify-center gap-1 rounded-lg bg-red-500/20 border border-red-500/30 text-red-400 py-2 text-xs font-medium"
+                    >
+                      <XIcon className="w-3.5 h-3.5" /> Reject
+                    </button>
+                    <button
+                      onClick={() => handlePrepare(item.contractId, item.instrumentId?.id ?? '', 'approve')}
+                      disabled={prepareApprove.isPending}
+                      className="flex-1 flex items-center justify-center gap-1 rounded-lg bg-primary text-primary-foreground py-2 text-xs font-medium"
+                    >
+                      <CheckIcon className="w-3.5 h-3.5" /> Approve
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        );
+      })}
 
       {data && data.totalPages > 1 && (
         <div className="flex justify-center gap-2 pt-2">

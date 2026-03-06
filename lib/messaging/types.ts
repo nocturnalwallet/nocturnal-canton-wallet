@@ -4,7 +4,7 @@ import type {
   AboutMeResponse,
   ActivityResponse,
   AutoApprovalPrepareResponse,
-  BalanceSwapResponse,
+  TokenBalance,
   GetApproveRequestsResponse,
   GetHistoryRequestsQuery,
   GetIncomingRequestsQuery,
@@ -12,7 +12,6 @@ import type {
   PrepareTransferResponse,
   PrepareTransferTokenStandardProps,
   PrepareTransferTokenStandardResponse,
-  PriceFeedResponse,
   User,
 } from '../types';
 
@@ -87,9 +86,16 @@ export type MessageRequest =
         preparedData: PrepareTransferTokenStandardResponse;
       };
     }
+  | {
+      action: typeof MSG.SIGN_AND_SUBMIT_WITHDRAW;
+      payload: {
+        password: string;
+        preparedData: PrepareTransferTokenStandardResponse;
+        contractId?: string;
+      };
+    }
   // API proxy
   | { action: typeof MSG.FETCH_BALANCES }
-  | { action: typeof MSG.FETCH_PRICES }
   | {
       action: typeof MSG.PREPARE_TRANSFER_PREAPPROVAL;
       payload: PrepareTransferProps;
@@ -116,6 +122,10 @@ export type MessageRequest =
     }
   | {
       action: typeof MSG.PREPARE_REJECT;
+      payload: { contractId: string; tokenId: string };
+    }
+  | {
+      action: typeof MSG.PREPARE_WITHDRAW;
       payload: { contractId: string; tokenId: string };
     }
   | {
@@ -167,11 +177,7 @@ export interface KeyPairData {
 }
 
 export interface BalancesData {
-  balances: BalanceSwapResponse[];
-}
-
-export interface PricesData {
-  prices: PriceFeedResponse;
+  balances: TokenBalance[];
 }
 
 export interface PaginatedOffersData {

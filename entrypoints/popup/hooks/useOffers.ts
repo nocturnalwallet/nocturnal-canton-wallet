@@ -68,6 +68,7 @@ export function useSignAndSubmitApprove() {
     mutationFn: (payload: {
       password: string;
       preparedData: PrepareTransferTokenStandardResponse;
+      contractId?: string;
     }) =>
       sendMessage<{ success: boolean }>({
         action: MSG.SIGN_AND_SUBMIT_APPROVE,
@@ -88,6 +89,7 @@ export function useSignAndSubmitReject() {
     mutationFn: (payload: {
       password: string;
       preparedData: PrepareTransferTokenStandardResponse;
+      contractId?: string;
     }) =>
       sendMessage<{ success: boolean }>({
         action: MSG.SIGN_AND_SUBMIT_REJECT,
@@ -95,6 +97,37 @@ export function useSignAndSubmitReject() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [queryKey.INCOMING_REQUESTS] });
+      queryClient.invalidateQueries({ queryKey: [queryKey.HISTORY_REQUESTS] });
+      queryClient.invalidateQueries({ queryKey: [queryKey.BALANCE] });
+    },
+  });
+}
+
+export function usePrepareWithdraw() {
+  return useMutation({
+    mutationFn: (payload: { contractId: string; tokenId: string }) =>
+      sendMessage<PrepareData>({
+        action: MSG.PREPARE_WITHDRAW,
+        payload,
+      }),
+  });
+}
+
+export function useSignAndSubmitWithdraw() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (payload: {
+      password: string;
+      preparedData: PrepareTransferTokenStandardResponse;
+      contractId?: string;
+    }) =>
+      sendMessage<{ success: boolean }>({
+        action: MSG.SIGN_AND_SUBMIT_WITHDRAW,
+        payload,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [queryKey.OUTGOING_REQUESTS] });
       queryClient.invalidateQueries({ queryKey: [queryKey.HISTORY_REQUESTS] });
       queryClient.invalidateQueries({ queryKey: [queryKey.BALANCE] });
     },
