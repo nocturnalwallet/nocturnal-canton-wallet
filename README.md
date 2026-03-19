@@ -353,6 +353,7 @@ ginkgo/
 |-- entrypoints/
 |   |-- background.ts             # Service worker: message router, network init, migrations
 |   |-- content.ts                # CIP-0103 content script bridge (postMessage <-> chrome.runtime)
+|   |-- provider.content.ts       # MAIN world script: injects window.canton marker for SDK detection
 |   |-- background/
 |   |   |-- api-client.ts         # Axios instance for dapp-core (setApiBaseUrl)
 |   |   |-- gateway-client.ts     # Axios instance for Wallet Gateway (JSON-RPC 2.0)

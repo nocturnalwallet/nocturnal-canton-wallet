@@ -46,11 +46,28 @@ const EMPTY_ONBOARDING: OnboardingState = {
   preparedParty: null,
 };
 
-/** True when the app is running inside a persistent auth window (not the popup). */
-const IS_STANDALONE_WINDOW = new URLSearchParams(window.location.search).has('window');
+/** True when the app is running inside a full onboarding tab (not the extension popup). */
+const IS_ONBOARDING_TAB = new URLSearchParams(window.location.search).has('tab');
+
+// Apply tab-mode class to <html> so CSS can override fixed popup sizing
+if (IS_ONBOARDING_TAB) {
+  document.documentElement.classList.add('tab-mode');
+}
 
 const searchParams = new URLSearchParams(window.location.search);
 const APPROVAL_REQUEST_ID = searchParams.get('action') === 'dapp-approve' ? searchParams.get('id') : null;
+
+/** Wrap content in a centered card layout when running in a full browser tab. */
+function TabLayout({ children }: { children: React.ReactNode }) {
+  if (!IS_ONBOARDING_TAB) return <>{children}</>;
+  return (
+    <div className="min-h-screen w-full flex items-center justify-center bg-background p-6">
+      <div className="w-full max-w-[420px] h-[600px] rounded-2xl border border-border/40 shadow-2xl shadow-black/40 overflow-y-auto">
+        {children}
+      </div>
+    </div>
+  );
+}
 
 function App() {
   // If opened as a dApp approval popup, render only the approval UI
@@ -89,9 +106,9 @@ function App() {
     // Authenticated but locked — check if onboarding is done
     // (onboardingComplete comes from the background via namespaced localStore)
     if (authState.onboardingComplete) {
-      // Onboarding already complete — if we're in the persistent auth window,
+      // Onboarding already complete — if we're in the onboarding tab,
       // close it and let the user continue via the extension popup.
-      if (IS_STANDALONE_WINDOW) {
+      if (IS_ONBOARDING_TAB) {
         window.close();
         return;
       }
@@ -101,157 +118,161 @@ function App() {
     }
   }, [authState, lockState, authLoading, lockLoading]);
 
-  if (screen === 'loading') {
-    return (
-      <div className="flex items-center justify-center h-full bg-background">
-        <div className="animate-spin rounded-full h-8 w-8 border-2 border-primary border-t-transparent" />
-      </div>
-    );
-  }
-
-  switch (screen) {
-    case 'welcome':
+  const renderScreen = () => {
+    if (screen === 'loading') {
       return (
-        <Welcome
-          onSuccess={(data) => {
-            if (data.onboardingComplete) {
-              // User already has a keystore on this network — go straight to unlock.
-              // If in persistent window, close it (popup will show unlock via useEffect).
-              if (IS_STANDALONE_WINDOW) {
-                window.close();
-                return;
-              }
-              setScreen('unlock');
-            } else {
-              // Store party info for the onboarding flow
-              setOnboarding((prev) => ({
-                ...prev,
-                partyStatus: data.partyStatus,
-                existingPublicKey: data.publicKey,
-              }));
-              setScreen('create-password');
-            }
-          }}
-        />
+        <div className="flex items-center justify-center h-full bg-background">
+          <div className="animate-spin rounded-full h-8 w-8 border-2 border-primary border-t-transparent" />
+        </div>
       );
+    }
 
-    case 'create-password':
-      return (
-        <CreatePassword
-          isLocalnet={isLocalnet}
-          onReset={async () => {
-            await sendMessage({ action: MSG.LOGOUT });
-            clearOnboarding();
-            setScreen('welcome');
-          }}
-          onNext={async (password) => {
-            if (onboarding.partyStatus === 'SUCCESSFULLY' || onboarding.existingPublicKey) {
-              // User already has a key pair on the backend (fully onboarded or onboarding underway) — import existing key
-              setOnboarding((prev) => ({ ...prev, password }));
-              setScreen('key-setup');
-            } else {
-              // Truly new user (no public key yet) — auto-generate keypair, skip to show-key
-              try {
-                const data = await sendMessage<KeyPairData>({ action: MSG.CREATE_KEYPAIR });
+    switch (screen) {
+      case 'welcome':
+        return (
+          <Welcome
+            onSuccess={(data) => {
+              if (data.onboardingComplete) {
+                // User already has a keystore on this network — go straight to unlock.
+                // If in onboarding tab, close it (popup will show unlock via useEffect).
+                if (IS_ONBOARDING_TAB) {
+                  window.close();
+                  return;
+                }
+                setScreen('unlock');
+              } else {
+                // Store party info for the onboarding flow
                 setOnboarding((prev) => ({
                   ...prev,
-                  password,
-                  privateKey: data.privateKey,
-                  publicKey: data.publicKey,
-                  isImport: false,
+                  partyStatus: data.partyStatus,
+                  existingPublicKey: data.publicKey,
                 }));
-                setScreen('show-key');
-              } catch {
-                // Fallback to key-setup if generation fails
+                setScreen('create-password');
+              }
+            }}
+          />
+        );
+
+      case 'create-password':
+        return (
+          <CreatePassword
+            isLocalnet={isLocalnet}
+            onReset={async () => {
+              await sendMessage({ action: MSG.LOGOUT });
+              clearOnboarding();
+              setScreen('welcome');
+            }}
+            onNext={async (password) => {
+              if (onboarding.partyStatus === 'SUCCESSFULLY' || onboarding.existingPublicKey) {
+                // User already has a key pair on the backend (fully onboarded or onboarding underway) — import existing key
                 setOnboarding((prev) => ({ ...prev, password }));
                 setScreen('key-setup');
+              } else {
+                // Truly new user (no public key yet) — auto-generate keypair, skip to show-key
+                try {
+                  const data = await sendMessage<KeyPairData>({ action: MSG.CREATE_KEYPAIR });
+                  setOnboarding((prev) => ({
+                    ...prev,
+                    password,
+                    privateKey: data.privateKey,
+                    publicKey: data.publicKey,
+                    isImport: false,
+                  }));
+                  setScreen('show-key');
+                } catch {
+                  // Fallback to key-setup if generation fails
+                  setOnboarding((prev) => ({ ...prev, password }));
+                  setScreen('key-setup');
+                }
               }
-            }
-          }}
-        />
-      );
+            }}
+          />
+        );
 
-    case 'key-setup':
-      return (
-        <KeySetup
-          existingPublicKey={onboarding.existingPublicKey}
-          partyStatus={onboarding.partyStatus}
-          onNext={(data) => {
-            setOnboarding((prev) => ({
-              ...prev,
-              privateKey: data.privateKey,
-              publicKey: data.publicKey,
-              isImport: data.isImport,
-            }));
-            // Imported keys don't need the "save your key" screen
-            setScreen(data.isImport ? 'acknowledgment' : 'show-key');
-          }}
-          onBack={() => setScreen('create-password')}
-        />
-      );
+      case 'key-setup':
+        return (
+          <KeySetup
+            existingPublicKey={onboarding.existingPublicKey}
+            partyStatus={onboarding.partyStatus}
+            onNext={(data) => {
+              setOnboarding((prev) => ({
+                ...prev,
+                privateKey: data.privateKey,
+                publicKey: data.publicKey,
+                isImport: data.isImport,
+              }));
+              // Imported keys don't need the "save your key" screen
+              setScreen(data.isImport ? 'acknowledgment' : 'show-key');
+            }}
+            onBack={() => setScreen('create-password')}
+          />
+        );
 
-    case 'show-key':
-      return (
-        <ShowPrivateKey
-          privateKey={onboarding.privateKey}
-          onNext={() => setScreen('acknowledgment')}
-          onBack={() => setScreen('create-password')}
-        />
-      );
+      case 'show-key':
+        return (
+          <ShowPrivateKey
+            privateKey={onboarding.privateKey}
+            onNext={() => setScreen('acknowledgment')}
+            onBack={() => setScreen('create-password')}
+          />
+        );
 
-    case 'acknowledgment':
-      return (
-        <Acknowledgment
-          isLocalnet={isLocalnet}
-          onNext={() => setScreen('typed-confirm')}
-          onBack={() => setScreen(onboarding.isImport ? 'key-setup' : 'show-key')}
-        />
-      );
+      case 'acknowledgment':
+        return (
+          <Acknowledgment
+            isLocalnet={isLocalnet}
+            onNext={() => setScreen('typed-confirm')}
+            onBack={() => setScreen(onboarding.isImport ? 'key-setup' : 'show-key')}
+          />
+        );
 
-    case 'typed-confirm':
-      return (
-        <TypedConfirm
-          isLocalnet={isLocalnet}
-          password={onboarding.password}
-          privateKey={onboarding.privateKey}
-          publicKey={onboarding.publicKey}
-          preparedParty={onboarding.preparedParty}
-          onSuccess={() => {
-            clearOnboarding();
-            setScreen('dashboard');
-          }}
-          onBack={() => setScreen('acknowledgment')}
-        />
-      );
+      case 'typed-confirm':
+        return (
+          <TypedConfirm
+            isLocalnet={isLocalnet}
+            password={onboarding.password}
+            privateKey={onboarding.privateKey}
+            publicKey={onboarding.publicKey}
+            preparedParty={onboarding.preparedParty}
+            onSuccess={() => {
+              clearOnboarding();
+              setScreen('dashboard');
+            }}
+            onBack={() => setScreen('acknowledgment')}
+          />
+        );
 
-    case 'unlock':
-      return (
-        <Unlock
-          onSuccess={() => setScreen('dashboard')}
-          onLogout={() => {
-            clearOnboarding();
-            setScreen('welcome');
-          }}
-        />
-      );
+      case 'unlock':
+        return (
+          <Unlock
+            onSuccess={() => setScreen('dashboard')}
+            onLogout={() => {
+              clearOnboarding();
+              setScreen('welcome');
+            }}
+          />
+        );
 
-    case 'dashboard':
-      return (
-        <Dashboard
-          onLock={() => {
-            clearOnboarding();
-            setScreen('unlock');
-          }}
-          onLogout={() => {
-            clearOnboarding();
-            setScreen('welcome');
-          }}
-        />
-      );
+      case 'dashboard':
+        return (
+          <Dashboard
+            onLock={() => {
+              clearOnboarding();
+              setScreen('unlock');
+            }}
+            onLogout={() => {
+              clearOnboarding();
+              setScreen('welcome');
+            }}
+          />
+        );
 
-    default:
-      return null;
-  }
+      default:
+        return null;
+    }
+  };
+
+  return <TabLayout>{renderScreen()}</TabLayout>;
 }
 
 export default App;

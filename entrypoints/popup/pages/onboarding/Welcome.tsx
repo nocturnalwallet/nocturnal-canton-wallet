@@ -6,7 +6,6 @@ import { IconGoogle } from '@assets/icons/icon-google';
 import { IconLogo } from '@assets/icons/icon-logo';
 import { NETWORK_IDS, NETWORKS, type NetworkId } from '@lib/network';
 import type { GoogleAuthData } from '@lib/messaging';
-import { createCenteredPopup } from '@lib/utils';
 
 const NETWORK_DOT_COLORS: Record<NetworkId, string> = {
   localnet: 'bg-purple-400',
@@ -19,9 +18,9 @@ interface Props {
   onSuccess: (data: GoogleAuthData) => void;
 }
 
-/** Check if we're running inside a persistent window (not the extension popup). */
-function isStandaloneWindow(): boolean {
-  return new URLSearchParams(window.location.search).has('window');
+/** Check if we're running inside a full onboarding tab (not the extension popup). */
+function isOnboardingTab(): boolean {
+  return new URLSearchParams(window.location.search).has('tab');
 }
 
 export function Welcome({ onSuccess }: Props) {
@@ -49,12 +48,12 @@ export function Welcome({ onSuccess }: Props) {
     await switchNetwork(id);
   };
 
-  // Auto-trigger auth when opened in a persistent window with ?action=sign-in
+  // Auto-trigger auth when opened in an onboarding tab with ?action=sign-in
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('action') === 'sign-in' && !authTriggered.current) {
       authTriggered.current = true;
-      // Clean up action param but keep window param
+      // Clean up action param but keep tab param
       params.delete('action');
       const qs = params.toString();
       window.history.replaceState({}, '', window.location.pathname + (qs ? `?${qs}` : ''));
@@ -73,21 +72,19 @@ export function Welcome({ onSuccess }: Props) {
   };
 
   const handleGoogleSignIn = async () => {
-    if (isStandaloneWindow()) {
-      // Already in a persistent window — do auth directly
+    if (isOnboardingTab()) {
+      // Already in a full onboarding tab — do auth directly
       doAuth();
       return;
     }
 
-    // Open a persistent popup window so the UI survives the OAuth redirect.
-    // The extension popup auto-closes when it loses focus, but a window stays open.
+    // Open a full browser tab for onboarding (like MetaMask).
+    // The extension popup auto-closes when it loses focus, but a tab stays open.
     try {
-      await createCenteredPopup(
-        chrome.runtime.getURL('popup.html?window=1&action=sign-in'),
-        420,
-        660,
-      );
-      // Close the extension popup so only the persistent window remains
+      await chrome.tabs.create({
+        url: chrome.runtime.getURL('popup.html?tab=1&action=sign-in'),
+      });
+      // Close the extension popup so only the onboarding tab remains
       window.close();
     } catch {
       // Fallback: try auth directly

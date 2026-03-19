@@ -1,10 +1,10 @@
-import { createKeyPair, getPublicKeyFromPrivate } from '@canton-network/core-signing-lib';
+import { createKeyPair, getPublicKeyFromPrivate, signTransactionHash } from '@canton-network/core-signing-lib';
 import { ok, err } from '@lib/messaging';
 import type { MessageResponse, KeyPairData, OnboardingPrepareData, PreapprovalStatusData } from '@lib/messaging';
 import { localStore, sessionStore } from '@lib/storage';
 import { getEncryptionProvider } from '../encryption';
 import apiClient from '../api-client';
-import { setCachedPrivateKey, connectSigningRelay, connectSigningRelayForOnboarding } from './session.handler';
+import { setCachedPrivateKey, getCachedPrivateKey, connectSigningRelay, connectSigningRelayForOnboarding } from './session.handler';
 import { signingRelay } from '../signing-relay/relay-client';
 import { gatewayUserRpc } from '../gateway-client';
 import type { CreateWalletParams, CreateWalletResult } from '@lib/dapp-api/gateway-types';
@@ -189,24 +189,70 @@ export async function handleExportPrivateKey(
 }
 
 /**
- * Transfer preapproval via Gateway is not yet implemented.
- * The dapp-core endpoints have been removed. This will be implemented
- * in a future phase using Gateway's prepareExecute with the appropriate Daml command.
+ * Register transfer preapproval via dapp-core.
+ * Flow: prepare → sign locally → submit (same pattern as faucet).
  */
 export async function handleRegisterTransferPreapproval(): Promise<
   MessageResponse<{ success: boolean }>
 > {
-  return err(
-    'Transfer preapproval is not yet available via Gateway. This feature will be added in a future update.',
-  );
+  try {
+    const partyId = await sessionStore.get('partyId');
+    if (!partyId) return err('No party ID');
+
+    // Use cached private key (preferred) or fail — user must be unlocked
+    const privateKey = getCachedPrivateKey();
+    if (!privateKey) return err('Private key not available — please unlock the wallet');
+
+    // Step 1: Prepare via dapp-core
+    const { data: prepareRes } = await apiClient.post(
+      '/transfer-preapproval/prepare',
+      { partyId },
+    );
+    const prepared = prepareRes.data;
+    if (!prepared?.preparedTransactionHash) {
+      return err('Transfer preapproval prepare returned no transaction hash');
+    }
+
+    // Step 2: Sign locally
+    const signature = signTransactionHash(prepared.preparedTransactionHash, privateKey);
+    const publicKey = getPublicKeyFromPrivate(privateKey);
+
+    // Step 3: Submit signed transaction to dapp-core
+    await apiClient.post('/transfer-preapproval/submit', {
+      partyId,
+      preparedTransaction: prepared.preparedTransaction,
+      preparedTransactionHash: prepared.preparedTransactionHash,
+      signature,
+      publicKey,
+      commandId: prepared.commandId,
+    });
+
+    return ok({ success: true });
+  } catch (e: unknown) {
+    return err(e instanceof Error ? e.message : 'Transfer preapproval registration failed');
+  }
 }
 
+/**
+ * Check transfer preapproval status via dapp-core.
+ */
 export async function handleGetPreapprovalStatus(): Promise<
   MessageResponse<PreapprovalStatusData>
 > {
-  // Transfer preapproval status check via dapp-core is no longer available.
-  // Return false until Gateway-based preapproval is implemented.
-  return ok({ hasPreapproval: false });
+  try {
+    const partyId = await sessionStore.get('partyId');
+    if (!partyId) return ok({ hasPreapproval: false });
+
+    const { data: statusRes } = await apiClient.get(
+      '/transfer-preapproval/status',
+      { params: { partyId } },
+    );
+    const result = statusRes.data;
+    return ok({ hasPreapproval: result?.exists === true });
+  } catch {
+    // Non-critical — return false on any error
+    return ok({ hasPreapproval: false });
+  }
 }
 
 export async function handleDeleteKeystore(): Promise<MessageResponse<void>> {

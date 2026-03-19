@@ -22,11 +22,21 @@ export default defineContentScript({
 
   main() {
     window.addEventListener('message', async (event: MessageEvent) => {
-      // Only handle messages from the same window (not from iframes etc.)
-      if (event.source !== window) return;
-
       const msg = event.data;
       if (!isSpliceMessage(msg)) return;
+
+      // EXT_READY can come from the SDK's discovery popup (a different window),
+      // so we must NOT restrict it to event.source === window.
+      if (msg.type === WalletEvent.SPLICE_WALLET_EXT_READY) {
+        window.postMessage(
+          { type: WalletEvent.SPLICE_WALLET_EXT_ACK } satisfies SpliceMessage,
+          '*',
+        );
+        return;
+      }
+
+      // All other messages must originate from the same window (not iframes etc.)
+      if (event.source !== window) return;
 
       // Forward JSON-RPC requests to the background script
       if (msg.type === WalletEvent.SPLICE_WALLET_REQUEST) {
@@ -48,14 +58,6 @@ export default defineContentScript({
         } catch {
           // ignore
         }
-      }
-
-      // Acknowledge extension readiness probe from dApp SDK
-      if (msg.type === WalletEvent.SPLICE_WALLET_EXT_READY) {
-        window.postMessage(
-          { type: WalletEvent.SPLICE_WALLET_EXT_ACK } satisfies SpliceMessage,
-          '*',
-        );
       }
     });
 
