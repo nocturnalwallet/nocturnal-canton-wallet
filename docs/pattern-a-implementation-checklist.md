@@ -1,5 +1,25 @@
 # Pattern A Implementation Checklist
 
+> **Last updated: 2026-03-20**
+>
+> | Phase | Description | Status |
+> |-------|-------------|--------|
+> | 1 | Foundation (Network Config + Environment) | **DONE** |
+> | 2 | Gateway JSON-RPC Client | **DONE** |
+> | 3 | Content Script + CIP-0103 Discovery | **DONE** |
+> | 4 | CIP-0103 dApp API Handler (11/11 methods) | **DONE** |
+> | 5 | dapp-core Minimization | **SUPERSEDED** — dapp-core retained as SDK middleware |
+> | 6 | Gateway Configuration + End-to-End | **DONE** (config), verification items pending |
+> | 7 | Party Onboarding via Wallet Gateway | **DONE** |
+> | 8.1 | Token Balance | **DONE** — via dapp-core SDK middleware (`listHoldingUtxos`) |
+> | 8.2 | Remove Token Prices | **DONE** |
+> | 8.3 | Faucet via dapp-core Middleware | **DONE** |
+> | 8.4 | Transfers via dapp-core SDK Middleware | **DONE** — prepare/sign/submit via SDK interactive submission |
+> | 8.5 | Offers (Incoming/Outgoing/History) | **DONE** — SDK activeContracts queries + DB history |
+> | 8.6 | Approve/Reject/Withdraw | **DONE** — prepare/sign/submit with history recording |
+> | 8.7 | Activity/TX History | **DONE** — DB-backed queries |
+> | 8.8 | Transfer Preapproval | **DONE** — prepare/sign/submit via dapp-core SDK middleware |
+
 ## CIP-0103 `prepareExecute` via Wallet Gateway
 
 ### Context
@@ -10,21 +30,25 @@ The current architecture routes all wallet operations through dapp-core, which u
 
 ### Architecture
 
-```text
-canton-exchange-frontend (dApp)
-    |
-    |-- CIP-0103 postMessage --> ginkgo extension
-    |                                |
-    |                                |-- Wallet Gateway (dApp API)
-    |                                |       |
-    |                                |       |-- Canton Ledger API (prepare/execute)
-    |                                |       |
-    |                                |       '-- Signing Relay <--Socket.io--> extension
-    |                                |
-    |                                '-- local signing (private key in memory)
-    |
-    '-- REST API --> dapp-core (auth only)
-                        '-- Google OAuth + JWT + user-party mapping
+```mermaid
+flowchart TD
+    dApp["canton-exchange-frontend (dApp)"]
+    ext["ginkgo extension"]
+    gw["Wallet Gateway (dApp API)"]
+    ledger["Canton Ledger API (prepare/execute)"]
+    relay["Signing Relay"]
+    localsign["Local signing (private key in memory)"]
+    dappcore["dapp-core (auth only)"]
+    oauth["Google OAuth + JWT + user-party mapping"]
+
+    dApp -->|"CIP-0103 postMessage"| ext
+    ext --> gw
+    gw --> ledger
+    gw -->|"Socket.io"| relay
+    relay -->|"Socket.io"| ext
+    ext --> localsign
+    dApp -->|"REST API"| dappcore
+    dappcore --> oauth
 ```
 
 ---
@@ -140,7 +164,7 @@ yarn dev   # uses tsx watch — no build step needed
 
 - [ ] Relay starts on port 4100
 
-**Step 2 — HTTP: Health check and empty keys**
+#### Step 2 — HTTP: Health check and relay URL discovery
 
 Create two HTTP requests in Postman:
 
@@ -152,7 +176,7 @@ Create two HTTP requests in Postman:
 - [ ] `GET /health` returns `{ "status": "ok", "service": "signing-relay" }`
 - [ ] `POST /getKeys` returns `{ "keys": [] }`
 
-**Step 3 — Socket.io: Connect as extension**
+#### Step 3 — Socket.io: Connect as party
 
 1. In Postman, click **New** → **Socket.IO**
 2. URL: `localhost:4100`
@@ -175,7 +199,7 @@ Expected relay log:
 
 - [ ] Postman connects, relay logs the partyId
 
-**Step 4 — Socket.io: Register keys**
+#### Step 4 — Socket.io: Register keys
 
 In the connected Socket.io tab:
 
@@ -202,7 +226,7 @@ Verify via HTTP — send the `POST /getKeys` request again:
 
 - [ ] Keys registered and visible via `POST /getKeys`
 
-**Step 5 — Socket.io: Listen for sign requests**
+#### Step 5 — Socket.io: Listen for sign requests
 
 In the Socket.io tab:
 
@@ -212,7 +236,7 @@ In the Socket.io tab:
 
 - [ ] Listener added for `sign-request`
 
-**Step 6 — HTTP: Trigger signing**
+#### Step 6 — HTTP: Trigger signing
 
 Create a new HTTP request in Postman:
 
@@ -247,7 +271,7 @@ Switch to the Socket.io tab — you should see a `sign-request` event arrive:
 
 - [ ] `sign-request` event received in Socket.io tab
 
-**Step 7 — Socket.io: Respond with signature**
+#### Step 7 — Socket.io: Respond with signature
 
 In the Socket.io tab, send a new message:
 
@@ -700,32 +724,33 @@ Expected: test page receives an error response, extension calls `deleteTransacti
 
 ### 5.2 Remove Wallet Modules
 
-- [ ] Delete `src/modules/onboarding/` (service + controller)
-- [ ] Delete `src/modules/transfer/` (service + controller)
-- [ ] Delete `src/modules/amulet-transfer/` (service + controller)
-- [ ] Delete `src/modules/balance/` (service + controller)
-- [ ] Delete `src/modules/transfer-preapproval/` (service + controller)
-- [ ] Delete `src/entities/transfer-history.entity.ts`
-- [ ] Delete `gateway-config.json`
+> **Status: DEFERRED** — These modules are retained because dapp-core now serves as SDK middleware for operations that the extension cannot perform directly (faucet, transfers, balance queries, transfer preapproval). The original plan to strip dapp-core down to auth-only was superseded by the middleware approach (Phase 8.3+). Modules were refactored to use interactive submission (prepare/sign/submit) instead of being deleted.
+
+- [x] ~~Delete~~ `src/modules/onboarding/` — **Removed** (onboarding handled by Wallet Gateway `createWallet` via signing relay)
+- [ ] ~~Delete~~ `src/modules/transfer/` — **Retained**: refactored to SDK-based interactive submission (prepare/submit endpoints)
+- [ ] ~~Delete~~ `src/modules/amulet-transfer/` — **Retained**: refactored to SDK-based interactive submission
+- [ ] ~~Delete~~ `src/modules/balance/` — **Retained**: refactored to use SDK `listHoldingUtxos()`
+- [ ] ~~Delete~~ `src/modules/transfer-preapproval/` — **Retained**: refactored to SDK-based interactive submission
+- [ ] ~~Delete~~ `src/entities/transfer-history.entity.ts` — **Retained**: used by transfer history recording
+- [ ] ~~Delete~~ `gateway-config.json` — **Retained**: used by gateway module
 
 **Keep** `src/modules/gateway/` (wallet-sdk.ts, gateway.service.ts) and `src/modules/faucet/` — dapp-core acts as middleware for operations requiring admin/validator access (SDK, scan proxy). See Phase 8.3.
 
 ### 5.3 Trim Entry Point
 
-- [x] Modify `dapp-core/src/index.ts`:
-  - Remove all route registrations except auth routes
-  - Remove `initWalletSDK()` call
-  - Remove unused imports
+> **Status: SUPERSEDED** — dapp-core retains all routes (auth, faucet, balance, transfer, amulet-transfer, transfer-preapproval, activity, offers) as SDK middleware. `initWalletSDK()` is still called on startup.
+
+- [ ] ~~Modify `dapp-core/src/index.ts`~~ — **Retained**: all routes kept for SDK middleware pattern
 
 ### 5.4 Trim Config
 
-- [x] Modify `dapp-core/src/config/index.ts`:
-  - Remove: `participantLedgerApiUrl`, `walletGatewayUrl`, `canton.adminUser`, `canton.adminPassword`
-  - Keep: database config, auth config (JWT secret, Google OAuth), server port
+> **Status: SUPERSEDED** — All config entries retained for SDK middleware operation.
+
+- [ ] ~~Modify `dapp-core/src/config/index.ts`~~ — **Retained**: `participantLedgerApiUrl`, `validatorApiUrl`, `gatewayUserApiUrl`, `gatewayDappApiUrl`, `canton.*` all needed
 
 ### 5.5 Clean Dependencies
 
-- [ ] **Keep** `@canton-network/wallet-sdk` — needed by faucet middleware (Phase 8.3)
+- [x] **Keep** `@canton-network/wallet-sdk` — needed by all SDK middleware modules
 - [ ] Remove any other unused dependencies
 - [ ] Run `yarn install` to update lockfile
 
@@ -993,25 +1018,24 @@ After Phase 5 (dapp-core minimization), the onboarding endpoints (`/external-par
 
 ### New Onboarding Flow
 
-```text
-Extension                    Relay                   Gateway
-   |                          |                        |
-   |-- connect(url, '', token) -->                     |
-   |-- registerKeys([key]) --->                        |
-   |                          |                        |
-   |--- gatewayUserRpc('createWallet', {...}) -------->|
-   |                          |                        |
-   |                          |<-- POST /createKey ----|
-   |                          |--- return key -------->|
-   |                          |                        |
-   |                          |<-- POST /signTx -------|
-   |<-- sign-request ---------|                        |
-   |--- sign-response ------->|                        |
-   |                          |--- return sig -------->|
-   |                          |                        |
-   |<--- { wallet: { partyId, status: 'allocated' } } -|
-   |                          |                        |
-   |--- POST /auth/register-party ---> dapp-core       |
+```mermaid
+sequenceDiagram
+    participant Ext as Extension
+    participant Relay as Signing Relay
+    participant GW as Wallet Gateway
+    participant DC as dapp-core
+
+    Ext->>Relay: connect(url, '', token)
+    Ext->>Relay: registerKeys([key])
+    Ext->>GW: gatewayUserRpc('createWallet', {partyHint, signingProviderId})
+    GW->>Relay: POST /createKey
+    Relay-->>GW: return key
+    GW->>Relay: POST /signTransaction
+    Relay->>Ext: sign-request (txHash)
+    Ext-->>Relay: sign-response (signature)
+    Relay-->>GW: return signature
+    GW-->>Ext: { wallet: { partyId, status: 'allocated' } }
+    Ext->>DC: POST /auth/register-party { partyId, publicKey }
 ```
 
 ### 7.1 Relay Security: Shared API Key
@@ -1020,46 +1044,46 @@ Currently the relay has zero authentication — all HTTP endpoints are open, Soc
 
 **Files**: `ginkgo/tools/signing-relay/src/index.ts`, `http-api.ts`, `socket-handler.ts`
 
-- [ ] Add `RELAY_API_KEY` env var to signing relay
-- [ ] Add Express middleware on HTTP routes: validate `Authorization: Bearer <RELAY_API_KEY>` header
-- [ ] Add Socket.io auth middleware: validate `token` field matches `RELAY_API_KEY`
-- [ ] Restrict CORS origins to configured values only (no more `*` default)
-- [ ] Pass `RELAY_API_KEY` from extension via Socket.io auth
+- [x] Add `RELAY_API_KEY` env var to signing relay
+- [x] Add Express middleware on HTTP routes: validate `Authorization: Bearer <RELAY_API_KEY>` header
+- [x] Add Socket.io auth middleware: validate `token` field matches `RELAY_API_KEY`
+- [x] Restrict CORS origins to configured values only (no more `*` default)
+- [x] Pass `RELAY_API_KEY` from extension via Socket.io auth
 
 ### 7.2 Signing Relay: `POST /createKey` fallback
 
 **File**: `ginkgo/tools/signing-relay/src/http-api.ts`
 
-- [ ] When no key matches by `name`, return the **first registered key** instead of an empty placeholder
-- [ ] Log fallback usage for debugging
+- [x] When no key matches by `name`, return the **first registered key** instead of an empty placeholder
+- [x] Log fallback usage for debugging
 
 ### 7.3 Relay Client: add `autoApprove` flag
 
 **File**: `ginkgo/entrypoints/background/signing-relay/relay-client.ts`
 
-- [ ] Add `setAutoApprove(enabled: boolean)` method to `SigningRelayClient`
-- [ ] In `handleSignRequest()`: skip approval popup and auto-sign when `autoApprove` is true
-- [ ] Log when auto-approving for debugging
+- [x] Add `setAutoApprove(enabled: boolean)` method to `SigningRelayClient`
+- [x] In `handleSignRequest()`: skip approval popup and auto-sign when `autoApprove` is true
+- [x] Log when auto-approving for debugging
 
 ### 7.4 Session Handler: export relay-connect for onboarding
 
 **File**: `ginkgo/entrypoints/background/handlers/session.handler.ts`
 
-- [ ] Export `connectSigningRelay()` (make public)
-- [ ] Add `connectSigningRelayForOnboarding(privateKey: string)` — connects to relay without partyId, registers key with generic name `'onboarding'`
+- [x] Export `connectSigningRelay()` (make public)
+- [x] Add `connectSigningRelayForOnboarding(privateKey: string)` — connects to relay without partyId, registers key with generic name `'onboarding'`
 
 ### 7.5 Gateway Types: `CreateWalletParams` / `CreateWalletResult`
 
 **File**: `ginkgo/lib/dapp-api/gateway-types.ts`
 
-- [ ] Add `CreateWalletParams` interface: `{ partyHint: string; signingProviderId: string; primary?: boolean }`
-- [ ] Add `CreateWalletResult` interface: `{ wallet: { partyId: string; status: string; hint: string; publicKey: string; ... } }`
+- [x] Add `CreateWalletParams` interface: `{ partyHint: string; signingProviderId: string; primary?: boolean }`
+- [x] Add `CreateWalletResult` interface: `{ wallet: { partyId: string; status: string; hint: string; publicKey: string; ... } }`
 
 ### 7.6 Keystore Handler: replace dapp-core calls with Gateway (CORE)
 
 **File**: `ginkgo/entrypoints/background/handlers/keystore.handler.ts`
 
-- [ ] Rewrite `handleCompleteOnboarding()`:
+- [x] Rewrite `handleCompleteOnboarding()`:
   1. Encrypt + store key in IndexedDB
   2. Cache private key in memory (needed for relay signing)
   3. Connect to relay + register key (via `connectSigningRelayForOnboarding()`)
@@ -1070,15 +1094,15 @@ Currently the relay has zero authentication — all HTTP endpoints are open, Soc
   8. Reconnect relay with real partyId (via `connectSigningRelay()`)
   9. Disable `autoApprove`
   10. Set `onboardingComplete = true`, `unlocked = true`
-- [ ] Stub `handlePrepareOnboarding()` — return empty data (no longer needed)
-- [ ] Update `handleRegisterTransferPreapproval()` — return error (deferred to future phase)
+- [x] Stub `handlePrepareOnboarding()` — return empty data (no longer needed)
+- [ ] Update `handleRegisterTransferPreapproval()` — still uses dapp-core endpoints (deferred to Phase 8.8)
 
 ### 7.7 Popup: remove pre-fetch
 
 **File**: `ginkgo/entrypoints/popup/App.tsx`
 
-- [ ] Remove the fire-and-forget `PREPARE_ONBOARDING` call in the `create-password` handler
-- [ ] Keep `preparedParty` field in `OnboardingState` (ignored but harmless)
+- [x] Remove the fire-and-forget `PREPARE_ONBOARDING` call in the `create-password` handler
+- [x] Keep `preparedParty` field in `OnboardingState` (ignored but harmless)
 
 ### Phase 7 Verification
 
@@ -1136,17 +1160,25 @@ Transfer preapproval registration was removed from dapp-core. Stubbed with error
 
 ---
 
-## Phase 8: Replace Deleted dapp-core Modules
+## Phase 8: Wallet Operations via dapp-core SDK Middleware
 
-Phase 5 removed all wallet modules from dapp-core (balance, transfer, faucet, onboarding, offers, activity). Only auth routes remain. The extension's `api.handler.ts` and `signing.handler.ts` still call these deleted endpoints, causing 404 errors. Each deleted module needs a Gateway-based substitute using `ledgerApi` (ACS queries) for reads and `prepareExecute` for writes.
+> **Status: DONE** — Instead of removing dapp-core modules and replacing them with direct Gateway calls (original plan), dapp-core was retained as SDK middleware. All modules were refactored to use SDK interactive submission (prepare/sign/submit pattern). The extension handles local signing; dapp-core handles SDK command construction and Canton Ledger API interaction. This approach was chosen because:
+>
+> - DSO-owned contracts require scan proxy access (external parties get PERMISSION_DENIED)
+> - SDK handles complex command construction (transfers, faucet, preapproval)
+> - Eliminates need to replicate SDK logic in the extension
 
-### 8.1 Token Balance via Gateway `ledgerApi`
+### 8.1 Token Balance via dapp-core SDK Middleware
 
-**Goal**: Replace `GET /wallet/token-balance?partyId=...` with Gateway ACS query.
+**Goal**: ~~Replace `GET /wallet/token-balance?partyId=...` with Gateway ACS query.~~ Implemented via dapp-core SDK middleware.
+
+> **Status: DONE** — Extension queries dapp-core `GET /wallet/token-balance`, which uses SDK's `listHoldingUtxos()` server-side. Aggregates by instrumentId, separates locked/unlocked amounts.
 
 **File**: `ginkgo/entrypoints/background/handlers/api.handler.ts`
 
-- [ ] Rewrite `handleFetchBalances()`:
+- [x] `handleFetchBalances()` calls dapp-core `GET /wallet/token-balance?partyId=X`
+- [ ] ~~Rewrite to direct Gateway `ledgerApi`~~ (optional future optimization):
+  - Alternative: Rewrite `handleFetchBalances()`:
   1. Get ledger offset: `gatewayDappRpc('ledgerApi', { requestMethod: 'GET', resource: '/v2/state/ledger-end' })`
   2. Query ACS: `gatewayDappRpc('ledgerApi', { requestMethod: 'POST', resource: '/v2/state/active-contracts', body })` with `InterfaceFilter` for `HOLDING_INTERFACE_ID`
   3. Parse `createdEvent.interfaceViews[0].viewValue` → `{ instrumentId: { admin, id }, amount, lock }`
@@ -1159,11 +1191,11 @@ Phase 5 removed all wallet modules from dapp-core (balance, transfer, faucet, on
 
 **Goal**: Remove `/wallet/token-prices` — not related to token standard or CIP.
 
-- [ ] Delete `handleFetchPrices()` from `api.handler.ts`
-- [ ] Remove `MSG.FETCH_PRICES` case from `background.ts` message router
-- [ ] Remove `FETCH_PRICES` from `lib/messaging/constants.ts`
-- [ ] Remove price-related types from `lib/messaging/types.ts`
-- [ ] Remove `usePrices` hook and any price display UI components
+- [x] Delete `handleFetchPrices()` from `api.handler.ts`
+- [x] Remove `MSG.FETCH_PRICES` case from `background.ts` message router
+- [x] Remove `FETCH_PRICES` from `lib/messaging/constants.ts`
+- [x] Remove price-related types from `lib/messaging/types.ts`
+- [x] Remove `usePrices` hook and any price display UI components
 
 ### 8.3 Faucet via dapp-core Middleware
 
@@ -1173,19 +1205,20 @@ Phase 5 removed all wallet modules from dapp-core (balance, transfer, faucet, on
 
 **Architecture**: dapp-core (prepare/execute) ↔ Ginkgo (sign only)
 
-```text
-Ginkgo                              dapp-core                     Canton
-  |                                    |                            |
-  |-- POST /devnet-tap/prepare ------->|                            |
-  |                                    |-- SDK createTap() -------->|
-  |                                    |-- /v2/.../prepare -------->|
-  |<-- { preparedTransactionHash } ----|                            |
-  |                                    |                            |
-  |-- signTransactionHash(hash, key)   |                            |
-  |                                    |                            |
-  |-- POST /devnet-tap/submit -------->|                            |
-  |   { signature, partyId }           |-- /v2/.../execute -------->|
-  |<-- { success } -------------------|                            |
+```mermaid
+sequenceDiagram
+    participant Ext as Ginkgo Extension
+    participant DC as dapp-core
+    participant Canton as Canton Ledger
+
+    Ext->>DC: POST /devnet-tap/prepare { partyId, amount }
+    DC->>Canton: SDK createTap()
+    DC->>Canton: /v2/.../prepare
+    DC-->>Ext: { preparedTransactionHash }
+    Note over Ext: signTransactionHash(hash, privateKey)
+    Ext->>DC: POST /devnet-tap/submit { signature, publicKey, partyId }
+    DC->>Canton: /v2/.../execute
+    DC-->>Ext: { success }
 ```
 
 **dapp-core changes** (`Quickstart/dapp-core`):
@@ -1203,28 +1236,32 @@ Ginkgo                              dapp-core                     Canton
 
 - [x] Rewrite `handleRequestFaucet(password, amount)`:
   1. Get `partyId` from session, get cached private key (or decrypt from keystore)
-  2. Call dapp-core `POST /external-party/devnet-tap/prepare` with `{ partyId, amount }`
+  2. Call dapp-core `POST /external-party/devnet-tap/prepare` with `{ partyId, amount, publicKey }`
   3. Receive `{ preparedTransactionHash }` from response
   4. Sign locally: `signTransactionHash(preparedTransactionHash, privateKey)`
-  5. Call dapp-core `POST /external-party/devnet-tap/submit` with `{ preparedTransaction, signature, partyId }`
+  5. Call dapp-core `POST /external-party/devnet-tap/submit` with `{ preparedTransaction, preparedTransactionHash, signature, partyId, publicKey }`
   6. Return success
 - [x] Remove `AMULET_RULES_TEMPLATE_ID`, `OPEN_MINING_ROUND_TEMPLATE_ID` constants
 - [x] Remove `AcsCreatedEvent`, `AcsContract` interfaces
 - [x] Remove `queryAcsByTemplate()` helper
 
-### 8.4 Transfers via Gateway `prepareExecute`
+### 8.4 Transfers via dapp-core SDK Middleware
 
-**Goal**: Replace transfer prepare/submit endpoints.
+**Goal**: ~~Replace transfer prepare/submit endpoints with direct Gateway calls.~~ Implemented via dapp-core SDK middleware with interactive submission.
 
-**Endpoints replaced**:
+> **Status: DONE** — Both amulet and token standard transfers use the prepare/sign/submit pattern through dapp-core.
 
-- `POST /external-party/transfer-amulet/prepare` + `/submit` (Amulet/CC)
-- `POST /transfer-token-standard/prepare` + `/submit` (CBTC/USDCx)
+**Flows implemented**:
 
-**Files**: `api.handler.ts`, `signing.handler.ts`
+- `POST /external-party/transfer-amulet/prepare` + `/submit` (Amulet/CC) — SDK `createTransfer()` + `prepareSubmission()` / `executeSubmissionAndWaitFor()` + history recording
+- `POST /offers/prepare` + `/submit` (CBTC/USDCx offers) — SDK `createTransfer()` + `prepareSubmission()` / `executeSubmission()`
 
-- [ ] Rewrite transfer prepare handlers to use `gatewayDappRpc('prepareExecute', { commands, actAs })`
-- [ ] Rewrite transfer submit handlers to sign locally + call `gatewayUserRpc('execute', ...)`
+**Extension files**: `api.handler.ts` (prepare handlers), `signing.handler.ts` (sign + submit handlers)
+**dapp-core files**: `amulet-transfer.service.ts`, `transfer.service.ts`
+
+- [x] Amulet transfer: extension calls dapp-core prepare → signs locally → calls dapp-core submit with `{ signature, publicKey }`
+- [x] Token standard transfer: same prepare/sign/submit pattern via offers endpoints
+- [x] Both use SDK interactive submission (`prepareSubmission` + `executeSubmission`/`executeSubmissionAndWaitFor`)
 
 **Daml details**: Both use `WalletUserProxy_TransferFactory_Transfer` choice on the `WalletUserProxy` template. Requires:
 
@@ -1234,37 +1271,45 @@ Ginkgo                              dapp-core                     Canton
 - Input holding CIDs (ACS query for holdings)
 - Disclosed contracts
 
-### 8.5 Offers (Incoming/Outgoing/History) via Gateway `ledgerApi`
+### 8.5 Offers (Incoming/Outgoing/History) via dapp-core SDK Middleware
 
-**Goal**: Replace `/transfer-token-standard/incoming-requests`, `/outgoing-requests`, `/history`.
+**Goal**: ~~Replace offer queries with direct Gateway `ledgerApi`.~~ Implemented via dapp-core SDK middleware.
 
-**File**: `ginkgo/entrypoints/background/handlers/api.handler.ts`
+> **Status: DONE** — Extension queries dapp-core endpoints, which use SDK `activeContracts()` for on-chain queries and DB for history.
 
-- [ ] Rewrite `handleFetchIncomingOffers()` — query ACS for `TransferInstruction` contracts where party is receiver
-- [ ] Rewrite `handleFetchOutgoingOffers()` — query ACS where party is sender
-- [ ] Rewrite `handleFetchHistoryOffers()` — query `/v2/updates/flats` for completed transfer events
+**Extension file**: `ginkgo/entrypoints/background/handlers/api.handler.ts`
+**dapp-core file**: `transfer.service.ts`
 
-**Interface ID**: `#splice-api-token-transfer-instruction-v1:Splice.Api.Token.TransferInstructionV1:TransferInstruction`
+- [x] `handleFetchIncomingOffers()` → `GET /offers/incoming-requests` → SDK `activeContracts()` with `TRANSFER_INSTRUCTION_INTERFACE_ID`, filtered by receiver
+- [x] `handleFetchOutgoingOffers()` → `GET /offers/outgoing-requests` → SDK `activeContracts()`, filtered by sender
+- [x] `handleFetchHistoryOffers()` → `GET /offers/history` → DB query on `TransferHistory` table
 
-### 8.6 Approve/Reject via Gateway `prepareExecute`
+### 8.6 Approve/Reject/Withdraw via dapp-core SDK Middleware
 
-**Goal**: Replace approve/reject prepare/submit endpoints.
+**Goal**: ~~Replace approve/reject/withdraw with direct Gateway calls.~~ Implemented via dapp-core SDK middleware with interactive submission.
 
-- [ ] Rewrite `handlePrepareApprove()` + `handleSignAndSubmitApprove()` — exercise `WalletUserProxy_TransferInstruction_Accept`
-- [ ] Rewrite `handlePrepareReject()` + `handleSignAndSubmitReject()` — exercise `WalletUserProxy_TransferInstruction_Reject`
+> **Status: DONE** — All three actions use prepare/sign/submit pattern with history recording.
 
-Same complexity as 8.4 — requires choice context and disclosed contracts.
+**Extension files**: `api.handler.ts` (prepare), `signing.handler.ts` (sign + submit)
+**dapp-core file**: `transfer.service.ts` — uses SDK `exerciseTransferInstructionChoice()` + `prepareSubmission()` / `executeSubmissionAndWaitFor()`
 
-### 8.7 Activity/TX History via Gateway `ledgerApi`
+- [x] Approve: `POST /offers/approve/prepare` → sign locally → `POST /offers/approve/submit` → history recorded as `APPROVED`
+- [x] Reject: `POST /offers/reject/prepare` → sign locally → `POST /offers/reject/submit` → history recorded as `REJECTED`
+- [x] Withdraw: `POST /offers/withdraw/prepare` → sign locally → `POST /offers/withdraw/submit` → history recorded as `CANCELLED`
 
-**Goal**: Replace `GET /external-party/tx-history`.
+### 8.7 Activity/TX History via dapp-core DB
 
-- [ ] Rewrite `handleFetchActivity()` — query `/v2/updates/flats` for transaction events involving the party
-- [ ] Parse flat transaction events into the existing `PaginatedActivityData` format
+**Goal**: ~~Replace `GET /external-party/tx-history` with direct Gateway queries.~~ Implemented via dapp-core DB-backed queries.
 
-### 8.8 Transfer Preapproval via Gateway
+> **Status: DONE** — Extension queries dapp-core, which returns paginated activity from the `TxHistory` DB table.
 
-**Goal**: Replace dapp-core `/transfer-preapproval/prepare` + `/submit` + `/status` with direct Canton Ledger API calls via the Gateway's `ledgerApi` proxy.
+- [x] `handleFetchActivity()` → `GET /external-party/tx-history?partyId=X&page=Y&limit=Z` → DB query on `TxHistory` table
+
+### 8.8 Transfer Preapproval via dapp-core SDK Middleware
+
+> **Status: DONE** — Transfer preapproval uses dapp-core endpoints (`/transfer-preapproval/prepare` + `/submit`), which use SDK-based interactive submission server-side (`createTransferPreapprovalCommand()` + `prepareSubmission()` / `executeSubmission()`). The extension signs locally and sends to dapp-core for execution.
+
+**Goal**: ~~Replace dapp-core `/transfer-preapproval/prepare` + `/submit` + `/status` with direct Canton Ledger API calls via the Gateway's `ledgerApi` proxy.~~ Implemented via dapp-core SDK middleware.
 
 **Background**: A `TransferPreapproval` contract allows other parties to send tokens to the user without requiring per-transfer approval. The cn-quickstart-dapp-core reference implementation (`cn-quickstart-dapp-core/dapp-core/src/modules/transfer-preapproval/`) uses the Wallet SDK server-side to build a `CreateCommand` for the `TransferPreapprovalProposal` template, then prepares + signs + executes it via the SDK's interactive submission flow. In Pattern A, the extension replicates this by proxying the Canton Ledger API's interactive submission endpoints through the Gateway's `ledgerApi` method.
 
@@ -1282,21 +1327,19 @@ Same complexity as 8.4 — requires choice context and disclosed contracts.
 
 **Implementation steps**:
 
-- [ ] Configure `providerParty` and `dsoParty` discovery (choose option a/b/c above)
-- [ ] Rewrite `handleRegisterTransferPreapproval()`:
+- [x] Configure `providerParty` and `dsoParty` discovery — handled by dapp-core SDK (scan proxy access)
+- [x] ~~Rewrite `handleRegisterTransferPreapproval()`~~ — uses dapp-core prepare/submit endpoints instead:
   1. Get `partyId` from session, get cached private key
   2. Get splice-wallet package version: `gatewayDappRpc('ledgerApi', { requestMethod: 'GET', resource: '/v2/interactive-submission/preferred-package-version?parties=<partyId>&package-name=splice-wallet' })`
   3. Build `CreateCommand` for `TransferPreapprovalProposal` with `{ provider, receiver, expectedDso }` (include `expectedDso` for version >= 0.1.11)
   4. Prepare submission: `gatewayDappRpc('ledgerApi', { requestMethod: 'POST', resource: '/v2/interactive-submission/prepare', body: JSON.stringify({ userId, commandId, commands: [createCommand], actAs: [partyId], readAs: [], synchronizerId }) })`
   5. Sign `preparedTransactionHash` locally with `signTransactionHash()`
   6. Execute submission: `gatewayDappRpc('ledgerApi', { requestMethod: 'POST', resource: '/v2/interactive-submission/execute', body: JSON.stringify({ preparedTransaction, preparedTransactionHash, submissionId: commandId, partySignatures: { signatures: [{ party: partyId, signatures: [{ format: 'SIGNATURE_FORMAT_CONCAT', signature, signedBy: fingerprint }] }] } }) })`
-- [ ] Rewrite `handleGetPreapprovalStatus()`:
+- [x] ~~Rewrite `handleGetPreapprovalStatus()`~~ — queries dapp-core which uses scan proxy:
   1. Query ACS for `TransferPreapproval` contracts: `gatewayDappRpc('ledgerApi', { requestMethod: 'POST', resource: '/v2/state/active-contracts', body })` with `TemplateFilter` for `#splice-wallet:Splice.Wallet.TransferPreapproval:TransferPreapproval` filtered by party
   2. Return `{ hasPreapproval: contracts.length > 0 }`
-- [ ] Update `handleCompleteOnboarding()`:
-  - After successful `createWallet`, call preapproval registration (non-blocking, fail silently)
-  - Use `autoApprove` mode since relay is still connected during onboarding
-- [ ] Extract shared `prepareSignAndExecute()` helper for reuse by 8.3, 8.4, 8.6
+- [ ] Update `handleCompleteOnboarding()` to auto-register preapproval after `createWallet` (non-blocking, fail silently)
+- [ ] Extract shared `prepareSignAndExecute()` helper for reuse across signing handlers
 
 **Reference**: `cn-quickstart-dapp-core/dapp-core/src/modules/transfer-preapproval/transfer-preapproval.service.ts` — SDK-based implementation showing the full prepare → sign → execute flow with `createTransferPreapprovalCommand()`.
 
