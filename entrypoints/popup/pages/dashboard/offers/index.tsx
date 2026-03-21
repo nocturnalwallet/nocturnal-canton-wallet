@@ -4,9 +4,8 @@ import { useQueryClient } from '@tanstack/react-query';
 import { queryKey } from '@lib/constants';
 import { IncomingTab } from './IncomingTab';
 import { OutgoingTab } from './OutgoingTab';
-import { HistoryTab } from './HistoryTab';
 
-type OfferTab = 'incoming' | 'outgoing' | 'history';
+type OfferTab = 'incoming' | 'outgoing';
 
 export function Offers() {
   const [tab, setTab] = useState<OfferTab>('incoming');
@@ -18,7 +17,6 @@ export function Offers() {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: [queryKey.INCOMING_REQUESTS] }),
       queryClient.invalidateQueries({ queryKey: [queryKey.OUTGOING_REQUESTS] }),
-      queryClient.invalidateQueries({ queryKey: [queryKey.HISTORY_REQUESTS] }),
     ]);
     setRefreshing(false);
   };
@@ -26,7 +24,6 @@ export function Offers() {
   const tabs: { id: OfferTab; label: string }[] = [
     { id: 'incoming', label: 'Incoming' },
     { id: 'outgoing', label: 'Outgoing' },
-    { id: 'history', label: 'History' },
   ];
 
   return (
@@ -58,7 +55,6 @@ export function Offers() {
       <div className="flex-1 overflow-y-auto">
         {tab === 'incoming' && <IncomingTab />}
         {tab === 'outgoing' && <OutgoingTab />}
-        {tab === 'history' && <HistoryTab />}
       </div>
     </div>
   );

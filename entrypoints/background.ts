@@ -44,7 +44,7 @@ import {
   handleFetchHistoryOffers,
   handlePrepareApprove,
   handlePrepareReject,
-  handleFetchActivity,
+
   handleFetchAboutMe,
   handleRequestFaucet,
   handlePrepareWithdraw,
@@ -211,9 +211,8 @@ async function routeMessage(message: MessageRequest) {
       return handlePrepareReject(message.payload);
     case MSG.PREPARE_WITHDRAW:
       return handlePrepareWithdraw(message.payload);
-    case MSG.FETCH_ACTIVITY:
-      return handleFetchActivity(message.payload);
-    case MSG.FETCH_ABOUT_ME:
+
+case MSG.FETCH_ABOUT_ME:
       return handleFetchAboutMe();
     case MSG.REQUEST_FAUCET:
       return handleRequestFaucet(message.payload.password, message.payload.amount);

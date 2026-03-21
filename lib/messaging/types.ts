@@ -2,7 +2,6 @@ import type { MSG } from './constants';
 import type { NetworkId, NetworkConfig } from '../network';
 import type {
   AboutMeResponse,
-  ActivityResponse,
   AutoApprovalPrepareResponse,
   TokenBalance,
   GetApproveRequestsResponse,
@@ -128,10 +127,6 @@ export type MessageRequest =
       action: typeof MSG.PREPARE_WITHDRAW;
       payload: { contractId: string; tokenId: string };
     }
-  | {
-      action: typeof MSG.FETCH_ACTIVITY;
-      payload: { page: number; limit: number };
-    }
   | { action: typeof MSG.FETCH_ABOUT_ME }
   | { action: typeof MSG.REQUEST_FAUCET; payload: { password: string; amount: string } }
   // dApp approval flow
@@ -189,14 +184,6 @@ export interface PaginatedOffersData {
   has_previous: boolean;
 }
 
-export interface PaginatedActivityData {
-  data: ActivityResponse[];
-  page: number;
-  total: number;
-  totalPages: number;
-  has_next: boolean;
-  has_previous: boolean;
-}
 
 export interface AboutMeData {
   aboutMe: AboutMeResponse;

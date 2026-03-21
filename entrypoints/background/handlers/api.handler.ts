@@ -4,7 +4,7 @@ import type {
   MessageResponse,
   BalancesData,
   PaginatedOffersData,
-  PaginatedActivityData,
+
   AboutMeData,
   PrepareData,
 } from '@lib/messaging';
@@ -158,30 +158,6 @@ export async function handlePrepareReject(payload: {
   }
 }
 
-export async function handleFetchActivity(payload: {
-  page: number;
-  limit: number;
-}): Promise<MessageResponse<PaginatedActivityData>> {
-  try {
-    const partyId = await sessionStore.get('partyId');
-    if (!partyId) return err('No party ID');
-
-    const { data } = await apiClient.get('/external-party/tx-history', {
-      params: { ...payload, partyId },
-    });
-    const result = data.data;
-    return ok({
-      data: result.data ?? [],
-      page: result.page,
-      total: result.total,
-      totalPages: result.totalPages,
-      has_next: result.has_next,
-      has_previous: result.has_previous,
-    });
-  } catch (e: unknown) {
-    return err(e instanceof Error ? e.message : 'Failed to fetch activity');
-  }
-}
 
 export async function handleFetchAboutMe(): Promise<
   MessageResponse<AboutMeData>

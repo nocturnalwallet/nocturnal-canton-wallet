@@ -1,15 +1,16 @@
 import { useState } from 'react';
-import { Loader2Icon, CheckCircleIcon, XCircleIcon, LockIcon, AlertTriangleIcon, AlertCircleIcon } from 'lucide-react';
+import { Loader2Icon, CheckCircleIcon, XCircleIcon, LockIcon, AlertTriangleIcon, AlertCircleIcon, ShieldCheckIcon } from 'lucide-react';
 import { useHistoryOffers } from '../../../hooks/useOffers';
 import { format } from '@lib/format';
 import BigNumber from 'bignumber.js';
 
-const STATUS_CONFIG: Record<string, { color: string; icon: React.FC<{ className?: string }> }> = {
-  APPROVED: { color: 'text-positive', icon: CheckCircleIcon },
-  CANCELLED: { color: 'text-red-500', icon: XCircleIcon },
-  REJECTED: { color: 'text-red-500', icon: XCircleIcon },
-  LOCKED: { color: 'text-amber-400', icon: LockIcon },
-  EXPIRED: { color: 'text-gray-400', icon: AlertTriangleIcon },
+const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.FC<{ className?: string }> }> = {
+  APPROVED: { label: 'APPROVED', color: 'text-positive', icon: CheckCircleIcon },
+  AUTO_APPROVED: { label: 'AUTO APPROVED', color: 'text-positive', icon: ShieldCheckIcon },
+  CANCELLED: { label: 'CANCELLED', color: 'text-red-500', icon: XCircleIcon },
+  REJECTED: { label: 'REJECTED', color: 'text-red-500', icon: XCircleIcon },
+  LOCKED: { label: 'LOCKED', color: 'text-amber-400', icon: LockIcon },
+  EXPIRED: { label: 'EXPIRED', color: 'text-gray-400', icon: AlertTriangleIcon },
 };
 
 export function HistoryTab() {
@@ -56,7 +57,7 @@ export function HistoryTab() {
               </p>
               <div className={`flex items-center gap-1 text-xs ${cfg.color}`}>
                 <StatusIcon className="w-3 h-3" />
-                {item.status}
+                {cfg.label}
               </div>
             </div>
             <p className="text-xs text-muted-foreground">

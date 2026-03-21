@@ -33,7 +33,7 @@ export function useSignAndSubmitTransferPreapproval() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [queryKey.BALANCE] });
-      queryClient.invalidateQueries({ queryKey: [queryKey.ACTIVITY] });
+      queryClient.invalidateQueries({ queryKey: [queryKey.HISTORY_REQUESTS] });
     },
   });
 }
@@ -62,7 +62,7 @@ export function useSignAndSubmitTransferTokenStandard() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [queryKey.BALANCE] });
-      queryClient.invalidateQueries({ queryKey: [queryKey.ACTIVITY] });
+      queryClient.invalidateQueries({ queryKey: [queryKey.HISTORY_REQUESTS] });
       queryClient.invalidateQueries({
         queryKey: [queryKey.OUTGOING_REQUESTS],
       });
