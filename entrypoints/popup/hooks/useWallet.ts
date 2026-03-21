@@ -78,6 +78,8 @@ export function useRegisterPreapproval() {
         action: MSG.REGISTER_TRANSFER_PREAPPROVAL,
       }),
     onSuccess: () => {
+      // Invalidate so the next query hits the background handler, which
+      // now returns true immediately via its in-memory flag.
       queryClient.invalidateQueries({ queryKey: ['preapprovalStatus'] });
     },
   });

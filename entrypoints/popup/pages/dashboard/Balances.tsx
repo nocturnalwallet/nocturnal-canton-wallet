@@ -63,7 +63,7 @@ export function Balances() {
   })();
   const showPreapprovalBanner =
     !preapprovalLoading &&
-    !registerPreapproval.isSuccess &&
+    !showSuccess &&
     (!preapprovalData || !preapprovalData.hasPreapproval);
 
   const selectedToken = selectedTokenId

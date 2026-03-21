@@ -227,10 +227,19 @@ export async function handleRegisterTransferPreapproval(): Promise<
       commandId: prepared.commandId,
     });
 
+    markPreapprovalRegistered();
     return ok({ success: true });
   } catch (e: unknown) {
     return err(e instanceof Error ? e.message : 'Transfer preapproval registration failed');
   }
+}
+
+// In-memory flag set after a successful preapproval registration.
+// Prevents the banner from flickering while Canton's ACS catches up.
+let preapprovalRegisteredLocally = false;
+
+export function markPreapprovalRegistered(): void {
+  preapprovalRegisteredLocally = true;
 }
 
 /**
@@ -240,6 +249,10 @@ export async function handleGetPreapprovalStatus(): Promise<
   MessageResponse<PreapprovalStatusData>
 > {
   try {
+    if (preapprovalRegisteredLocally) {
+      return ok({ hasPreapproval: true });
+    }
+
     const partyId = await sessionStore.get('partyId');
     if (!partyId) return ok({ hasPreapproval: false });
 
@@ -248,7 +261,9 @@ export async function handleGetPreapprovalStatus(): Promise<
       { params: { partyId } },
     );
     const result = statusRes.data;
-    return ok({ hasPreapproval: result?.exists === true });
+    const exists = result?.exists === true;
+    if (exists) preapprovalRegisteredLocally = true;
+    return ok({ hasPreapproval: exists });
   } catch {
     // Non-critical — return false on any error
     return ok({ hasPreapproval: false });
