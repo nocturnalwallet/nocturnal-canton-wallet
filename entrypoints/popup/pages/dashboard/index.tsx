@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { WalletIcon, SendIcon, InboxIcon, HistoryIcon, SettingsIcon, ChevronDownIcon, CopyIcon, CheckIcon } from 'lucide-react';
+import { WalletIcon, SendIcon, InboxIcon, HistoryIcon, SettingsIcon, Maximize2Icon, ChevronDownIcon, CopyIcon, CheckIcon } from 'lucide-react';
 import { IconLogo } from '@assets/icons/icon-logo';
 import { Balances } from './Balances';
 import { Transfer } from './Transfer';
@@ -147,6 +147,18 @@ export function Dashboard({ onLock, onLogout }: Props) {
             className="rounded-lg p-1.5 hover:bg-secondary transition-colors"
           >
             <SettingsIcon className="w-4 h-4 text-muted-foreground" />
+          </button>
+
+          {/* Expand to full tab */}
+          <button
+            onClick={() => {
+              const url = chrome.runtime.getURL('/popup.html?tab');
+              chrome.tabs.create({ url });
+              window.close();
+            }}
+            className="rounded-lg p-1.5 hover:bg-secondary transition-colors"
+          >
+            <Maximize2Icon className="w-4 h-4 text-muted-foreground" />
           </button>
         </div>
       </div>
