@@ -2,7 +2,7 @@
 
 ## Context
 
-This document explores using [splice-wallet-kernel](https://github.com/hyperledger-labs/splice-wallet-kernel)'s dApp SDK and CIP-0103 protocol to enable web dApps to connect to the canton-wallet browser extension for wallet connection, account discovery, and transaction signing — similar to how MetaMask works for Ethereum dApps.
+This document explores using [splice-wallet-kernel](https://github.com/hyperledger-labs/splice-wallet-kernel)'s dApp SDK and CIP-0103 protocol to enable web dApps to connect to the Ginkgo browser extension for wallet connection, account discovery, and transaction signing — similar to how MetaMask works for Ethereum dApps.
 
 **Goal**: Build a proof-of-concept that validates the architecture before integrating into canton-exchange-frontend.
 
@@ -43,37 +43,39 @@ This document explores using [splice-wallet-kernel](https://github.com/hyperledg
 
 ---
 
-## Current State of canton-wallet
+## Current State of Ginkgo
 
-The canton-wallet is **self-contained with no dApp connectivity**:
+Ginkgo has **full CIP-0103 dApp connectivity** (all phases implemented):
 
-- No content scripts injecting into web pages
-- No `window.canton` provider
-- No external message listeners
-- Uses internal `chrome.runtime.sendMessage` only between popup ↔ background
+- Content script (`entrypoints/content.ts`) bridges dApp `window.postMessage` ↔ extension `chrome.runtime.sendMessage`
+- Provider marker script (`entrypoints/provider.content.ts`) injects `window.canton` for SDK detection
+- All 11 CIP-0103 methods implemented in `dapp-api.handler.ts` (connect, disconnect, isConnected, status, getActiveNetwork, listAccounts, getPrimaryAccount, signMessage, signTransaction, prepareExecute/prepareExecuteAndWait, ledgerApi)
+- Gateway-mediated methods (prepareExecute, ledgerApi) route through Wallet Gateway JSON-RPC
+- MetaMask-style approval popups for connect, signMessage, signTransaction, prepareExecute
+- Event broadcasting (statusChanged, accountsChanged) via chrome.storage.onChanged
 - Private keys isolated in background service worker
-- All signing operations are password-gated and internal-only
+- Signing relay bridges Gateway signing requests to extension-held keys
 
 ---
 
 ## Architecture: How dApp ↔ Extension Communication Works
 
-```text
-Test dApp (browser tab)                   Canton Wallet Extension
-┌──────────────────────┐                  ┌──────────────────────────┐
-│                      │                  │                          │
-│  @canton-network/    │   postMessage    │  content-script.ts       │
-│  dapp-sdk            │ ◄─────────────►  │  (listens window msgs,   │
-│                      │                  │   relays to background)  │
-│  DappProvider uses   │                  │         │                │
-│  WindowTransport     │                  │  chrome.runtime.sendMsg  │
-│  (window.postMessage)│                  │         ↓                │
-│                      │                  │  background.ts           │
-│  sdk.connect()       │                  │  (CIP-0103 RPC handler)  │
-│  sdk.listAccounts()  │                  │         │                │
-│  sdk.signMessage()   │                  │  existing handlers       │
-│                      │                  │  (auth, keystore, sign)  │
-└──────────────────────┘                  └──────────────────────────┘
+```mermaid
+flowchart LR
+    subgraph dApp["Test dApp (browser tab)"]
+        sdk["@canton-network/dapp-sdk<br/>DappProvider uses<br/>WindowTransport<br/>(window.postMessage)"]
+        methods["sdk.connect()<br/>sdk.listAccounts()<br/>sdk.signMessage()"]
+    end
+
+    subgraph ext["Ginkgo Extension"]
+        content["content-script.ts<br/>(listens window msgs,<br/>relays to background)"]
+        bg["background.ts<br/>(CIP-0103 RPC handler)"]
+        handlers["existing handlers<br/>(auth, keystore, sign)"]
+        content -->|"chrome.runtime.sendMsg"| bg
+        bg --> handlers
+    end
+
+    sdk <-->|"postMessage"| content
 ```
 
 ### Discovery Flow (how dApp finds the extension)
@@ -153,7 +155,7 @@ Browser.runtime.onMessage.addListener((message, _, sendResponse) => {
 
 ## Prototype Plan
 
-### Part 1: Canton Wallet Extension Changes
+### Part 1: Ginkgo Extension Changes
 
 **Goal**: Add CIP-0103 content script + background handler so the extension responds to dApp SDK calls.
 
@@ -283,7 +285,7 @@ The `@canton-network/dapp-sdk` may not be published to npm. Options:
 
 ### Current Backend Communication
 
-The canton-wallet talks to **dapp-core** (Quickstart/dapp-core) — not canton-exchange-backend — via Axios:
+Ginkgo talks to **dapp-core** (Quickstart/dapp-core) — not canton-exchange-backend — via Axios:
 
 | Network | Backend URL |
 |---|---|
@@ -302,12 +304,17 @@ API endpoints called: `/auth/*`, `/wallet/*`, `/transfer-token-standard/*`, `/ex
 
 **3. Two independent communication channels**:
 
-```text
-EXISTING (unchanged):
-  Popup → chrome.runtime.sendMessage({action, payload}) → background → dapp-core API
+```mermaid
+flowchart LR
+    subgraph existing["EXISTING (unchanged)"]
+        direction LR
+        P[Popup] -->|"chrome.runtime.sendMessage<br/>({action, payload})"| B1[background] --> DC[dapp-core API]
+    end
 
-NEW (additive):
-  Web page → window.postMessage(SpliceMessage) → content script → chrome.runtime.sendMessage(SpliceMessage) → background → response
+    subgraph new["NEW (additive)"]
+        direction LR
+        WP[Web page] -->|"window.postMessage<br/>(SpliceMessage)"| CS[content script] -->|"chrome.runtime.sendMessage<br/>(SpliceMessage)"| B2[background] --> R[response]
+    end
 ```
 
 **4. Background handler coexistence**: The `chrome.runtime.onMessage` API supports multiple listeners. The new CIP-0103 listener checks `isSpliceMessage(message)` first — if the message isn't a SpliceMessage, it returns early and the existing handler processes it normally.
@@ -351,7 +358,7 @@ chrome.runtime.onMessage.addListener((message: MessageRequest, _sender, sendResp
 
 ## Verification
 
-1. **Build canton-wallet** with the new content script: `yarn build`
+1. **Build Ginkgo** with the new content script: `yarn build`
 2. **Load extension** in Chrome (unpacked from build output)
 3. **Start test dApp**: `npm run dev` (localhost)
 4. **Open test dApp in browser**, open DevTools console
@@ -415,7 +422,7 @@ The dApp SDK operates at a different abstraction level than the current canton-e
 | `examples/ping/src/App.tsx` | Reference dApp showing full connect + submit flow |
 | `docs/dapp-building/dapp-sdk/usage.md` | Complete SDK usage guide |
 
-### canton-wallet (to modify)
+### Ginkgo (to modify)
 
 | File | Purpose |
 |------|---------|
@@ -447,15 +454,15 @@ The Discovery popup from `@canton-network/core-wallet-ui-components` is a **dApp
 - This is ONE way to connect. Another valid way: `sdk.injectProvider({ walletType: 'extension' })` bypasses discovery entirely
 - **The wallet extension has no control over this** — it's a dApp-side decision about how to discover wallets
 
-### Canton-wallet vs splice-wallet-kernel Reference Extension
+### Ginkgo vs splice-wallet-kernel Reference Extension
 
 The splice-wallet-kernel reference extension (`wallet-gateway/extension/`) is an **architectural template with stubs**, not a working implementation. Most methods throw `"Function not implemented"`.
 
-| Area | Canton Wallet | splice-wallet-kernel ref | Assessment |
+| Area | Ginkgo | splice-wallet-kernel ref | Assessment |
 | --- | --- | --- | --- |
-| Working methods | **8/10** (+ 3 stubs) with events + approval popup | 2/10 (rest throw "not implemented") | Canton-wallet is more functional |
-| Content script security | Checks `event.source !== window` | No source check | Canton-wallet is more secure |
-| Handler isolation | Two listeners (dApp + popup coexist) | Single listener (swallows all messages) | Canton-wallet is more robust |
+| Working methods | **8/10** (+ 3 stubs) with events + approval popup | 2/10 (rest throw "not implemented") | Ginkgo is more functional |
+| Content script security | Checks `event.source !== window` | No source check | Ginkgo is more secure |
+| Handler isolation | Two listeners (dApp + popup coexist) | Single listener (swallows all messages) | Ginkgo is more robust |
 | Message format | Matches CIP-0103 exactly | Matches CIP-0103 exactly | Both correct |
 | Types approach | Inlined (avoids dependency conflicts) | External `@canton-network/core-types` (Zod) | Both valid |
 | Provider injection | Not injected (correct -- dApp SDK does this) | Not injected (correct) | Both correct |
@@ -471,7 +478,7 @@ The splice-wallet-kernel reference extension (`wallet-gateway/extension/`) is an
 - **Background handler isolation**: CIP-0103 handler coexists with existing popup messaging without interference
 - **Provider injection**: Correctly NOT injected by extension (the dApp SDK handles this)
 
-#### Implemented Methods (8/10 functional + 3 stubs = 11/11 registered)
+#### Implemented Methods (11/11 functional)
 
 | Method | Status | Notes |
 |--------|--------|-------|
@@ -483,30 +490,32 @@ The splice-wallet-kernel reference extension (`wallet-gateway/extension/`) is an
 | `listAccounts` | Implemented | Returns full SDK `Wallet` type: partyId, primary, status, hint, publicKey, namespace, networkId, signingProviderId |
 | `getPrimaryAccount` | Implemented | Returns full account metadata or throws if not ready |
 | `signMessage` | Implemented | SHA-256 hashes message, then signs with signTransactionHash. Gated by user approval popup. |
-| `prepareExecute` | Stubbed | Returns descriptive INTERNAL_ERROR ("not yet implemented") |
-| `prepareExecuteAndWait` | Stubbed | Returns descriptive INTERNAL_ERROR ("not yet implemented") |
-| `ledgerApi` | Stubbed | Returns descriptive INTERNAL_ERROR ("not yet implemented") |
+| `prepareExecute` | Implemented | Full tx lifecycle via Wallet Gateway with approval popup and local signing |
+| `prepareExecuteAndWait` | Implemented | Same as prepareExecute, returns execution result |
+| `ledgerApi` | Implemented | Proxy to Wallet Gateway ledgerApi RPC with approval popup |
 
-#### Remaining Features (not yet implemented)
+#### All Features Complete
 
-| Feature | Priority | Notes |
-|---------|----------|-------|
-| ~~Event push (statusChanged, accountsChanged)~~ | ~~Low~~ | Done — background broadcasts via chrome.storage.onChanged → chrome.tabs.sendMessage → content script → window.postMessage |
-| ~~User approval popup for connect/sign~~ | ~~Medium~~ | Done — MetaMask-style popup window for connect, signMessage, signTransaction. Auto-rejects on window close. |
-| ~~Full Account type (8 required fields)~~ | ~~Low~~ | Done — returns all SDK `Wallet` fields: partyId, primary, status, hint, publicKey, namespace, networkId, signingProviderId |
+| Feature | Status | Notes |
+|---------|--------|-------|
+| ~~Event push (statusChanged, accountsChanged)~~ | Done | Background broadcasts via chrome.storage.onChanged → chrome.tabs.sendMessage → content script → window.postMessage |
+| ~~User approval popup for connect/sign~~ | Done | MetaMask-style popup window for connect, signMessage, signTransaction, prepareExecute. Auto-rejects on window close. |
+| ~~Full Account type (8 required fields)~~ | Done | Returns all SDK `Wallet` fields: partyId, primary, status, hint, publicKey, namespace, networkId, signingProviderId |
+| ~~prepareExecute / prepareExecuteAndWait~~ | Done | Gateway-mediated with approval popup and local signing |
+| ~~ledgerApi proxy~~ | Done | Gateway-mediated with approval popup |
 
 ### Compliance Improvements Completed
 
 **Batch 1** — Brought compliance from ~80% to ~95%:
 
 1. ~~**Add `getActiveNetwork` method**~~ — Done. Returns `{ id, name, apiBaseUrl }` from the extension's active network config.
-2. ~~**Enrich `status()` response**~~ — Done. Now includes `provider: { id: 'canton-wallet', version: '0.2.0', providerType: 'browser' }` and `network: { id, name }`.
+2. ~~**Enrich `status()` response**~~ — Done. Now includes `provider: { id: 'ginkgo', version: '0.2.0', providerType: 'browser' }` and `network: { id, name }`.
 3. ~~**Stub `prepareExecute` and `ledgerApi`**~~ — Done. All three methods (`prepareExecute`, `prepareExecuteAndWait`, `ledgerApi`) return descriptive `INTERNAL_ERROR` instead of generic `METHOD_NOT_FOUND`.
 4. ~~**Verify error codes**~~ — Done. `RpcErrorCodes` already includes all required EIP-1193 codes: `4001` (USER_REJECTED), `4100` (UNAUTHORIZED), `4200` (UNSUPPORTED_METHOD), `4900` (DISCONNECTED), `4901` (CHAIN_DISCONNECTED).
 
 **Batch 2** — Production readiness (~95% → ~99%):
 
-1. ~~**Full Account metadata**~~ — Done. `listAccounts` and `getPrimaryAccount` now return all 8 required SDK `Wallet` fields: `partyId`, `primary`, `status` (`'allocated'`), `hint`, `publicKey`, `namespace`, `networkId`, `signingProviderId` (`'canton-wallet'`). Public key derived from cached private key via `getPublicKeyFromPrivate()`.
+1. ~~**Full Account metadata**~~ — Done. `listAccounts` and `getPrimaryAccount` now return all 8 required SDK `Wallet` fields: `partyId`, `primary`, `status` (`'allocated'`), `hint`, `publicKey`, `namespace`, `networkId`, `signingProviderId` (`'ginkgo'`). Public key derived from cached private key via `getPublicKeyFromPrivate()`.
 
 2. ~~**Event subscription mechanism**~~ — Done. Background detects `chrome.storage.onChanged` for `unlocked`, `partyId` (session) and `selectedNetwork` (local), broadcasts `statusChanged` and `accountsChanged` events via `chrome.tabs.sendMessage` → content script relays to page via `window.postMessage`. Added `SPLICE_WALLET_EVENT` message type. dApps bridge events to SDK via `window.canton.provider.emit()` (bypasses SDK `Provider` wrapper bug where `emit()` passes args as array instead of spreading).
 
@@ -514,10 +523,12 @@ The splice-wallet-kernel reference extension (`wallet-gateway/extension/`) is an
 
 ### Gaps Remaining (for production)
 
+All gaps have been resolved:
+
 1. ~~**Event subscription mechanism**~~ — Done (Batch 2, #6)
 2. ~~**User approval popup**~~ — Done (Batch 2, #7)
-3. **`prepareExecute` implementation** — full Daml command building + signing flow
-4. **`ledgerApi` proxy** — authenticated request forwarding to Canton ledger API
+3. ~~**`prepareExecute` implementation**~~ — Done. Full Daml command building + signing flow via Wallet Gateway `prepareExecute` RPC with approval popup and local signing.
+4. ~~**`ledgerApi` proxy**~~ — Done. Authenticated request forwarding via Wallet Gateway `ledgerApi` RPC with approval popup.
 5. ~~**Full Account metadata**~~ — Done (Batch 2, #5)
 
 ---
@@ -632,18 +643,34 @@ Each driver exposes 8 methods: `signTransaction`, `getTransaction`, `getTransact
 
 ### Transaction Signing Flow by Provider
 
-```text
-PARTICIPANT:      returns signature='none' → participant signs at submission time
-WALLET_KERNEL:    signTransactionHash(hash, privateKey) → immediate signature
-FIREBLOCKS:       POST to Fireblocks API → poll getTransaction() up to 60s → signature
-BLOCKDAEMON:      POST to Blockdaemon API → poll getTransaction() up to 60s → signature
+```mermaid
+flowchart LR
+    subgraph PARTICIPANT
+        direction LR
+        P1["returns signature='none'"] --> P2["participant signs at submission time"]
+    end
+
+    subgraph WALLET_KERNEL
+        direction LR
+        W1["signTransactionHash(hash, privateKey)"] --> W2["immediate signature"]
+    end
+
+    subgraph FIREBLOCKS
+        direction LR
+        F1["POST to Fireblocks API"] --> F2["poll getTransaction() up to 60s"] --> F3["signature"]
+    end
+
+    subgraph BLOCKDAEMON
+        direction LR
+        BD1["POST to Blockdaemon API"] --> BD2["poll getTransaction() up to 60s"] --> BD3["signature"]
+    end
 ```
 
-### How Canton Wallet Extension Relates to Signing Providers
+### How Ginkgo Extension Relates to Signing Providers
 
-The canton-wallet browser extension is effectively acting as a **custom signing provider** analogous to `WALLET_KERNEL`, but running in the browser instead of on a server:
+The Ginkgo browser extension is effectively acting as a **custom signing provider** analogous to `WALLET_KERNEL`, but running in the browser instead of on a server:
 
-| Aspect | Wallet Gateway WALLET_KERNEL | Canton Wallet Extension |
+| Aspect | Wallet Gateway WALLET_KERNEL | Ginkgo Extension |
 | ----------- | -------------------------------- | ------------------------------------ |
 | Key storage | Server-side database | Browser IndexedDB (AES encrypted) |
 | Signing | Server-side signTransactionHash | Background script signTransactionHash |
@@ -667,11 +694,11 @@ The canton-wallet browser extension is effectively acting as a **custom signing 
 
 ### Problem
 
-The canton-wallet browser extension manages its own keys (IndexedDB, AES-encrypted) and signs transactions independently. Wallets created by the extension are invisible to the Wallet Gateway — they exist only in the extension's local storage.
+The Ginkgo browser extension manages its own keys (IndexedDB, AES-encrypted) and signs transactions independently. Wallets created by the extension are invisible to the Wallet Gateway — they exist only in the extension's local storage.
 
 **Goal**: Make extension-created wallets **visible and usable** in the Wallet Gateway UI, so the Gateway can list them and delegate signing to the extension.
 
-**Tech stack**: Quickstart/dapp-core, splice-wallet-kernel Wallet Gateway, canton-wallet browser extension.
+**Tech stack**: Quickstart/dapp-core, splice-wallet-kernel Wallet Gateway, Ginkgo browser extension.
 
 ### Key Insight: Reuse the Blockdaemon Driver
 
@@ -687,46 +714,28 @@ We create a **standalone signing relay service** that implements these exact HTT
 
 ### Architecture
 
-```text
-┌─────────────────────────┐
-│  canton-wallet extension │
-│  (keys in IndexedDB)     │
-└────────┬────────────────┘
-         │ Socket.io (persistent connection)
-         │
-┌────────▼──────────────────────────────────────────┐
-│  signing-relay (standalone Express + Socket.io)    │
-│  Location: canton-wallet/tools/signing-relay/      │
-│                                                    │
-│  HTTP API (Blockdaemon-compatible):                │
-│    POST /createKey         → ask extension for key │
-│    POST /signTransaction   → relay to extension    │
-│    POST /getTransaction    → return stored sig     │
-│    POST /getKeys           → return extension keys │
-│    POST /getTransactions   → bulk query            │
-│                                                    │
-│  WebSocket server:                                 │
-│    Extension connects, registers keys, receives    │
-│    signing requests, sends back signatures         │
-│                                                    │
-│  In-memory store:                                  │
-│    Registered keys, pending signing requests,      │
-│    completed signatures                            │
-└────────┬──────────────────────────────────────────┘
-         │ HTTP (Gateway calls these endpoints)
-         │
-┌────────▼───────────────┐
-│  Wallet Gateway         │
-│  BLOCKDAEMON_API_URL=   │
-│  http://localhost:4100   │
-│                         │
-│  → wallet appears in UI │
-│  → signs via relay      │
-└────────┬───────────────┘
-         │
-┌────────▼───────────────┐
-│  Canton Network         │
-└────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph extBlock["Ginkgo Extension"]
+        ext["keys in IndexedDB"]
+    end
+
+    subgraph relayBlock["signing-relay (standalone Express + Socket.io)<br/>Location: ginkgo/tools/signing-relay/"]
+        direction TB
+        httpApi["HTTP API (Blockdaemon-compatible)<br/>POST /createKey - ask extension for key<br/>POST /signTransaction - relay to extension<br/>POST /getTransaction - return stored sig<br/>POST /getKeys - return extension keys<br/>POST /getTransactions - bulk query"]
+        wsServer["WebSocket server<br/>Extension connects, registers keys,<br/>receives signing requests, sends back signatures"]
+        store["In-memory store<br/>Registered keys, pending signing requests,<br/>completed signatures"]
+    end
+
+    subgraph gwBlock["Wallet Gateway"]
+        gw["BLOCKDAEMON_API_URL=http://localhost:4100<br/>wallet appears in UI, signs via relay"]
+    end
+
+    canton["Canton Network"]
+
+    extBlock <-->|"Socket.io (persistent connection)"| relayBlock
+    relayBlock <-->|"HTTP (Gateway calls these endpoints)"| gwBlock
+    gwBlock --> canton
 ```
 
 ### Wallet Creation Flow (extension wallet appears in Gateway UI)
@@ -764,7 +773,7 @@ If the extension disconnects, `getKeys()` returns empty → wallet becomes disab
 
 #### 1. Standalone Signing Relay Service
 
-**Location**: `canton-wallet/tools/signing-relay/`
+**Location**: `ginkgo/tools/signing-relay/`
 
 | File | Purpose |
 | ---- | ------- |
@@ -794,9 +803,9 @@ If the extension disconnects, `getKeys()` returns empty → wallet becomes disab
 | Relay → Extension | `sign-request` | `{ txId, txHash, tx, keyIdentifier }` |
 | Relay → Extension | `keys-registered` | `{ count }` |
 
-#### 2. Extension WebSocket Client (canton-wallet)
+#### 2. Extension WebSocket Client (Ginkgo)
 
-**New file**: `canton-wallet/lib/signing-relay/relay-client.ts`
+**New file**: `ginkgo/lib/signing-relay/relay-client.ts`
 
 - `SigningRelayClient` class with Socket.io client
 - `connect(relayUrl)` / `disconnect()` — connection lifecycle

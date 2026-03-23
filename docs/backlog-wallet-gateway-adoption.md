@@ -2,7 +2,7 @@
 
 **Status:** Backlog
 **Priority:** Low (future improvement)
-**Scope:** Canton Exchange Backend + Canton Wallet Extension
+**Scope:** dapp-core + Ginkgo Extension
 
 ## Context
 
@@ -16,16 +16,18 @@ Local clone: `/Users/lehoanganh/Working/FETCH/Angelhack/Canton/splice-wallet-ker
 
 ### Architecture
 
-```
-┌─────────────┐    dApp API (CIP-103)    ┌──────────────────┐    Ledger API     ┌──────────────────┐
-│   Your dApp │ ◄──────────────────────► │  Wallet Gateway  │ ◄───────────────► │ Canton Validator │
-│ (dApp SDK)  │   (HTTP / postMessage)   │   (Express.js)   │                   │                  │
-└─────────────┘                          │  ┌────────────┐  │   Signing         └──────────────────┘
-                                         │  │  User API  │  │   ┌──────────────────┐
-                                         │  │  User UI   │  │ ◄►│ Signing Provider │
-                                         │  └────────────┘  │   │ (Participant,    │
-                                         └──────────────────┘   │  Fireblocks, …)  │
-                                                                └──────────────────┘
+```mermaid
+flowchart LR
+    dApp["Your dApp<br/>(dApp SDK)"]
+    subgraph gwBlock["Wallet Gateway (Express.js)"]
+        userApi["User API / User UI"]
+    end
+    validator["Canton Validator"]
+    signing["Signing Provider<br/>(Participant, Fireblocks, ...)"]
+
+    dApp <-->|"dApp API (CIP-103)<br/>HTTP / postMessage"| gwBlock
+    gwBlock <-->|"Ledger API"| validator
+    gwBlock <-->|"Signing"| signing
 ```
 
 ### Key Packages
@@ -94,22 +96,23 @@ Single JSON config file — example for localnet:
 
 ## Overlap with Our Backend
 
-| Capability | Our Backend (`canton-exchange-backend`) | Wallet Gateway |
+| Capability | dapp-core | Wallet Gateway |
 |---|---|---|
-| Canton Ledger API | Hand-rolled `CantonClientService` (~500 LOC) | `LedgerClient` (OpenAPI-generated) |
-| Interactive submission | Manual in `TopologyService` | Built-in prepare → sign → execute |
+| Canton Ledger API | `@canton-network/wallet-sdk` (SDK-wrapped) | `LedgerClient` (OpenAPI-generated) |
+| Interactive submission | SDK `LedgerController.prepareSignAndExecuteTransaction()` | Built-in prepare → sign → execute |
 | Party allocation | Custom onboarding flow | `PartyAllocationService` |
-| Auth to Canton | Manual JWT creation (share-secret, oauth2) | Pluggable (self-signed, OAuth, client_credentials) |
+| Auth to Canton | SDK-managed via Gateway proxy (`gatewayService.ledgerApiPost`) | Pluggable (self-signed, OAuth, client_credentials) |
 | Signing | External only (wallet extension signs) | Pluggable drivers (4 providers) |
 | Multi-network | Single network per `.env` deployment | Multi-network in one config, runtime switching |
 
-## What Our Backend Has That the Gateway Doesn't
+## What dapp-core Has That the Gateway Doesn't
 
-- Swap engine (token quotes, swap execution, price feeds)
 - Offer management (incoming/outgoing transfer requests, approve/reject)
 - Transaction history (paginated activity feed)
-- User management (Google OAuth sign-up, email/password, profiles)
-- Token balances (aggregated with locked/unlocked breakdown)
+- User management (Google OAuth sign-up, profiles)
+- Token balances (aggregated with locked/unlocked breakdown via `listHoldingUtxos`)
+- Transfer preapproval registration
+- Faucet (DevNet tap via SDK)
 - Business-specific DTOs and API contracts
 
 ---
@@ -118,75 +121,84 @@ Single JSON config file — example for localnet:
 
 ### Path A: Deploy Gateway as Sidecar
 
-Deploy the Wallet Gateway alongside our NestJS backend. Our backend delegates all Canton ledger interactions to the Gateway's User API.
+Deploy the Wallet Gateway alongside dapp-core. dapp-core delegates all Canton ledger interactions to the Gateway's User API.
 
 **Architecture:**
-```
-Extension / Frontend
-  │
-  ├─ Business logic ──► Our NestJS Backend ──► Wallet Gateway ──► Canton Participant
-  │                     (swap, offers, etc.)   (ledger, signing)
-  │
-  └─ (future) dApp API ──► Wallet Gateway directly
+
+```mermaid
+flowchart LR
+    client["Extension / Frontend"]
+    nest["dapp-core<br/>(offers, balances, etc.)"]
+    gw["Wallet Gateway<br/>(ledger, signing)"]
+    canton["Canton Participant"]
+
+    client -->|"Business logic"| nest --> gw --> canton
+    client -->|"(future) dApp API"| gw
 ```
 
 **Changes:**
-- Replace `CantonClientService` calls with HTTP calls to Gateway's User API
-- Configure Gateway with same network/auth as our `.env`
-- Run both services (our backend + Gateway)
+
+- Replace dapp-core's SDK-based Canton calls with HTTP calls to Gateway's User API
+- Configure Gateway with same network/auth as dapp-core's `.env`
+- Run both services (dapp-core + Gateway)
 
 **Pros:**
+
 - Clean separation of concerns
 - Get all Gateway features (multi-network, pluggable signing) for free
 - Future-proof: can expose dApp API (CIP-103) for third-party dApps
 
 **Cons:**
+
 - Two services to deploy and maintain
 - Extra network hop for Canton operations
 - Need to sync auth state between the two services
 
-### Path B: Embed wallet-sdk in Our NestJS Backend
+### Path B: Embed wallet-sdk in dapp-core — CURRENT APPROACH
 
-Use `@canton-network/wallet-sdk` as a library inside our NestJS backend. Replace our hand-rolled Canton code with SDK controllers.
+Use `@canton-network/wallet-sdk` as a library inside dapp-core. Replace hand-rolled Canton code with SDK controllers.
 
-**Changes:**
-- `yarn add @canton-network/wallet-sdk` in backend (Node.js — no polyfill issues)
-- Replace `CantonClientService` + `TopologyService` with `LedgerController` + `TokenStandardController`
-- Get `createTap()` for DevNet faucet for free
-- Keep all business logic (swap, offers, balances) unchanged
+**Status:** Implemented. dapp-core already uses wallet-sdk for all Canton Ledger API interactions (balances via `listHoldingUtxos`, transfers, offers, faucet via `createTap`).
 
 **Pros:**
+
 - Minimal architectural change — swap out the Canton layer, keep everything above it
 - Single service deployment
 - wallet-sdk is designed for exactly this use case
 - No polyfill/stub issues (Node.js native)
 
 **Cons:**
+
 - Still maintaining our own auth, signing flow, and network config
 - Don't get Gateway's pluggable signing drivers or multi-network config
 - Must track wallet-sdk version updates manually
 
 ### Path C: Replace Backend with Gateway + Business Logic Layer
 
-Use the Wallet Gateway as the primary Canton backend. Add our business logic as a separate NestJS service or Express middleware on top.
+Use the Wallet Gateway as the primary Canton backend. Keep dapp-core as a pure business logic service on top.
 
 **Architecture:**
-```
-Extension / Frontend
-  │
-  ├─ Canton ops ──────► Wallet Gateway (dApp API / User API)
-  │                     └── Canton Participant
-  │
-  └─ Business logic ──► Our Business API (NestJS)
-                        └── Database (swap, offers, history)
+
+```mermaid
+flowchart LR
+    client["Extension / Frontend"]
+    gw["Wallet Gateway<br/>(dApp API / User API)"]
+    canton["Canton Participant"]
+    biz["dapp-core (business logic)"]
+    db["Database<br/>(swap, offers, history)"]
+
+    client -->|"Canton ops"| gw --> canton
+    client -->|"Business logic"| biz --> db
 ```
 
 **Changes:**
+
 - Extension uses `@canton-network/dapp-sdk` for standard Canton operations
-- Our backend becomes a pure business logic service (no Canton calls)
+- dapp-core becomes a pure business logic service (no Canton calls)
 - Wallet Gateway handles auth, signing, network management
 
 **Pros:**
+
 - Most "correct" architecture long-term
 - Clean separation: Canton plumbing vs. business logic
 - Get CIP-103 dApp API standard for free
@@ -194,20 +206,20 @@ Extension / Frontend
 - Multi-network runtime switching
 
 **Cons:**
+
 - Significant restructuring
 - Two services + database migration
-- Extension needs to talk to two backends
-- Gateway's browser extension is NOT IMPLEMENTED YET
+- Extension needs to talk to two backends (already the case — extension talks to both dapp-core and Wallet Gateway)
 
 ---
 
 ## Recommendation
 
-**Short-term (now):** Use **Path B** — embed wallet-sdk in the NestJS backend for DevNet tap and to modernize Canton interactions. Minimal risk, immediate value.
+**Current:** Using **Path B** — dapp-core embeds wallet-sdk for all Canton interactions (balances, transfers, offers, faucet). This is live and working.
 
 **Medium-term:** Evaluate **Path A** — run the Wallet Gateway as a sidecar when we need multi-network support or pluggable signing beyond Ed25519.
 
-**Long-term:** Consider **Path C** when the Gateway matures (especially the browser extension implementation) and when we need CIP-103 dApp API support for third-party integrations.
+**Long-term:** Consider **Path C** to eliminate Canton calls from dapp-core entirely. The extension already talks to the Wallet Gateway for CIP-0103 dApp API operations and onboarding — extending this to cover all wallet operations would simplify the architecture.
 
 ## Key Files in splice-wallet-kernel
 

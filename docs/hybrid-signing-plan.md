@@ -2,7 +2,7 @@
 
 ## Context
 
-The canton-wallet browser extension manages keys locally (IndexedDB, AES-encrypted). The Wallet Gateway has ledger API access (prepare/execute transactions). Currently these are disconnected:
+The Ginkgo browser extension manages keys locally (IndexedDB, AES-encrypted). The Wallet Gateway has ledger API access (prepare/execute transactions). Currently these are disconnected:
 
 - **Gateway mode**: ledgerApi/prepareExecute work, but uses Gateway's own keys (`ledger-api-user`)
 - **Extension mode**: has the user's private key, but can't do ledger queries or submit transactions
@@ -13,25 +13,28 @@ The canton-wallet browser extension manages keys locally (IndexedDB, AES-encrypt
 
 ### Approach A: Signing Relay (production)
 
-```
-dApp → SDK → Gateway → Relay (Socket.io) → Extension
+```mermaid
+flowchart LR
+    dApp --> SDK --> Gateway -->|"Socket.io"| Relay --> Extension
 ```
 
 Gateway delegates signing to extension via a relay service. Already designed in `dapp-connectivity-plan.md`. Best for production but requires extra infrastructure (relay service).
 
 ### Approach B: dApp-Orchestrated Hybrid (prototyping — recommended to start)
 
-```
-dApp → SDK → Gateway     (for prepare/execute via ledgerApi)
-dApp → postMessage → Extension  (for signing)
+```mermaid
+flowchart LR
+    dApp1[dApp] -->|"prepare/execute via ledgerApi"| SDK --> Gateway
+    dApp2[dApp] -->|"postMessage (for signing)"| Extension
 ```
 
 dApp connects to Gateway for ledger access, talks to extension directly for signing. Orchestrates the prepare → sign → execute flow itself.
 
 ### Approach C: Extension as Gateway Proxy
 
-```
-dApp → SDK → Extension → HTTP → Gateway  (extension proxies ledger calls)
+```mermaid
+flowchart LR
+    dApp --> SDK --> Extension -->|"HTTP (proxies ledger calls)"| Gateway
 ```
 
 Extension implements `ledgerApi`/`prepareExecute` by proxying to Gateway internally. Most complex.
@@ -46,7 +49,7 @@ Approach B is simplest to prototype (2 small changes). Once validated, Approach 
 
 ### How It Works
 
-```
+```text
 1. dApp connects to Gateway via SDK Discovery ("Remote")
    → Gets sdk.ledgerApi() access + session (userId: "ledger-api-user")
 
@@ -65,12 +68,13 @@ Approach B is simplest to prototype (2 small changes). Once validated, Approach 
 ### Prerequisites
 
 The extension's party (`dapp-user::1220...`) must be onboarded via dapp-core so that:
+
 - `ledger-api-user` has `CanActAs` rights for that party
 - The party is registered in the Canton participant
 
 ### Change 1: Add `signTransaction` to Extension
 
-**File**: `canton-wallet/entrypoints/background/handlers/dapp-api.handler.ts`
+**File**: `ginkgo/entrypoints/background/handlers/dapp-api.handler.ts`
 
 Add handler that signs a transaction hash with the cached private key:
 
@@ -102,6 +106,7 @@ async function handleSignTransaction(params: unknown): Promise<{
 ```
 
 Register in methods map:
+
 ```typescript
 signTransaction: handleSignTransaction,  // replace notImplemented stub
 ```
@@ -179,30 +184,25 @@ UI: Add "Hybrid Ping" button in Ledger Submit tab that only enables when both Ga
 
 ### Data Flow Diagram
 
-```
-canton-test-dapp                 Gateway                  Extension
-     │                              │                        │
-     │  sdk.ledgerApi(POST,prepare) │                        │
-     │─────────────────────────────>│                        │
-     │                              │──> Canton Ledger       │
-     │                              │<── { hash, tx }        │
-     │<─────────────────────────────│                        │
-     │  { preparedTransactionHash,  │                        │
-     │    preparedTransaction }     │                        │
-     │                              │                        │
-     │  postMessage(signTransaction)│                        │
-     │───────────────────────────────────────────────────────>│
-     │                              │          sign(hash, pk)│
-     │<───────────────────────────────────────────────────────│
-     │  { signature, publicKey,     │                        │
-     │    fingerprint }             │                        │
-     │                              │                        │
-     │  sdk.ledgerApi(POST,execute) │                        │
-     │─────────────────────────────>│                        │
-     │                              │──> Canton Ledger       │
-     │                              │<── success             │
-     │<─────────────────────────────│                        │
-     │  done                        │                        │
+```mermaid
+sequenceDiagram
+    participant dApp as canton-test-dapp
+    participant GW as Gateway
+    participant CL as Canton Ledger
+    participant Ext as Extension
+
+    dApp->>GW: sdk.ledgerApi(POST, prepare)
+    GW->>CL: prepare request
+    CL-->>GW: { hash, tx }
+    GW-->>dApp: { preparedTransactionHash, preparedTransaction }
+
+    dApp->>Ext: postMessage(signTransaction)
+    Ext-->>dApp: { signature, publicKey, fingerprint }
+
+    dApp->>GW: sdk.ledgerApi(POST, execute)
+    GW->>CL: execute request
+    CL-->>GW: success
+    GW-->>dApp: done
 ```
 
 ### Signature Format Details
@@ -227,13 +227,13 @@ The prepare/execute calls use `userId` from the Gateway session (`ledger-api-use
 
 | File | Change |
 |------|--------|
-| `canton-wallet/entrypoints/background/handlers/dapp-api.handler.ts` | Add `handleSignTransaction`, register in methods map |
+| `ginkgo/entrypoints/background/handlers/dapp-api.handler.ts` | Add `handleSignTransaction`, register in methods map |
 | `canton-test-dapp/src/App.tsx` | Add `handleHybridPing` function, add "Hybrid Ping" button in Ledger Submit tab |
 
 ### Verification
 
 1. Start dapp-core + Wallet Gateway + Canton network
-2. Load canton-wallet extension (unlocked, party onboarded)
+2. Load Ginkgo extension (unlocked, party onboarded)
 3. Open canton-test-dapp
 4. Connect via Discovery → select "Wallet Gateway (localhost, dev)"
 5. Verify: status shows `kernel: dapp-gateway`, `isConnected: true`, accounts loaded
@@ -255,7 +255,8 @@ The prepare/execute calls use `userId` from the Gateway session (`ledger-api-use
 ### Migration to Approach A (Production)
 
 Once Approach B validates the concept, migrate to the Signing Relay:
-1. Build relay service (`canton-wallet/tools/signing-relay/`)
+
+1. Build relay service (`ginkgo/tools/signing-relay/`)
 2. Extension connects to relay via Socket.io (registers keys)
 3. Gateway configured with `BLOCKDAEMON_API_URL=http://localhost:4100`
 4. dApp uses ONLY SDK — connects to Gateway via Discovery

@@ -3,6 +3,7 @@
 ## Context
 
 The extension's `preapprovalRegisteredLocally` flag in the background service worker caches `true` forever once set. This means:
+
 1. If a preapproval **expires on-chain**, the extension never detects it — the banner won't reappear.
 2. On **logout**, the flag isn't cleared — a different user logging in sees stale status.
 
@@ -40,6 +41,7 @@ function isPreapprovalCacheValid(): boolean {
 ```
 
 Update `handleGetPreapprovalStatus()`:
+
 - Replace `if (preapprovalRegisteredLocally)` with `if (isPreapprovalCacheValid())`
 - Replace `preapprovalRegisteredLocally = true` with `markPreapprovalRegistered()`
 

@@ -11,7 +11,7 @@ The previous plan (ACS queries, withdraw, refresh, timestamps, expiry) is **comp
 ## Key API Discovery
 
 - **`POST /v2/interactive-submission/executeAndWait`** — Same request as `execute`, returns `{ updateId: string, completionOffset: number }` (OpenAPI: `splice-wallet-kernel/api-specs/ledger-api/3.4.12/openapi.yaml:2002`)
-- **`POST /v2/updates/update-by-id`** — Query full transaction by updateId → `Transaction` with `updateId`, `offset`, `effectiveAt`, `recordTime`, `events[]` (Reference: canton-exchange-backend `topology.service.ts:1958`)
+- **`POST /v2/updates/update-by-id`** — Query full transaction by updateId → `Transaction` with `updateId`, `offset`, `effectiveAt`, `recordTime`, `events[]` (Reference pattern: canton-exchange-backend `topology.service.ts:1958`)
 
 ### Event parsing per transfer type
 
@@ -21,12 +21,12 @@ The previous plan (ACS queries, withdraw, refresh, timestamps, expiry) is **comp
 - `choiceArgument.transfer.outputs[0].receiver` → receiver
 - `choiceArgument.transfer.outputs[0].amount` → amount
 - tokenName: `'Amulet'` (hardcoded)
-- Reference: canton-exchange-backend `transfer-history.service.ts:202-261`
+- Reference pattern: canton-exchange-backend `transfer-history.service.ts:202-261`
 
 **TransferInstruction Accept/Reject/Withdraw** — ExercisedEvent does NOT contain contract view:
 
 - Must query ACS before execute for sender/receiver/amount (server-side, not client)
-- Reference: canton-exchange-backend `transfer-history.service.ts:262-302`
+- Reference pattern: canton-exchange-backend `transfer-history.service.ts:262-302`
 
 ### Security consideration
 

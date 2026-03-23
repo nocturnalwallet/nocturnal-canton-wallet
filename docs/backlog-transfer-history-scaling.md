@@ -5,6 +5,7 @@
 The `transfer_history` table in dapp-core's Postgres DB grows with every transfer event (created, approved, rejected, cancelled). Under heavy usage with many users, this table could reach millions of rows, causing query overhead on paginated reads.
 
 Current mitigations already in place:
+
 - Composite indexes on `(sender, status)`, `(receiver, status)`, `(sender, offset)`, `(receiver, offset)`
 - All queries are scoped to a single party (no full-table scans)
 - Paginated with `LIMIT`/`OFFSET`
@@ -32,10 +33,12 @@ Move records older than N days (e.g., 90 days) to a `transfer_history_archive` t
 ### 3. Replace DB with on-chain queries
 
 Eliminate the DB sync layer entirely by querying Canton's Ledger API directly:
+
 - `/v2/updates/flat` — offset-based streaming for history
 - `/v2/state/active-contracts` — for current pending transfers (LOCKED status)
 
 Trade-offs:
+
 - (+) No DB dependency for transfer data, always authoritative
 - (-) Harder to implement filtered pagination (sender, receiver, tokenName)
 - (-) Requires streaming + in-memory filtering or cursor-based pagination

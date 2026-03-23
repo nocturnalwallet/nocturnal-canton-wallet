@@ -2,7 +2,7 @@
 
 **Status:** Backlog
 **Priority:** Medium
-**Scope:** Canton Wallet extension + Canton Exchange Backend
+**Scope:** Ginkgo extension + dapp-core
 
 ## Overview
 
@@ -27,41 +27,44 @@ The backend creates new prepare/submit endpoints that internally call the Canton
 
 ### Architecture
 
-```
-Wallet                       Backend                          Canton Ledger API
-  │                            │                                     │
-  ├─ POST /devnet-tap/prepare ►│                                     │
-  │                            ├─ GET /v2/state/active-contracts ───►│  (fetch AmuletRules)
-  │                            │◄── AmuletRules + blob ─────────────│
-  │                            ├─ GET /v2/state/active-contracts ───►│  (fetch OpenMiningRound)
-  │                            │◄── OpenMiningRound + blob ─────────│
-  │                            ├─ POST /v2/interactive-submission/   │
-  │                            │       prepare ─────────────────────►│
-  │                            │◄── preparedTx + hash ──────────────│
-  │◄── preparedTxHash ────────│                                     │
-  │                            │                                     │
-  │  (wallet signs locally     │                                     │
-  │   with user's private key) │                                     │
-  │                            │                                     │
-  ├─ POST /devnet-tap/submit ─►│                                     │
-  │                            ├─ POST /v2/interactive-submission/   │
-  │                            │       executeAndWait ──────────────►│
-  │                            │◄── committed tx ───────────────────│
-  │◄── success ───────────────│                                     │
+```mermaid
+sequenceDiagram
+    participant W as Wallet
+    participant B as Backend
+    participant C as Canton Ledger API
+
+    W->>B: POST /devnet-tap/prepare
+    B->>C: GET /v2/state/active-contracts (AmuletRules)
+    C-->>B: AmuletRules + blob
+    B->>C: GET /v2/state/active-contracts (OpenMiningRound)
+    C-->>B: OpenMiningRound + blob
+    B->>C: POST /v2/interactive-submission/prepare
+    C-->>B: preparedTx + hash
+    B-->>W: preparedTxHash
+
+    Note over W: Signs locally with user's private key
+
+    W->>B: POST /devnet-tap/submit
+    B->>C: POST /v2/interactive-submission/executeAndWait
+    C-->>B: committed tx
+    B-->>W: success
 ```
 
 ### Backend Changes
 
 **File: `external-party.controller.ts`**
+
 - Add `POST /external-party/devnet-tap/prepare` endpoint
 - Add `POST /external-party/devnet-tap/submit` endpoint
 - Guard: only allow on devnet (check environment or add `@IsDevnet()` guard)
 
 **File: `topology.service.ts`**
+
 - Add `prepareDevNetTap(partyId: string, amount: number)` method:
   1. Fetch `AmuletRules` contract from ledger via `/v2/state/active-contracts` with `includeCreatedEventBlob: true`
   2. Fetch latest `OpenMiningRound` contract similarly
   3. Build ExerciseCommand for `AmuletRules_DevNet_Tap`:
+
      ```json
      {
        "ExerciseCommand": {
@@ -76,11 +79,13 @@ Wallet                       Backend                          Canton Ledger API
        }
      }
      ```
+
   4. Call `prepareInteractiveSubmission()` with the command + disclosed contracts (AmuletRules blob + OpenMiningRound blob)
   5. Return `{ preparedTransactionHash, preparedTransaction, hashingSchemeVersion }`
 - Add `submitDevNetTap(params)` method that calls `executeInteractiveSubmission()`
 
 **New DTOs:**
+
 - `PrepareDevNetTapDto`: `{ partyId: string, amount?: number }` (default amount: 100 CC)
 - `PrepareDevNetTapResponseDto`: `{ preparedTransactionHash, preparedTransaction, hashingSchemeVersion }`
 - `SubmitDevNetTapDto`: `{ preparedTransaction, hashingSchemeVersion, signature, partyId }`
@@ -88,38 +93,47 @@ Wallet                       Backend                          Canton Ledger API
 ### Wallet Changes
 
 **File: `entrypoints/background/handlers/api.handler.ts`**
+
 - Update `handleRequestFaucet()` to become a two-step flow:
   - `handlePrepareDevNetTap()` → calls `POST /external-party/devnet-tap/prepare`
   - Keep existing `MSG.REQUEST_FAUCET` or split into `PREPARE_DEVNET_TAP` + `SUBMIT_DEVNET_TAP`
 
 **File: `entrypoints/background/handlers/signing.handler.ts`**
+
 - Add `handleSignAndSubmitDevNetTap()` following existing transfer pattern
 
 **File: `entrypoints/popup/hooks/useFaucet.ts`** (new)
+
 - `usePrepareDevNetTap()` mutation
 - `useSignAndSubmitDevNetTap()` mutation (invalidates balance cache on success)
 
 **File: `entrypoints/popup/pages/dashboard/TokenDetail.tsx`**
+
 - Add conditional faucet button:
+
   ```tsx
   {tokenId === 'Amulet' && network === 'devnet' && (
     <Button onClick={handleFaucet}>Request Amulet (DevNet)</Button>
   )}
   ```
+
 - Password confirmation dialog (same pattern as transfers)
 - Success/error toast notifications
 
 ### Pros
+
 - Follows existing architecture exactly (prepare → sign → submit)
 - No new auth infrastructure needed — backend already has Canton API access
 - Server-side secrets stay on the server
 - Minimal wallet changes
 
 ### Cons
+
 - Requires backend deployment for faucet to work
 - Backend must be running and reachable
 
 ### Estimated effort
+
 - Backend: ~2-3 hours (new endpoint pair + service method)
 - Wallet: ~2 hours (hook + UI + message wiring)
 
@@ -129,23 +143,24 @@ Wallet                       Backend                          Canton Ledger API
 
 The wallet's background service worker calls the Canton Ledger JSON API directly, bypassing the backend entirely.
 
-### Architecture
+### Architecture (Direct)
 
-```
-Wallet Background SW                        Canton Ledger API (Participant)
-  │                                                │
-  ├─ POST /v2/state/active-contracts ─────────────►│  (fetch AmuletRules from SV)
-  │◄── AmuletRules + blob ────────────────────────│
-  ├─ POST /v2/state/active-contracts ─────────────►│  (fetch OpenMiningRound from SV)
-  │◄── OpenMiningRound + blob ────────────────────│
-  ├─ POST /v2/interactive-submission/prepare ─────►│
-  │◄── preparedTx + hash ─────────────────────────│
-  │                                                │
-  │  (signs locally with user's private key)       │
-  │                                                │
-  ├─ POST /v2/interactive-submission/              │
-  │       executeAndWaitForTransaction ───────────►│
-  │◄── committed tx ──────────────────────────────│
+```mermaid
+sequenceDiagram
+    participant W as Wallet Background SW
+    participant C as Canton Ledger API (Participant)
+
+    W->>C: POST /v2/state/active-contracts (fetch AmuletRules from SV)
+    C-->>W: AmuletRules + blob
+    W->>C: POST /v2/state/active-contracts (fetch OpenMiningRound from SV)
+    C-->>W: OpenMiningRound + blob
+    W->>C: POST /v2/interactive-submission/prepare
+    C-->>W: preparedTx + hash
+
+    Note over W: Signs locally with user's private key
+
+    W->>C: POST /v2/interactive-submission/executeAndWaitForTransaction
+    C-->>W: committed tx
 ```
 
 ### Auth Requirements (the blocker)
@@ -164,6 +179,7 @@ The JWT `sub` must identify a Canton user with `CanActAs` rights for the wallet'
 ### Possible workaround: Backend-issued Canton JWT relay
 
 The backend could expose an endpoint like `GET /canton/token` that:
+
 1. Authenticates the wallet user via the existing backend JWT
 2. Issues a short-lived, scoped Canton JWT for that user's party
 3. Returns the token + Canton API URLs to the wallet
@@ -189,17 +205,20 @@ export const NETWORKS = {
 - DSO party ID resolution (currently via validator scan-proxy)
 - Synchronizer ID (currently via `/v2/state/connected-synchronizers`)
 
-### Wallet Changes
+### Wallet Changes (Direct)
 
 **File: `lib/network.ts`**
+
 - Add `participantLedgerApi`, `svLedgerApi` to `NetworkConfig`
 
 **File: `entrypoints/background/canton-client.ts`** (new)
+
 - Direct HTTP client for Canton JSON API
 - JWT management (obtain from backend relay endpoint or configure)
 - Methods: `fetchActiveContracts()`, `prepareInteractiveSubmission()`, `executeInteractiveSubmission()`
 
 **File: `entrypoints/background/handlers/faucet.handler.ts`** (new)
+
 - Full DevNet Tap logic:
   1. Obtain Canton JWT (from backend relay or cached)
   2. Fetch AmuletRules + OpenMiningRound from SV
@@ -209,21 +228,25 @@ export const NETWORKS = {
   6. Call execute
 
 **File: `entrypoints/popup/pages/dashboard/TokenDetail.tsx`**
+
 - Same UI as Approach A
 
-### Pros
+### Pros (Direct)
+
 - True self-custody: wallet talks to Canton directly, no backend dependency for faucet
 - Could be extended for other direct ledger operations in the future
 - Faucet works even if backend is down (if JWT relay is pre-cached)
 
-### Cons
+### Cons (Direct)
+
 - **Auth is a fundamental blocker** — requires either embedding secrets (insecure) or a backend JWT relay endpoint (which negates the "no backend" advantage)
 - Significant new infrastructure in the wallet (Canton API client, auth management, URL config)
 - Must handle Canton API errors, retries, and token refresh in the extension
 - SV JSON API URL may not be publicly accessible on all networks
 - ~4x more implementation effort than Approach A
 
-### Estimated effort
+### Estimated Effort (Direct)
+
 - Backend (JWT relay endpoint): ~1-2 hours
 - Wallet (Canton client + handler + UI): ~6-8 hours
 
@@ -235,7 +258,7 @@ Instead of hardcoding Canton API URLs in the wallet's `lib/network.ts`, the back
 
 ### Endpoint
 
-```
+```text
 GET /auth/canton-config
 Authorization: Bearer <backend-jwt>
 
@@ -271,16 +294,17 @@ When the number of environments grows beyond 4, or when Canton API URLs change f
 
 ## Current Implementation Status
 
-**Implemented:** Hybrid approach using `@canton-network/wallet-sdk` (branch `core/use-wallet-sdk`)
-- Backend provides Canton JWT via `GET /auth/canton-access-token`
-- Canton API URLs hardcoded per network in `lib/network.ts`
-- `TokenStandardController.createTap()` + `LedgerController.prepareSignAndExecuteTransaction()`
+**Implemented:** dapp-core SDK middleware approach (prepare/sign/submit)
+
+- dapp-core backend uses `@canton-network/wallet-sdk` internally for Canton Ledger API interactions
+- Extension calls `POST /external-party/devnet-tap/prepare` → signs locally → `POST /external-party/devnet-tap/submit`
 - UI: faucet section on Amulet Token Detail when `config.faucetEnabled` is true (Localnet + Devnet)
+- Handler: `api.handler.ts` → `handleRequestFaucet()` (3-step: prepare, sign with cached key, submit)
 
 ## References
 
 - Quickstart faucet script: `Quickstart/quickstart/docker/utxo-handling/03-request-faucet-amulet.sh`
 - Daml choice: `AmuletRules_DevNet_Tap` on `#splice-amulet:Splice.AmuletRules:AmuletRules`
 - Required disclosed contracts: `AmuletRules` + `OpenMiningRound` (from SV participant)
-- Backend Canton client: `canton-exchange-backend/src/modules/topology/canton-client.service.ts`
-- Backend interactive submission: `canton-exchange-backend/src/modules/topology/topology.service.ts` (lines 474-506)
+- dapp-core faucet endpoints: `Quickstart/dapp-core/src/modules/external-party/` (prepare + submit)
+- dapp-core SDK integration: `@canton-network/wallet-sdk` used server-side for Canton Ledger API
