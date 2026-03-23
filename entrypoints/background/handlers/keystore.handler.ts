@@ -234,12 +234,22 @@ export async function handleRegisterTransferPreapproval(): Promise<
   }
 }
 
-// In-memory flag set after a successful preapproval registration.
-// Prevents the banner from flickering while Canton's ACS catches up.
-let preapprovalRegisteredLocally = false;
+// In-memory cache with TTL for preapproval registration status.
+// Prevents the banner from flickering while Canton's ACS catches up,
+// but expires after 30 minutes so on-chain expiry is eventually detected.
+const PREAPPROVAL_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
+let preapprovalCachedAt: number | null = null;
 
 export function markPreapprovalRegistered(): void {
-  preapprovalRegisteredLocally = true;
+  preapprovalCachedAt = Date.now();
+}
+
+export function clearPreapprovalCache(): void {
+  preapprovalCachedAt = null;
+}
+
+function isPreapprovalCacheValid(): boolean {
+  return preapprovalCachedAt !== null && (Date.now() - preapprovalCachedAt) < PREAPPROVAL_CACHE_TTL_MS;
 }
 
 /**
@@ -249,7 +259,7 @@ export async function handleGetPreapprovalStatus(): Promise<
   MessageResponse<PreapprovalStatusData>
 > {
   try {
-    if (preapprovalRegisteredLocally) {
+    if (isPreapprovalCacheValid()) {
       return ok({ hasPreapproval: true });
     }
 
@@ -262,7 +272,7 @@ export async function handleGetPreapprovalStatus(): Promise<
     );
     const result = statusRes.data;
     const exists = result?.exists === true;
-    if (exists) preapprovalRegisteredLocally = true;
+    if (exists) markPreapprovalRegistered();
     return ok({ hasPreapproval: exists });
   } catch {
     // Non-critical — return false on any error

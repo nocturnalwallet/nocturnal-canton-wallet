@@ -588,6 +588,12 @@ Dashboard -> Send tab -> Select token + recipient + amount
        (3) dapp-core: POST /offers/submit
 ```
 
+### Transfer Pre-Approval
+
+Transfer pre-approval is required to receive Amulet transfers. It is registered via dapp-core using the prepare/sign/submit flow. If missing, a warning banner appears on the Balances tab with a manual registration button.
+
+**Preapproval cache TTL:** After a successful registration (or dapp-core confirming the preapproval exists), the status is cached in-memory for **30 minutes** (`PREAPPROVAL_CACHE_TTL_MS`). During this window, `GET_PREAPPROVAL_STATUS` returns `true` without hitting dapp-core. After expiry, the next status check re-queries dapp-core, allowing the banner to reappear if the on-chain preapproval has expired. The cache is also cleared on **logout** and **network switch**.
+
 ### Offer Actions (Popup-Driven via dapp-core)
 
 ```text

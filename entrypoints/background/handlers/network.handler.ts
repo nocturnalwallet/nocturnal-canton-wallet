@@ -5,6 +5,7 @@ import { networkStore, sessionStore, setNetworkPrefix, setUserScope } from '@lib
 import { setApiBaseUrl } from '../api-client';
 import { setGatewayBaseUrl, setGatewayAuth, resetGatewaySession } from '../gateway-client';
 import { setCachedPrivateKey } from './session.handler';
+import { clearPreapprovalCache } from './keystore.handler';
 import { signingRelay } from '../signing-relay/relay-client';
 
 export async function handleGetNetwork(): Promise<MessageResponse<NetworkData>> {
@@ -20,8 +21,9 @@ export async function handleSwitchNetwork(
   network: NetworkId,
 ): Promise<MessageResponse<NetworkData>> {
   try {
-    // Clear cached private key
+    // Clear cached private key and preapproval cache
     setCachedPrivateKey(null);
+    clearPreapprovalCache();
 
     if (!NETWORK_IDS.includes(network)) {
       return err(`Invalid network: ${network}`);
