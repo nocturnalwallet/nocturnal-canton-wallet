@@ -1,8 +1,8 @@
-# Security Audit Report — Canton Wallet Extension
+# Security Audit Report — Ginkgo Extension
 
 **Date:** 2026-02-23
-**Updated:** 2026-02-24
-**Scope:** Full codebase review of `canton-wallet/`
+**Updated:** 2026-03-23
+**Scope:** Full codebase review of `ginkgo/`
 **Focus areas:** Cross-account key leaking, unauthorized submission, authentication, session management, input validation, cryptography
 
 ---
@@ -13,7 +13,7 @@
 |----------|-------|-------|------|
 | Critical | 4     | 4     | 0    |
 | High     | 4     | 1     | 3    |
-| Medium   | 7     | 0     | 7    |
+| Medium   | 7     | 1     | 6    |
 | Low      | 4     | 0     | 4    |
 
 The extension uses strong encryption at rest (AES-GCM + PBKDF2) and avoids common web vulnerabilities (no XSS vectors, no `eval`, no dynamic script loading). All four critical vulnerabilities have been fixed — the in-memory key cache is now cleared on logout/network switch, signing handlers validate sender identity and key fingerprints, `.env` is gitignored, and the OAuth flow includes a `state` parameter.
@@ -25,6 +25,7 @@ The extension uses strong encryption at rest (AES-GCM + PBKDF2) and avoids commo
 ### C1. Cross-Account Key Leaking — Cached Private Key Not Cleared on Logout — FIXED
 
 **Files:**
+
 - `entrypoints/background/handlers/auth.handler.ts` (lines 180–189)
 - `entrypoints/background/handlers/session.handler.ts` (lines 9–18)
 
@@ -55,6 +56,7 @@ export async function handleLogout() {
 ```
 
 **Attack scenario:**
+
 1. User A logs in, unlocks wallet. `_cachedPrivateKey` holds User A's key.
 2. User A clicks Sign Out. Session/storage cleared, but `_cachedPrivateKey` persists.
 3. User B logs in on the same extension.
@@ -64,6 +66,7 @@ export async function handleLogout() {
 **The same bug exists in `handleSwitchNetwork()`** (`entrypoints/background/handlers/network.handler.ts`, lines 16–43) — session is cleared but the cached key persists.
 
 **Fix:**
+
 ```typescript
 // auth.handler.ts — handleLogout
 import { setCachedPrivateKey } from './session.handler';
@@ -90,44 +93,12 @@ export async function handleSwitchNetwork(network) {
 
 ### C2. Missing senderPartyId Validation in Signing Handlers — FIXED
 
-**File:** `entrypoints/background/handlers/signing.handler.ts` (lines 20–46)
+**File:** `entrypoints/background/handlers/signing.handler.ts`
 
 **Description:**
-The signing handler accepts `preparedData` (including `senderPartyId`) from the popup and signs it without verifying that the sender matches the currently authenticated user.
+The signing handler accepted `preparedData` (including `senderPartyId`) from the popup and signed it without verifying that the sender matches the currently authenticated user.
 
-```typescript
-export async function handleSignAndSubmitTransferPreapproval(payload: {
-  password: string;
-  preparedData: PrepareTransferResponse;
-}) {
-  const { password, preparedData } = payload;
-  const privateKey = await decryptKey(password);
-
-  // NO CHECK: preparedData.senderPartyId could be anyone's partyId
-  const signature = signTransactionHash(
-    preparedData.preparedTransactionHash,
-    privateKey,
-  );
-
-  await apiClient.post('/external-party/transfer-amulet/submit', {
-    preparedTransaction: preparedData.preparedTransaction,
-    signature,
-    senderPartyId: preparedData.senderPartyId, // UNVALIDATED
-  });
-}
-```
-
-Combined with C1, a second user could sign transactions attributed to the first user's party.
-
-**Fix:**
-```typescript
-const currentPartyId = await sessionStore.get('partyId');
-if (currentPartyId !== preparedData.senderPartyId) {
-  return err('Transaction sender does not match your account. Cannot sign.');
-}
-```
-
-Apply this check to all signing handlers: `handleSignAndSubmitTransferPreapproval`, `handleSignAndSubmitApprove`, `handleSignAndSubmitReject`.
+**Fix applied:** All signing handlers now call `verifyCurrentParty()` (line 21) which checks the session's `partyId` against the prepared data's `senderPartyId`. Additionally, a unified `signAndVerify()` helper (line 74) decrypts the key, derives the public key, verifies the fingerprint (see H3), and signs — applied to all 5 handlers: `handleSignAndSubmitTransferPreapproval`, `handleSignAndSubmitTransferTokenStandard`, `handleSignAndSubmitApprove`, `handleSignAndSubmitReject`, `handleSignAndSubmitWithdraw`.
 
 ---
 
@@ -139,6 +110,7 @@ Apply this check to all signing handlers: `handleSignAndSubmitTransferPreapprova
 The Google OAuth client secret (`VITE_GOOGLE_CLIENT_SECRET`) is hardcoded in the `.env` file. If committed to version control, any attacker with repo access can impersonate the wallet application in OAuth flows and forge authentication tokens.
 
 **Fix:**
+
 - Remove `.env` from version control (add to `.gitignore`).
 - Rotate the Google client secret immediately.
 - Use environment-specific secret injection for builds.
@@ -152,17 +124,30 @@ Instead of exchanging the Google authorization code in the extension, send the c
 
 Current flow:
 
-```text
-Extension → Google (code + client_secret) → id_token
-Extension → Backend (/auth/login-with-google) → app tokens
+```mermaid
+sequenceDiagram
+    participant Ext as Extension
+    participant Google
+    participant Backend
+
+    Ext->>Google: code + client_secret
+    Google-->>Ext: id_token
+    Ext->>Backend: /auth/login-with-google
+    Backend-->>Ext: app tokens
 ```
 
 Secure flow:
 
-```text
-Extension → Backend (auth code + code_verifier)
-Backend  → Google (code + client_secret + code_verifier) → id_token
-Backend  → app tokens → Extension
+```mermaid
+sequenceDiagram
+    participant Ext as Extension
+    participant Backend
+    participant Google
+
+    Ext->>Backend: auth code + code_verifier
+    Backend->>Google: code + client_secret + code_verifier
+    Google-->>Backend: id_token
+    Backend-->>Ext: app tokens
 ```
 
 **Option B — Use Chrome Identity API:**
@@ -192,6 +177,7 @@ authUrl.searchParams.set('code_challenge_method', 'S256');
 ```
 
 **Fix:**
+
 ```typescript
 const state = crypto.randomUUID();
 authUrl.searchParams.set('state', state);
@@ -210,31 +196,33 @@ if (returnedState !== state) {
 ### H1. Cached Key Enables Password-less Signing
 
 **Files:**
-- `entrypoints/background/handlers/keystore.handler.ts` (lines 202–206)
-- `entrypoints/background/handlers/session.handler.ts` (lines 9–18)
+
+- `entrypoints/background/handlers/keystore.handler.ts` — `handleRegisterTransferPreapproval()`, faucet
+- `entrypoints/background/handlers/api.handler.ts` — `handleRequestFaucet()`
+- `entrypoints/background/handlers/session.handler.ts` — `getCachedPrivateKey()`
 
 **Description:**
-After initial unlock, `getCachedPrivateKey()` returns the decrypted private key without requiring the password again. Transfer preapproval operations use this cached key directly. If the user steps away from an unlocked wallet, an attacker with physical access can sign transactions without knowing the password until the auto-lock timer fires (default: 15 minutes).
+After initial unlock, `getCachedPrivateKey()` returns the decrypted private key without requiring the password again. Transfer preapproval and faucet operations use this cached key directly. If the user steps away from an unlocked wallet, an attacker with physical access could trigger these operations without knowing the password until the auto-lock timer fires (default: 15 minutes).
 
-```typescript
-// keystore.handler.ts
-const privateKey = getCachedPrivateKey();
-if (!privateKey) {
-  return err('Wallet is locked. Please unlock first.');
-}
-// Proceeds to sign without password
-```
+**Current mitigations (partial):**
+
+- All **transfer and offer signing handlers** (`signing.handler.ts`) require the password — they call `decryptKey(password)`, not `getCachedPrivateKey()`
+- **CIP-0103 dApp operations** (signMessage, signTransaction, prepareExecute) require explicit user approval via popup
+- Only **preapproval registration** and **faucet** use the cached key without password re-entry
+- The faucet UI does collect a password, but `handleRequestFaucet()` uses the cached key first and only falls back to password decryption
 
 **Recommendation:**
-- Require password re-entry for high-value operations (transfers, approvals).
-- Reduce the default auto-lock timeout.
-- Consider a separate "confirm transaction" password prompt.
+
+- Remove cached key fallback from faucet handler — always use password-decrypted key
+- Reduce the default auto-lock timeout
+- Consider requiring password for preapproval registration as well
 
 ---
 
 ### H2. No Re-Verification of Transaction Details Between Confirm and Submit
 
 **Files:**
+
 - `entrypoints/popup/pages/dashboard/Transfer.tsx` (lines 48–78)
 - `entrypoints/background/handlers/signing.handler.ts` (lines 20–46)
 
@@ -242,6 +230,7 @@ if (!privateKey) {
 The `preparedData` object (containing recipient, amount, transaction hash) is stored in React state after the prepare step and sent as-is to the signing handler. There is no verification that the transaction details the user confirmed match the ones being signed. If popup code is compromised, `preparedData` could be swapped between user confirmation and submission.
 
 **Recommendation:**
+
 - Re-fetch or re-validate `preparedData` from the backend in the signing handler.
 - Or compute a client-side hash of the displayed transaction details and verify it matches before signing.
 
@@ -252,19 +241,9 @@ The `preparedData` object (containing recipient, amount, transaction hash) is st
 **File:** `entrypoints/background/handlers/signing.handler.ts`
 
 **Description:**
-The signing handler never verifies that the fingerprint of the private key being used matches the fingerprint embedded in the `senderPartyId` (format: `hint::fingerprint`). If a wrong key is cached (see C1), the backend will reject the signature with a cryptic "0 valid signatures (1 invalid)" error — but the user gets no meaningful feedback about the root cause.
+The signing handler never verified that the fingerprint of the private key being used matches the fingerprint embedded in the `senderPartyId` (format: `hint::fingerprint`). If a wrong key was cached (see C1), the backend would reject the signature with a cryptic "0 valid signatures (1 invalid)" error.
 
-**Fix:**
-```typescript
-import { getPublicKeyFromPrivate } from '@canton-network/core-signing-lib';
-
-const derivedPublicKey = getPublicKeyFromPrivate(privateKey);
-const derivedFingerprint = createFingerprintFromPublicKey(derivedPublicKey);
-const expectedFingerprint = preparedData.senderPartyId.split('::')[1];
-if (derivedFingerprint !== expectedFingerprint) {
-  return err('Key fingerprint mismatch — your signing key does not match your party ID.');
-}
-```
+**Fix applied:** `verifyKeyFingerprint()` (line 36) computes the Canton fingerprint (`hex(0x1220 || SHA256(int32_be(12) || pubkey))`) from the derived public key and compares it against the partyId's fingerprint. This is called by the unified `signAndVerify()` helper used by all signing handlers. Throws a descriptive error on mismatch.
 
 ---
 
@@ -288,6 +267,7 @@ await sessionStore.setMany({
 ```
 
 **Recommendation:**
+
 - Implement refresh token rotation: each refresh returns a new token, invalidating the old one.
 - Backend should reject reused refresh tokens.
 
@@ -298,6 +278,7 @@ await sessionStore.setMany({
 ### M1. Insufficient Numeric Validation on Amounts
 
 **Files:**
+
 - `entrypoints/popup/pages/dashboard/TokenDetail.tsx` (lines 152–183)
 - `entrypoints/popup/pages/dashboard/Transfer.tsx` (lines 20–78)
 
@@ -315,6 +296,7 @@ disabled={!recipient || !amount || isPreparing}
 ```
 
 **Fix:**
+
 ```typescript
 const isValidAmount = (val: string): boolean => {
   const num = parseFloat(val);
@@ -332,6 +314,7 @@ const isValidAmount = (val: string): boolean => {
 Recipient party IDs are accepted as arbitrary strings with no format check before submission. Expected format: `hint::fingerprint` where fingerprint is a hex string.
 
 **Fix:**
+
 ```typescript
 const PARTY_ID_REGEX = /^[^:]+::[a-fA-F0-9]+$/;
 const isValidPartyId = (id: string): boolean => PARTY_ID_REGEX.test(id.trim());
@@ -342,6 +325,7 @@ const isValidPartyId = (id: string): boolean => PARTY_ID_REGEX.test(id.trim());
 ### M3. `atob()` / `JSON.parse()` Without Error Handling
 
 **Files:**
+
 - `entrypoints/background/handlers/keystore.handler.ts` (lines 268–289)
 - `entrypoints/background/encryption/webcrypto.ts` (lines 17, 88)
 - `lib/utils.ts` (lines 19–31)
@@ -366,18 +350,21 @@ Additionally, `parseInt(hex, 16)` in `hexToBase64()` silently returns `NaN` for 
 
 ---
 
-### M4. Faucet Operation Lacks Confirmation UI
+### M4. Faucet Operation Lacks Confirmation UI — PARTIALLY FIXED
 
-**File:** `entrypoints/background/handlers/api.handler.ts` (lines 208–251)
+**File:** `entrypoints/popup/pages/dashboard/TokenDetail.tsx` (faucet section, lines 143–191)
 
 **Description:**
-Unlike transfers (which show a confirmation screen), the faucet prepare-sign-submit flow executes in a single handler without showing the user an intermediate confirmation of the transaction details being signed.
+Unlike transfers (which show a two-step confirm screen), the faucet executes in a single step.
+
+**Current state:** The faucet UI now requires the user to enter their password and the amount before requesting. However, it does not show a separate confirmation screen with transaction details — it goes directly from input to prepare-sign-submit in one handler call. This is acceptable for a low-risk DevNet-only operation, but a confirmation step would be more consistent with the transfer flow.
 
 ---
 
 ### M5. Passwords Passed Through Chrome Message Protocol
 
 **Files:**
+
 - `entrypoints/background/handlers/signing.handler.ts` (lines 21–26)
 - `entrypoints/background/handlers/keystore.handler.ts` (line 71)
 - `entrypoints/background/handlers/api.handler.ts` (line 209)
@@ -454,7 +441,7 @@ The following areas were reviewed and found to be properly implemented:
 - **Type-safe message routing:** TypeScript discriminated unions with exhaustive switch, no fall-through
 - **Settings page key cleanup:** Exported private key auto-clears from React state after 30 seconds, plus cleanup on unmount
 - **PKCE in OAuth:** Code challenge and verifier properly generated
-- **Internal-only messaging:** No content scripts expose `chrome.runtime.onMessage` to web pages
+- **CIP-0103 content script isolation:** Content script bridges `window.postMessage` to `chrome.runtime.sendMessage` but validates message source (`event.source !== window` guard) and only forwards recognized `SpliceMessage` types. dApp API requests are handled in a separate listener from popup messages, preventing cross-contamination. User approval popup required for connect, sign, and execute operations.
 
 ---
 
@@ -463,13 +450,14 @@ The following areas were reviewed and found to be properly implemented:
 | Priority | ID | Action | Status |
 | -------- | -- | ------ | ------ |
 | Immediate | C1 | Clear `_cachedPrivateKey` in `handleLogout()` and `handleSwitchNetwork()` | FIXED |
-| Immediate | C2 | Validate `senderPartyId` against current session in all signing handlers | FIXED |
-| Immediate | C3 | Remove `.env` from version control, rotate Google client secret | FIXED (`.gitignore` added, `.env` untracked; secret rotation still needed) |
+| Immediate | C2 | Validate `senderPartyId` against current session in all signing handlers | FIXED — `verifyCurrentParty()` in all 5 signing handlers |
+| Immediate | C3 | Remove `.env` from version control, rotate Google client secret | FIXED (`.gitignore` added, `.env` untracked; client secret still in bundle — see C3 options) |
 | High | C4 | Add OAuth `state` parameter generation and validation | FIXED |
-| High | H3 | Add fingerprint check before signing | FIXED |
-| High | H4 | Implement refresh token rotation on backend | Open |
-| Medium | M1 | Validate amounts with `Number.isFinite()` before submission | Open |
+| High | H3 | Add fingerprint check before signing | FIXED — `verifyKeyFingerprint()` via `signAndVerify()` in all signing handlers |
+| High | H4 | Implement refresh token rotation on backend | Open (backend-side) |
+| Medium | M1 | Validate amounts with `Number.isFinite()` before submission | Open (Transfer.tsx lacks numeric validation) |
 | Medium | M2 | Validate party ID format with regex before API calls | Open |
 | Medium | M3 | Wrap `atob()` / `JSON.parse()` in try-catch blocks | Open |
-| Low | H1 | Require password re-entry for high-value operations | Open |
+| Medium | M4 | Faucet confirmation UI | Partially fixed (password required, but no 2-step confirm) |
+| Low | H1 | Require password re-entry for high-value operations | Open (faucet + preapproval use cached key) |
 | Low | M7 | Remove `localhost` from host permissions in production builds | Open |
