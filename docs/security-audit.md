@@ -156,6 +156,19 @@ Replace `chrome.identity.launchWebAuthFlow()` with `chrome.identity.getAuthToken
 **Option C — Switch OAuth client type:**
 Create a new OAuth client in Google Cloud Console as **"Chrome Extension"** type instead of "Web Application". This type authenticates via the extension ID and does not require a client secret — only `client_id` + PKCE.
 
+**Comparison of Options A vs C:**
+
+| | **Option A: Proxy through backend** | **Option C: Chrome Extension OAuth client** |
+|---|---|---|
+| **How it works** | Extension sends auth code + PKCE verifier to dapp-core; dapp-core exchanges with Google server-side | New Google Cloud OAuth client type "Chrome Extension" — authenticates via extension ID, no `client_secret` needed |
+| **Secret exposure** | `client_secret` never leaves the server | `client_secret` eliminated entirely |
+| **Extension changes** | Replace token exchange with a POST to dapp-core (e.g. `/auth/google-callback`) | Change `client_id`, remove `client_secret` from `.env` and token exchange body |
+| **Backend changes** | New endpoint: accept auth code, exchange server-side, return app tokens | None |
+| **Dependency** | Requires dapp-core to be running (already the case) | Requires a fixed extension ID (already pinned via RSA key in `wxt.config.ts` — see L4) |
+| **Complexity** | Medium — new backend endpoint + token exchange logic | Low — config change in Google Cloud Console + remove secret from extension |
+| **Trade-offs** | Adds a network hop; dapp-core becomes the OAuth intermediary | Ties OAuth to the Chrome extension ID; if RSA key changes (L4), OAuth client breaks. Only works in Chrome (not Firefox/Edge) |
+| **Verdict** | Better if multi-browser support is needed | Lower-effort fix; sufficient if targeting Chrome only |
+
 ---
 
 ### C4. No OAuth `state` Parameter (CSRF on Auth Flow) — FIXED
