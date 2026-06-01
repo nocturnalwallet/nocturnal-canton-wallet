@@ -205,7 +205,7 @@ export async function handleRegisterTransferPreapproval(): Promise<
 
     // Step 1: Prepare via dapp-core
     const { data: prepareRes } = await apiClient.post(
-      '/transfer-preapproval/prepare',
+      '/wallet/transfer-preapproval/prepare',
       { partyId },
     );
     const prepared = prepareRes.data;
@@ -218,7 +218,7 @@ export async function handleRegisterTransferPreapproval(): Promise<
     const publicKey = getPublicKeyFromPrivate(privateKey);
 
     // Step 3: Submit signed transaction to dapp-core
-    await apiClient.post('/transfer-preapproval/submit', {
+    await apiClient.post('/wallet/transfer-preapproval/submit', {
       partyId,
       preparedTransaction: prepared.preparedTransaction,
       preparedTransactionHash: prepared.preparedTransactionHash,
@@ -267,7 +267,7 @@ export async function handleGetPreapprovalStatus(): Promise<
     if (!partyId) return ok({ hasPreapproval: false });
 
     const { data: statusRes } = await apiClient.get(
-      '/transfer-preapproval/status',
+      '/wallet/transfer-preapproval/status',
       { params: { partyId } },
     );
     const result = statusRes.data;
