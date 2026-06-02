@@ -53,7 +53,7 @@ export async function handlePrepareTransferTokenStandard(
 ): Promise<MessageResponse<PrepareData>> {
   try {
     const { data } = await apiClient.post(
-      '/offers/prepare',
+      '/transfer-offer/prepare',
       payload,
     );
     return ok({ preparedData: data.data });
@@ -67,7 +67,7 @@ export async function handleFetchIncomingOffers(
 ): Promise<MessageResponse<PaginatedOffersData>> {
   try {
     const { data } = await apiClient.get(
-      '/offers/incoming-requests',
+      '/transfer-offer/incoming-requests',
       { params: payload },
     );
     const result = data.data;
@@ -89,7 +89,7 @@ export async function handleFetchOutgoingOffers(
 ): Promise<MessageResponse<PaginatedOffersData>> {
   try {
     const { data } = await apiClient.get(
-      '/offers/outgoing-requests',
+      '/transfer-offer/outgoing-requests',
       { params: payload },
     );
     const result = data.data;
@@ -111,7 +111,7 @@ export async function handleFetchHistoryOffers(
 ): Promise<MessageResponse<PaginatedOffersData>> {
   try {
     const { data } = await apiClient.get(
-      '/offers/history',
+      '/transfer-offer/history',
       { params: payload },
     );
     const result = data.data;
@@ -134,7 +134,7 @@ export async function handlePrepareApprove(payload: {
 }): Promise<MessageResponse<PrepareData>> {
   try {
     const { data } = await apiClient.post(
-      '/offers/approve/prepare',
+      '/transfer-offer/approve/prepare',
       payload,
     );
     return ok({ preparedData: data.data });
@@ -149,7 +149,7 @@ export async function handlePrepareReject(payload: {
 }): Promise<MessageResponse<PrepareData>> {
   try {
     const { data } = await apiClient.post(
-      '/offers/reject/prepare',
+      '/transfer-offer/reject/prepare',
       payload,
     );
     return ok({ preparedData: data.data });
@@ -223,7 +223,7 @@ export async function handlePrepareWithdraw(payload: {
 }): Promise<MessageResponse<PrepareData>> {
   try {
     const { data } = await apiClient.post(
-      '/offers/withdraw/prepare',
+      '/transfer-offer/withdraw/prepare',
       payload,
     );
     return ok({ preparedData: data.data });

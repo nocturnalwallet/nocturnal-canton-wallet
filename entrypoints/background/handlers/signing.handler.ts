@@ -123,7 +123,7 @@ export async function handleSignAndSubmitTransferTokenStandard(payload: {
       password, partyId, preparedData.preparedTransactionHash,
     );
 
-    await apiClient.post('/offers/submit', {
+    await apiClient.post('/transfer-offer/submit', {
       preparedTransaction: preparedData.preparedTransaction,
       preparedTransactionHash: preparedData.preparedTransactionHash,
       signature,
@@ -149,7 +149,7 @@ export async function handleSignAndSubmitApprove(payload: {
       password, partyId, preparedData.preparedTransactionHash,
     );
 
-    await apiClient.post('/offers/approve/submit', {
+    await apiClient.post('/transfer-offer/approve/submit', {
       preparedTransaction: preparedData.preparedTransaction,
       preparedTransactionHash: preparedData.preparedTransactionHash,
       signature,
@@ -176,7 +176,7 @@ export async function handleSignAndSubmitReject(payload: {
       password, partyId, preparedData.preparedTransactionHash,
     );
 
-    await apiClient.post('/offers/reject/submit', {
+    await apiClient.post('/transfer-offer/reject/submit', {
       preparedTransaction: preparedData.preparedTransaction,
       preparedTransactionHash: preparedData.preparedTransactionHash,
       signature,
@@ -203,7 +203,7 @@ export async function handleSignAndSubmitWithdraw(payload: {
       password, partyId, preparedData.preparedTransactionHash,
     );
 
-    await apiClient.post('/offers/withdraw/submit', {
+    await apiClient.post('/transfer-offer/withdraw/submit', {
       preparedTransaction: preparedData.preparedTransaction,
       preparedTransactionHash: preparedData.preparedTransactionHash,
       signature,
