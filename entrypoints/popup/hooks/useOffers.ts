@@ -68,7 +68,6 @@ export function useSignAndSubmitApprove() {
     mutationFn: (payload: {
       password: string;
       preparedData: PrepareTransferTokenStandardResponse;
-      contractId?: string;
     }) =>
       sendMessage<{ success: boolean }>({
         action: MSG.SIGN_AND_SUBMIT_APPROVE,
@@ -89,7 +88,6 @@ export function useSignAndSubmitReject() {
     mutationFn: (payload: {
       password: string;
       preparedData: PrepareTransferTokenStandardResponse;
-      contractId?: string;
     }) =>
       sendMessage<{ success: boolean }>({
         action: MSG.SIGN_AND_SUBMIT_REJECT,
@@ -120,7 +118,6 @@ export function useSignAndSubmitWithdraw() {
     mutationFn: (payload: {
       password: string;
       preparedData: PrepareTransferTokenStandardResponse;
-      contractId?: string;
     }) =>
       sendMessage<{ success: boolean }>({
         action: MSG.SIGN_AND_SUBMIT_WITHDRAW,

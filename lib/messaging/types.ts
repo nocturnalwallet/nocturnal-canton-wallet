@@ -90,7 +90,6 @@ export type MessageRequest =
       payload: {
         password: string;
         preparedData: PrepareTransferTokenStandardResponse;
-        contractId?: string;
       };
     }
   // API proxy

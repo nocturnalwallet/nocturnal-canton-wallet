@@ -33,7 +33,7 @@ export function OutgoingTab() {
     if (!preparedData || !password) return;
     setWithdrawError('');
     try {
-      await signWithdraw.mutateAsync({ password, preparedData, contractId: activeContract ?? undefined });
+      await signWithdraw.mutateAsync({ password, preparedData });
       setActiveContract(null);
       setPreparedData(null);
       setPassword('');

@@ -135,10 +135,9 @@ export async function handleSignAndSubmitTransferTokenStandard(payload: {
 export async function handleSignAndSubmitApprove(payload: {
   password: string;
   preparedData: PrepareTransferTokenStandardResponse;
-  contractId?: string;
 }): Promise<MessageResponse<{ success: boolean }>> {
   try {
-    const { password, preparedData, contractId } = payload;
+    const { password, preparedData } = payload;
     const partyId = await verifyCurrentParty();
     const signature = await signAndVerify(
       password, partyId, preparedData.preparedTransactionHash,
@@ -149,7 +148,6 @@ export async function handleSignAndSubmitApprove(payload: {
       preparedTransactionHash: preparedData.preparedTransactionHash,
       hashingSchemeVersion: preparedData.hashingSchemeVersion,
       signature,
-      contractId,
     });
 
     resetAutoLockTimer();
@@ -162,10 +160,9 @@ export async function handleSignAndSubmitApprove(payload: {
 export async function handleSignAndSubmitReject(payload: {
   password: string;
   preparedData: PrepareTransferTokenStandardResponse;
-  contractId?: string;
 }): Promise<MessageResponse<{ success: boolean }>> {
   try {
-    const { password, preparedData, contractId } = payload;
+    const { password, preparedData } = payload;
     const partyId = await verifyCurrentParty();
     const signature = await signAndVerify(
       password, partyId, preparedData.preparedTransactionHash,
@@ -176,7 +173,6 @@ export async function handleSignAndSubmitReject(payload: {
       preparedTransactionHash: preparedData.preparedTransactionHash,
       hashingSchemeVersion: preparedData.hashingSchemeVersion,
       signature,
-      contractId,
     });
 
     resetAutoLockTimer();
@@ -189,10 +185,9 @@ export async function handleSignAndSubmitReject(payload: {
 export async function handleSignAndSubmitWithdraw(payload: {
   password: string;
   preparedData: PrepareTransferTokenStandardResponse;
-  contractId?: string;
 }): Promise<MessageResponse<{ success: boolean }>> {
   try {
-    const { password, preparedData, contractId } = payload;
+    const { password, preparedData } = payload;
     const partyId = await verifyCurrentParty();
     const signature = await signAndVerify(
       password, partyId, preparedData.preparedTransactionHash,
@@ -203,7 +198,6 @@ export async function handleSignAndSubmitWithdraw(payload: {
       preparedTransactionHash: preparedData.preparedTransactionHash,
       hashingSchemeVersion: preparedData.hashingSchemeVersion,
       signature,
-      contractId,
     });
 
     resetAutoLockTimer();
