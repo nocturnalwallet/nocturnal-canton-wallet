@@ -75,12 +75,11 @@ async function signAndVerify(
   password: string,
   partyId: string,
   preparedTransactionHash: string,
-): Promise<{ signature: string; publicKey: string }> {
+): Promise<string> {
   const privateKey = await decryptKey(password);
   const publicKey = getPublicKeyFromPrivate(privateKey);
   await verifyKeyFingerprint(publicKey, partyId);
-  const signature = signTransactionHash(preparedTransactionHash, privateKey);
-  return { signature, publicKey };
+  return signTransactionHash(preparedTransactionHash, privateKey);
 }
 
 export async function handleSignAndSubmitTransferPreapproval(payload: {
@@ -90,7 +89,7 @@ export async function handleSignAndSubmitTransferPreapproval(payload: {
   try {
     const { password, preparedData } = payload;
     const partyId = await verifyCurrentParty(preparedData.senderPartyId);
-    const { signature } = await signAndVerify(
+    const signature = await signAndVerify(
       password, partyId, preparedData.preparedTransactionHash,
     );
 
@@ -115,7 +114,7 @@ export async function handleSignAndSubmitTransferTokenStandard(payload: {
   try {
     const { password, preparedData } = payload;
     const partyId = await verifyCurrentParty();
-    const { signature } = await signAndVerify(
+    const signature = await signAndVerify(
       password, partyId, preparedData.preparedTransactionHash,
     );
 
@@ -141,7 +140,7 @@ export async function handleSignAndSubmitApprove(payload: {
   try {
     const { password, preparedData, contractId } = payload;
     const partyId = await verifyCurrentParty();
-    const { signature } = await signAndVerify(
+    const signature = await signAndVerify(
       password, partyId, preparedData.preparedTransactionHash,
     );
 
@@ -168,7 +167,7 @@ export async function handleSignAndSubmitReject(payload: {
   try {
     const { password, preparedData, contractId } = payload;
     const partyId = await verifyCurrentParty();
-    const { signature } = await signAndVerify(
+    const signature = await signAndVerify(
       password, partyId, preparedData.preparedTransactionHash,
     );
 
@@ -195,7 +194,7 @@ export async function handleSignAndSubmitWithdraw(payload: {
   try {
     const { password, preparedData, contractId } = payload;
     const partyId = await verifyCurrentParty();
-    const { signature } = await signAndVerify(
+    const signature = await signAndVerify(
       password, partyId, preparedData.preparedTransactionHash,
     );
 
