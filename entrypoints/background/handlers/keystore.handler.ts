@@ -215,7 +215,6 @@ export async function handleRegisterTransferPreapproval(): Promise<
 
     // Step 2: Sign locally
     const signature = signTransactionHash(prepared.preparedTransactionHash, privateKey);
-    const publicKey = getPublicKeyFromPrivate(privateKey);
 
     // Step 3: Submit signed transaction to dapp-core
     await apiClient.post('/wallet/transfer-preapproval/submit', {
@@ -223,7 +222,6 @@ export async function handleRegisterTransferPreapproval(): Promise<
       preparedTransaction: prepared.preparedTransaction,
       preparedTransactionHash: prepared.preparedTransactionHash,
       signature,
-      publicKey,
       commandId: prepared.commandId,
     });
 
