@@ -94,15 +94,12 @@ export async function handleSignAndSubmitTransferPreapproval(payload: {
       password, partyId, preparedData.preparedTransactionHash,
     );
 
-    await apiClient.post('/external-party/transfer-amulet/submit', {
+    await apiClient.post('/transfer-offer/submit', {
       preparedTransaction: preparedData.preparedTransaction,
       preparedTransactionHash: preparedData.preparedTransactionHash,
       hashingSchemeVersion: preparedData.hashingSchemeVersion,
       signature,
       publicKey,
-      senderPartyId: preparedData.senderPartyId,
-      receiverPartyId: preparedData.receiverPartyId,
-      amount: preparedData.amount,
     });
 
     resetAutoLockTimer();

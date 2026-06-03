@@ -38,11 +38,20 @@ export async function handlePrepareTransferPreapproval(
   payload: PrepareTransferProps,
 ): Promise<MessageResponse<PrepareData>> {
   try {
-    const { data } = await apiClient.post(
-      '/external-party/transfer-amulet/prepare',
-      payload,
-    );
-    return ok({ preparedData: data.data });
+    const { data } = await apiClient.post('/transfer-offer/prepare', {
+      assetId: 'Amulet',
+      assetAmount: String(payload.amount),
+      receiverPartyId: payload.receiverPartyId,
+      reason: payload.reason,
+    });
+    return ok({
+      preparedData: {
+        ...data.data,
+        senderPartyId: payload.senderPartyId,
+        receiverPartyId: payload.receiverPartyId,
+        amount: String(payload.amount),
+      },
+    });
   } catch (e: unknown) {
     return err(e instanceof Error ? e.message : 'Prepare transfer failed');
   }
