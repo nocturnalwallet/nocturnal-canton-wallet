@@ -44,14 +44,7 @@ export async function handlePrepareTransferPreapproval(
       receiverPartyId: payload.receiverPartyId,
       reason: payload.reason,
     });
-    return ok({
-      preparedData: {
-        ...data.data,
-        senderPartyId: payload.senderPartyId,
-        receiverPartyId: payload.receiverPartyId,
-        amount: String(payload.amount),
-      },
-    });
+    return ok({ preparedData: data.data });
   } catch (e: unknown) {
     return err(e instanceof Error ? e.message : 'Prepare transfer failed');
   }

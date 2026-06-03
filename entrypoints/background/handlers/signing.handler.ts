@@ -88,7 +88,7 @@ export async function handleSignAndSubmitTransferPreapproval(payload: {
 }): Promise<MessageResponse<{ success: boolean }>> {
   try {
     const { password, preparedData } = payload;
-    const partyId = await verifyCurrentParty(preparedData.senderPartyId);
+    const partyId = await verifyCurrentParty();
     const signature = await signAndVerify(
       password, partyId, preparedData.preparedTransactionHash,
     );
