@@ -90,7 +90,7 @@ export async function handleSignAndSubmitTransferPreapproval(payload: {
   try {
     const { password, preparedData } = payload;
     const partyId = await verifyCurrentParty(preparedData.senderPartyId);
-    const { signature, publicKey } = await signAndVerify(
+    const { signature } = await signAndVerify(
       password, partyId, preparedData.preparedTransactionHash,
     );
 
@@ -99,7 +99,6 @@ export async function handleSignAndSubmitTransferPreapproval(payload: {
       preparedTransactionHash: preparedData.preparedTransactionHash,
       hashingSchemeVersion: preparedData.hashingSchemeVersion,
       signature,
-      publicKey,
     });
 
     resetAutoLockTimer();
@@ -116,15 +115,15 @@ export async function handleSignAndSubmitTransferTokenStandard(payload: {
   try {
     const { password, preparedData } = payload;
     const partyId = await verifyCurrentParty();
-    const { signature, publicKey } = await signAndVerify(
+    const { signature } = await signAndVerify(
       password, partyId, preparedData.preparedTransactionHash,
     );
 
     await apiClient.post('/transfer-offer/submit', {
       preparedTransaction: preparedData.preparedTransaction,
       preparedTransactionHash: preparedData.preparedTransactionHash,
+      hashingSchemeVersion: preparedData.hashingSchemeVersion,
       signature,
-      publicKey,
     });
 
     resetAutoLockTimer();
@@ -142,15 +141,15 @@ export async function handleSignAndSubmitApprove(payload: {
   try {
     const { password, preparedData, contractId } = payload;
     const partyId = await verifyCurrentParty();
-    const { signature, publicKey } = await signAndVerify(
+    const { signature } = await signAndVerify(
       password, partyId, preparedData.preparedTransactionHash,
     );
 
     await apiClient.post('/transfer-offer/approve/submit', {
       preparedTransaction: preparedData.preparedTransaction,
       preparedTransactionHash: preparedData.preparedTransactionHash,
+      hashingSchemeVersion: preparedData.hashingSchemeVersion,
       signature,
-      publicKey,
       contractId,
     });
 
@@ -169,15 +168,15 @@ export async function handleSignAndSubmitReject(payload: {
   try {
     const { password, preparedData, contractId } = payload;
     const partyId = await verifyCurrentParty();
-    const { signature, publicKey } = await signAndVerify(
+    const { signature } = await signAndVerify(
       password, partyId, preparedData.preparedTransactionHash,
     );
 
     await apiClient.post('/transfer-offer/reject/submit', {
       preparedTransaction: preparedData.preparedTransaction,
       preparedTransactionHash: preparedData.preparedTransactionHash,
+      hashingSchemeVersion: preparedData.hashingSchemeVersion,
       signature,
-      publicKey,
       contractId,
     });
 
@@ -196,15 +195,15 @@ export async function handleSignAndSubmitWithdraw(payload: {
   try {
     const { password, preparedData, contractId } = payload;
     const partyId = await verifyCurrentParty();
-    const { signature, publicKey } = await signAndVerify(
+    const { signature } = await signAndVerify(
       password, partyId, preparedData.preparedTransactionHash,
     );
 
     await apiClient.post('/transfer-offer/withdraw/submit', {
       preparedTransaction: preparedData.preparedTransaction,
       preparedTransactionHash: preparedData.preparedTransactionHash,
+      hashingSchemeVersion: preparedData.hashingSchemeVersion,
       signature,
-      publicKey,
       contractId,
     });
 
