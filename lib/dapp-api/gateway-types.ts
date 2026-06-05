@@ -28,11 +28,17 @@ export interface PrepareExecuteResponse {
   userUrl: string;
 }
 
-/** Parameters for the `ledgerApi` dApp API method. */
+/**
+ * Parameters for the `ledgerApi` dApp API method.
+ *
+ * The gateway (wallet-gateway-remote ≥ 1.1.0) dispatches on a **lowercase**
+ * `requestMethod` and passes `body` through to its internal ledger client,
+ * which serializes it as JSON. Pass `body` as an object, not a JSON string.
+ */
 export interface LedgerApiParams {
-  requestMethod: 'GET' | 'POST' | 'PUT' | 'DELETE';
+  requestMethod: 'get' | 'post' | 'put' | 'delete';
   resource: string;
-  body?: string;
+  body?: Record<string, unknown>;
 }
 
 /** A transaction stored by the Gateway. */
