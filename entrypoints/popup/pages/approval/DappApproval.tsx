@@ -109,16 +109,20 @@ export function DappApproval({ requestId }: Props) {
         </div>
 
         {/* Parameters preview (for sign methods) */}
-        {details.params && (
-          <div className="w-full rounded-lg bg-secondary px-4 py-3">
-            <p className="text-xs text-muted-foreground mb-1">Parameters</p>
-            <pre className="text-xs text-foreground overflow-auto max-h-24 whitespace-pre-wrap break-all">
-              {typeof details.params === 'string'
-                ? details.params
-                : JSON.stringify(details.params, null, 2)}
-            </pre>
-          </div>
-        )}
+        {details.params != null && (() => {
+          const paramsText =
+            typeof details.params === 'string'
+              ? details.params
+              : JSON.stringify(details.params, null, 2);
+          return (
+            <div className="w-full rounded-lg bg-secondary px-4 py-3">
+              <p className="text-xs text-muted-foreground mb-1">Parameters</p>
+              <pre className="text-xs text-foreground overflow-auto max-h-24 whitespace-pre-wrap break-all">
+                {paramsText}
+              </pre>
+            </div>
+          );
+        })()}
       </div>
 
       {/* Actions — always pinned to bottom */}

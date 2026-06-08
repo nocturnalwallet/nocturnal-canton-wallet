@@ -1,4 +1,4 @@
-import { signTransactionHash, getPublicKeyFromPrivate } from '@canton-network/core-signing-lib';
+import { signTransactionHash } from '@canton-network/core-signing-lib';
 import { ok, err } from '@lib/messaging';
 import type {
   MessageResponse,
@@ -38,10 +38,12 @@ export async function handlePrepareTransferPreapproval(
   payload: PrepareTransferProps,
 ): Promise<MessageResponse<PrepareData>> {
   try {
-    const { data } = await apiClient.post(
-      '/external-party/transfer-amulet/prepare',
-      payload,
-    );
+    const { data } = await apiClient.post('/transfer-offer/prepare', {
+      assetId: 'Amulet',
+      assetAmount: String(payload.amount),
+      receiverPartyId: payload.receiverPartyId,
+      reason: payload.reason,
+    });
     return ok({ preparedData: data.data });
   } catch (e: unknown) {
     return err(e instanceof Error ? e.message : 'Prepare transfer failed');
@@ -53,7 +55,7 @@ export async function handlePrepareTransferTokenStandard(
 ): Promise<MessageResponse<PrepareData>> {
   try {
     const { data } = await apiClient.post(
-      '/offers/prepare',
+      '/transfer-offer/prepare',
       payload,
     );
     return ok({ preparedData: data.data });
@@ -67,7 +69,7 @@ export async function handleFetchIncomingOffers(
 ): Promise<MessageResponse<PaginatedOffersData>> {
   try {
     const { data } = await apiClient.get(
-      '/offers/incoming-requests',
+      '/transfer-offer/incoming-requests',
       { params: payload },
     );
     const result = data.data;
@@ -89,7 +91,7 @@ export async function handleFetchOutgoingOffers(
 ): Promise<MessageResponse<PaginatedOffersData>> {
   try {
     const { data } = await apiClient.get(
-      '/offers/outgoing-requests',
+      '/transfer-offer/outgoing-requests',
       { params: payload },
     );
     const result = data.data;
@@ -111,7 +113,7 @@ export async function handleFetchHistoryOffers(
 ): Promise<MessageResponse<PaginatedOffersData>> {
   try {
     const { data } = await apiClient.get(
-      '/offers/history',
+      '/transfer-offer/history',
       { params: payload },
     );
     const result = data.data;
@@ -134,7 +136,7 @@ export async function handlePrepareApprove(payload: {
 }): Promise<MessageResponse<PrepareData>> {
   try {
     const { data } = await apiClient.post(
-      '/offers/approve/prepare',
+      '/transfer-offer/approve/prepare',
       payload,
     );
     return ok({ preparedData: data.data });
@@ -149,7 +151,7 @@ export async function handlePrepareReject(payload: {
 }): Promise<MessageResponse<PrepareData>> {
   try {
     const { data } = await apiClient.post(
-      '/offers/reject/prepare',
+      '/transfer-offer/reject/prepare',
       payload,
     );
     return ok({ preparedData: data.data });
@@ -200,14 +202,12 @@ export async function handleRequestFaucet(
 
     // Step 2: Sign locally
     const signature = signTransactionHash(prepared.preparedTransactionHash, privateKey);
-    const publicKey = getPublicKeyFromPrivate(privateKey);
 
     // Step 3: Submit signed transaction to dapp-core
     await apiClient.post('/external-party/devnet-tap/submit', {
       preparedTransaction: prepared.preparedTransaction,
       preparedTransactionHash: prepared.preparedTransactionHash,
       signature,
-      publicKey,
       partyId,
     });
 
@@ -223,7 +223,7 @@ export async function handlePrepareWithdraw(payload: {
 }): Promise<MessageResponse<PrepareData>> {
   try {
     const { data } = await apiClient.post(
-      '/offers/withdraw/prepare',
+      '/transfer-offer/withdraw/prepare',
       payload,
     );
     return ok({ preparedData: data.data });

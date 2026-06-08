@@ -45,7 +45,7 @@ export function IncomingTab() {
     setError('');
     try {
       const fn = pendingAction === 'approve' ? signApprove : signReject;
-      await fn.mutateAsync({ password, preparedData, contractId: activeContract ?? undefined });
+      await fn.mutateAsync({ password, preparedData });
       setActiveContract(null);
       setPreparedData(null);
       setPassword('');

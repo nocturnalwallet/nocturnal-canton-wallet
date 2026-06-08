@@ -344,6 +344,10 @@ async function handlePrepareExecuteAndWait(params: unknown): Promise<PrepareExec
 
 /**
  * ledgerApi: Proxy to the Wallet Gateway's Ledger API.
+ *
+ * Normalizes legacy uppercase `requestMethod` and stringified `body` from older
+ * dApp callers — wallet-gateway-remote ≥ 1.1.0 requires lowercase method names
+ * and an object body.
  */
 async function handleLedgerApi(params: unknown): Promise<unknown> {
   if (!getGatewayBaseUrl()) {
@@ -353,8 +357,17 @@ async function handleLedgerApi(params: unknown): Promise<unknown> {
   const { isReady } = await getWalletState();
   if (!isReady) throw new Error('Wallet must be unlocked and onboarded');
 
-  const typedParams = params as LedgerApiParams;
-  const result = await gatewayDappRpc('ledgerApi', typedParams);
+  const raw = params as Partial<LedgerApiParams> & { requestMethod?: string; body?: unknown };
+  const normalized: LedgerApiParams = {
+    requestMethod: (raw.requestMethod ?? 'get').toLowerCase() as LedgerApiParams['requestMethod'],
+    resource: raw.resource ?? '',
+    body:
+      typeof raw.body === 'string'
+        ? (JSON.parse(raw.body) as Record<string, unknown>)
+        : (raw.body as Record<string, unknown> | undefined),
+  };
+
+  const result = await gatewayDappRpc('ledgerApi', normalized);
 
   resetAutoLockTimer();
   return result;

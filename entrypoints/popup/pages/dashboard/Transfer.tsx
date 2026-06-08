@@ -8,8 +8,6 @@ import {
   useSignAndSubmitTransferTokenStandard,
 } from '../../hooks/useTransfer';
 import { useBalances } from '../../hooks/useBalances';
-import { sendMessage, MSG } from '@lib/messaging';
-import type { AuthStateData } from '@lib/messaging';
 import type {
   PrepareTransferResponse,
   PrepareTransferTokenStandardResponse,
@@ -48,14 +46,9 @@ export function Transfer() {
   const handlePrepare = async () => {
     setError('');
     try {
-      const authState = await sendMessage<AuthStateData>({ action: MSG.GET_AUTH_STATE });
-      const partyId = authState.partyId;
-      if (!partyId) throw new Error('No party ID');
-
       let result;
       if (isAmulet) {
         result = await prepareAmulet.mutateAsync({
-          senderPartyId: partyId,
           receiverPartyId: recipient,
           amount,
           reason: 'Transfer from Ginkgo',

@@ -11,6 +11,7 @@
  */
 import axios from 'axios';
 import type { GatewayAuthConfig } from '@lib/network';
+import { localStore } from '@lib/storage';
 
 let currentGatewayUrl = '';
 let currentGatewayAuth: GatewayAuthConfig | undefined;
@@ -39,6 +40,12 @@ export function resetGatewaySession(): void {
   sessionEstablished = false;
 }
 
+/** Invalidate cached JWT so the next request regenerates it (e.g. after login adds email). */
+export function invalidateGatewayJwt(): void {
+  cachedGatewayJwt = null;
+  cachedJwtExpiry = 0;
+}
+
 const gatewayClient = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
@@ -57,10 +64,17 @@ gatewayClient.interceptors.request.use(async (config) => {
 /**
  * Generate an HS256 JWT for the Gateway's self-signed IDP.
  * Uses Web Crypto API (available in service workers).
+ *
+ * The optional `email` claim is required by wallet-gateway-remote >= 1.1.0
+ * for Blockdaemon wallet allocation. The gateway's jwt-unsafe-auth-service
+ * extracts it via jwtUserEmail() and passes it through to the
+ * BlockdaemonWalletAllocator as the userIdentifier.
+ * See: docs/wallet-gateway-remote-email-requirement.md
  */
 async function generateSelfSignedJwt(
   auth: GatewayAuthConfig,
   sub: string,
+  email?: string,
 ): Promise<string> {
   // No `typ` in header — Canton's unsafe-jwt-hmac-256 rejects it.
   // `scope` is required by the Gateway's JWT middleware.
@@ -73,6 +87,7 @@ async function generateSelfSignedJwt(
     scope: auth.scope,
     iat: now,
     exp: now + 3600,
+    ...(email && { email }),
   };
 
   const encodedHeader = base64UrlEncodeStr(JSON.stringify(header));
@@ -117,7 +132,13 @@ async function getOrCreateGatewayJwt(auth: GatewayAuthConfig): Promise<string> {
   // Must match Canton's registered user — the Gateway passes this token through
   // to the Canton ledger API, which only accepts registered users.
   const sub = auth.clientId;
-  cachedGatewayJwt = await generateSelfSignedJwt(auth, sub);
+
+  // Include the user's Google email in the JWT for wallet-gateway-remote >= 1.1.0
+  // which requires it for Blockdaemon wallet allocation and signing.
+  const user = await localStore.get('user');
+  const email = user?.email;
+
+  cachedGatewayJwt = await generateSelfSignedJwt(auth, sub, email);
   cachedJwtExpiry = now + 3600;
   return cachedGatewayJwt;
 }
