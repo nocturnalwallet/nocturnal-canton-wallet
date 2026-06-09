@@ -33,6 +33,8 @@ These verifications resolve the spec's §9 open questions and the `createWallet`
   - **Discovery (blocking for Task 10):** Ginkgo's `keystore.handler.ts:154` *already* calls `apiClient.post('/auth/register-party', { partyId, publicKey })` immediately after `createWallet` succeeds. Removing the `createWallet` call leaves the wallet with no partyId to register, so this swap as written cannot work. The actual gateway-side allocation today uses the gateway's `signingProviderId: 'blockdaemon'` (gateway-managed key), which is what's becoming unreachable in Phase 2. A correct Phase 3 onboarding replacement requires the backend's `external-party/onboarding/{prepare,submit}` flow (`canton-exchange-backend/src/modules/external-onboarding/external-party.controller.ts:85,105`) so the wallet's local Ed25519 key allocates the party via signed topology transactions, then `/auth/register-party` records the link. This is a multi-step rewrite, not a one-line swap.
   - **Action required:** human decision — see "Pre-flight escalation" block below before starting Task 1. `>`
 
+  `< RESOLVED 2026-06-09 (supplemental — parallel backend + Ginkgo audits): /external-party/onboarding/{prepare,submit} are LIVE on canton-exchange-backend's feat/CIP-0103_migration_phase2 branch, explicitly listed as UNCHANGED in the Phase 1 frontend-migration doc, dual-auth (JwtAuthGuard accepts the existing Bearer from sessionStore.authToken), and the submit endpoint already persists the party→user link in the DB so the separate /auth/register-party call is unnecessary. Wallet-side signing uses signTransactionHash from @canton-network/core-signing-lib (already imported in Ginkgo for transaction signing). Today's gateway-based onboarding is BROKEN on devnet/testnet/mainnet anyway (gatewayUrl='' throws "Gateway auth not configured" before any signing happens), so the new flow is strictly better than the current state. Pre-flight escalation Option 2 ("Expand Task 10 in place") is chosen. Task 10 is no longer deferred — see its rewritten body. The SCOPE ADJUSTED callouts on Tasks 11, 12, and 14 are removed accordingly. >`
+
 - [x] **Confirm `apiBaseUrl` is the correct facade base URL.** Inspect `lib/network.ts`: `apiBaseUrl` is set to the backend (e.g., `http://localhost:3003/` for localnet, `https://api-devnet.kairo.ag/` for devnet). The facade endpoints live at `/api/v0/{dapp,user}` on the same backend. Verify with one `curl`:
   ```bash
   curl -s -o /dev/null -w "%{http_code}\n" -X POST https://api-devnet.kairo.ag/api/v0/dapp -H "Content-Type: application/json" -d '{}'
@@ -83,12 +85,24 @@ The pre-flight surfaced a contradiction between the plan's Task 10 and the actua
 - Ginkgo's `keystore.handler.ts:154` already invokes this endpoint immediately after `createWallet` returns the partyId — it's not a substitute, it's the next step.
 - The actual party-allocation flow lives in `src/modules/external-onboarding/external-party.controller.ts` (`POST /external-party/onboarding/{prepare,submit}` with `create-key-pair`, `party-details`, `party-id`). Replacing `createWallet` requires the wallet to allocate the party itself using its local Ed25519 key via that multi-step flow, then call `/auth/register-party`.
 
-**Options for the human:**
-1. **Defer Task 10** — leave the `createWallet` call in place for now (gateway still reachable on localnet). Accept that onboarding breaks the moment backend Phase 2 makes the gateway private. Phase 3 ships as a facade-migration-only refactor; onboarding migration becomes its own follow-up phase. **Recommended** because §3 of the spec already calls onboarding out as deferrable.
-2. **Expand Task 10 in place** — design and implement the wallet-side multi-step `external-party/onboarding/{prepare,submit}` flow now. Significantly larger than a "one-line swap" and likely deserves its own plan.
+**Options considered:**
+1. **Defer Task 10** — leave the `createWallet` call in place for now (gateway still reachable on localnet). Accept that onboarding breaks the moment backend Phase 2 makes the gateway private. Phase 3 ships as a facade-migration-only refactor; onboarding migration becomes its own follow-up phase.
+2. **Expand Task 10 in place** — design and implement the wallet-side multi-step `external-party/onboarding/{prepare,submit}` flow now.
 3. **Hybrid** — drop the unconditional `createWallet`/`register-party` calls from `handleCreateAccount`, and add a clear `TODO(onboarding-rewrite)` comment + early-return so onboarding fails fast with a typed error until Phase 3.5 lands.
 
-Only proceed to Task 1 after every checkbox above has a resolution note **and** the Task 10 option is chosen (Option 1 is the default if no decision is recorded here).
+**Decision (2026-06-09): Option 2 chosen.**
+
+Parallel audits (recorded in Pre-flight Item 1's supplemental RESOLVED note) confirmed:
+- Backend endpoints are LIVE, explicitly UNCHANGED in the Phase 1 frontend-migration doc, dual-auth (accept Ginkgo's existing Bearer), and the submit endpoint already persists the party→user link (no separate `/auth/register-party` call needed).
+- Ginkgo's current onboarding is **broken on devnet/testnet/mainnet today** (`gatewayUrl=''` → `Gateway auth not configured` thrown before any signing). The rewrite is strictly an improvement over the current state.
+- Wallet-side signing uses `signTransactionHash` from `@canton-network/core-signing-lib` (already imported for transaction signing). No new dependencies.
+- Gateway+relay-specific scaffolding (`connectSigningRelayForOnboarding`, `signingRelay.setAutoApprove(true/false)`, two-step relay reconnect) gets deleted with the relay — no replacement needed in the new flow.
+
+Net effect on this plan:
+- Task 10 returns to scope as a meaningful (~40 LOC) rewrite of `handleCompleteOnboarding`. See the rewritten task body below.
+- Tasks 11, 12, and 14 return to their original scope: delete `gateway-client.ts`, drop `gatewayUrl`/`gatewayAuth`/`GatewayAuthConfig`/`clientId`, drop `setGatewayBaseUrl`/`setGatewayAuth` from `background.ts`, and verify zero live references to any of the deleted symbols.
+
+Tasks 1–14 unblocked. Proceed to Task 1 after every pre-flight checkbox above has a resolution note.
 
 ---
 
@@ -1388,85 +1402,150 @@ git commit -m "feat(dapp-api): route through gateway-facade-client and handle ty
 
 ---
 
-## Task 10: Replace `createWallet` in `keystore.handler.ts`
+## Task 10: Rewrite `handleCompleteOnboarding` to use `/external-party/onboarding/*`
 
-> **DEFERRED 2026-06-09** — Pre-flight Item 1 revealed `/auth/register-party` is not a substitute for `createWallet`. Ginkgo already calls it as the follow-up step (`keystore.handler.ts:154`). A correct replacement requires the wallet-side `external-party/onboarding/{prepare,submit}` flow, which is its own multi-step rewrite outside this phase's scope. **Skip this task entirely.** `keystore.handler.ts` continues to import `gatewayUserRpc` from `../gateway-client` and call `createWallet` directly against the gateway. Onboarding migration is tracked as a separate follow-up phase.
+**Why:** Onboarding today goes through gateway `createWallet` (which uses signing-relay + autoApprove gymnastics under the hood) + a follow-up `/auth/register-party` to link user↔party. After Phase 3 both the gateway and signing-relay are gone. The backend's `/external-party/onboarding/{prepare,submit}` endpoints — audited 2026-06-09, LIVE on backend's `feat/CIP-0103_migration_phase2`, explicitly UNCHANGED in Phase 1 docs — are the canonical replacement: backend prepares the party-allocation topology transaction, wallet signs the returned `multiHash` locally with its Ed25519 key, backend submits to Canton and persists the party→user link in one shot. The new flow also fixes onboarding on devnet/testnet/mainnet, which is broken today (`gatewayUrl=''` throws `Gateway auth not configured`).
 
-**Why:** Pre-flight verification (Item 1) confirmed the backend provides `/auth/register-party`. Swap the gateway call for the REST call so onboarding works after the gateway becomes private.
-
-**Pre-condition:** Pre-flight Item 1 RESOLVED with the actual `POST /auth/register-party` request/response shape recorded.
+**Pre-condition:** Pre-flight Item 1 RESOLVED (supplemental audit note) and Pre-flight escalation block has Option 2 chosen.
 
 **Files:**
 - Modify: `entrypoints/background/handlers/keystore.handler.ts`
 
-- [ ] **Step 1: Inspect the current callsite**
+- [ ] **Step 1: Read the current `handleCompleteOnboarding` to confirm scope**
 
 ```bash
-sed -n '130,160p' entrypoints/background/handlers/keystore.handler.ts
+sed -n '100,180p' entrypoints/background/handlers/keystore.handler.ts
 ```
 
-Expected lines (per the explorer):
-```
-// 5. Call Gateway createWallet — this triggers relay signing internally
-console.log(`[Ginkgo] Calling createWallet with partyHint: ${partyHint}`);
-const result = await gatewayUserRpc<CreateWalletResult>('createWallet', { ... });
-console.log(`[Ginkgo] createWallet result: ${result.wallet.partyId} ${result.wallet.status}`);
-```
+You should see (line numbers approximate):
+- `connectSigningRelayForOnboarding(privateKey)` call (line ~131)
+- `signingRelay.setAutoApprove(true)` (line ~134)
+- `gatewayUserRpc<CreateWalletResult>('createWallet', { partyHint, signingProviderId: 'blockdaemon', primary: true })` (line ~141)
+- `apiClient.post('/auth/register-party', { partyId, publicKey })` (line ~154)
+- `await connectSigningRelay()` reconnect (line ~157)
+- `signingRelay.setAutoApprove(false)` in `finally` (line ~160)
 
-- [ ] **Step 2: Replace the call with the REST equivalent**
+All of the above gets replaced by the new prepare→sign→submit block in Step 4.
 
-Swap imports and call. Replace the gateway import line in the file:
+- [ ] **Step 2: Define the response type for `/external-party/onboarding/prepare`**
+
+Add this type near the top of `keystore.handler.ts` (or in a new file `lib/dapp-api/onboarding-types.ts` if you prefer a cleaner separation). Shape matches the backend's `PrepareExternalPartyResponseDto` in `canton-exchange-backend/src/modules/external-onboarding/dto/create-external-party.dto.ts`:
 
 ```ts
-// Before:
-import { gatewayUserRpc } from '../gateway-client';
+interface PreparedExternalParty {
+  partyId: string;
+  namespace: string;
+  multiHash: string;
+  topologyTransactions: string[];
+}
+```
 
-// After:
+- [ ] **Step 3: Swap imports in `keystore.handler.ts`**
+
+First enumerate what's currently imported from the soon-to-be-deleted modules:
+
+```bash
+grep -nE "from '\\.\\./gateway-client'|from '\\.\\./signing-relay/|CreateWalletParams|CreateWalletResult|connectSigningRelayForOnboarding|connectSigningRelay" entrypoints/background/handlers/keystore.handler.ts
+```
+
+Remove all imports that reference `../gateway-client`, `../signing-relay/...`, `CreateWalletParams`, `CreateWalletResult`, `connectSigningRelayForOnboarding`, `connectSigningRelay`, and `signingRelay`. (Exact list depends on the file — use the grep above as ground truth.)
+
+Add (if not already present):
+
+```ts
 import apiClient from '../api-client';
+import { signTransactionHash } from '@canton-network/core-signing-lib';
 ```
 
-Replace the `gatewayUserRpc('createWallet', ...)` block with (adapt the request/response shape to what Pre-flight Item 1 RESOLVED documented):
+`apiClient` is likely already imported because `keystore.handler.ts` already calls `apiClient.post('/auth/register-party', ...)`. In that case just leave that import as-is. `signTransactionHash` is already imported elsewhere in the codebase (e.g., `dapp-api.handler.ts`) — confirm the named export exists in `@canton-network/core-signing-lib` via your IDE before relying on it.
+
+- [ ] **Step 4: Rewrite the body of `handleCompleteOnboarding`**
+
+Replace the entire `if (partyStatus !== 'SUCCESSFULLY') { … }` block (everything between the opening `{` of that `if` and its closing `}`, INCLUDING the `try { … } finally { signingRelay.setAutoApprove(false); }` wrapper) with:
 
 ```ts
-console.log(`[Ginkgo] Calling /auth/register-party with partyHint: ${partyHint}`);
-const { data } = await apiClient.post('/auth/register-party', {
-  partyHint,
-  publicKey,  // (and any other fields the verified endpoint accepts)
-});
-const result = data?.data as CreateWalletResult;
-console.log(`[Ginkgo] register-party result: ${result?.wallet?.partyId} ${result?.wallet?.status}`);
+const partyStatus = await sessionStore.get('partyStatus');
+if (partyStatus !== 'SUCCESSFULLY') {
+  const partyHint = import.meta.env.VITE_PARTY_HINT || 'ginkgo-wallet';
+
+  // 3. Backend prepares a party-allocation topology transaction.
+  //    Returns { partyId, namespace, multiHash, topologyTransactions }.
+  console.log(`[Ginkgo] POST /external-party/onboarding/prepare hint=${partyHint}`);
+  const prepareResponse = await apiClient.post(
+    '/external-party/onboarding/prepare',
+    { publicKey, hint: partyHint },
+  );
+  const prepared = prepareResponse.data?.data as PreparedExternalParty;
+  if (!prepared?.multiHash || !prepared?.partyId) {
+    throw new Error('Onboarding prepare returned malformed response');
+  }
+
+  // 4. Sign the multi-hash locally with the wallet's Ed25519 private key.
+  const signedHash = signTransactionHash(prepared.multiHash, privateKey);
+
+  // 5. Backend submits the signed topology to Canton and flips the party's
+  //    onboardingStatus to SUCCESSFULLY (which also persists the user↔party
+  //    link — no separate /auth/register-party call needed).
+  console.log(`[Ginkgo] POST /external-party/onboarding/submit partyId=${prepared.partyId}`);
+  const submitResponse = await apiClient.post(
+    '/external-party/onboarding/submit',
+    { signedHash, preparedParty: prepared },
+  );
+  const submitted = submitResponse.data?.data as { partyId: string; success: boolean };
+  if (!submitted?.success) {
+    throw new Error('Onboarding submit reported failure');
+  }
+
+  // 6. Persist partyId + onboarding status for the rest of the runtime.
+  await sessionStore.set('partyId', submitted.partyId);
+  await sessionStore.set('partyStatus', 'SUCCESSFULLY');
+  console.log(`[Ginkgo] Onboarding complete: ${submitted.partyId}`);
+}
 ```
 
-Keep the existing post-call code (storing the partyId, etc.) untouched.
+**Things this rewrite explicitly deletes:**
+- `connectSigningRelayForOnboarding(privateKey)` — no relay; the wallet signs locally.
+- `signingRelay.setAutoApprove(true/false)` and the `try/finally` wrapper — no relay request to auto-approve.
+- `await connectSigningRelay()` reconnect — no relay.
+- `gatewayUserRpc('createWallet', { partyHint, signingProviderId: 'blockdaemon', primary: true })` — replaced by prepare-sign-submit.
+- `apiClient.post('/auth/register-party', { partyId, publicKey })` — the submit endpoint already does the DB link (see `canton-exchange-backend/src/modules/external-onboarding/external-party.service.ts:300-315`).
 
-- [ ] **Step 3: Audit for other `gateway-client` imports in the handlers directory**
+**Things to leave unchanged:**
+- Steps 1 + 2 of the original function (key encryption + `setCachedPrivateKey`).
+- The early-return when `partyStatus === 'SUCCESSFULLY'`.
+- Step 10 (the final `localStore.set('onboardingComplete', true)` + `sessionStore.set('unlocked', true)`).
+- The outer `try { … } catch { … }` error handler.
+
+Also remove the unused `preparedParty?: OnboardingPrepareData` field from the function's parameter type — it was a stub for a never-implemented design.
+
+- [ ] **Step 5: Audit for stale references**
 
 ```bash
-grep -rn "from '.*gateway-client'" entrypoints/
+grep -nE "gatewayUserRpc|signingRelay|connectSigningRelay|CreateWalletResult|CreateWalletParams|setAutoApprove|OnboardingPrepareData" entrypoints/background/handlers/keystore.handler.ts
 ```
 
-Expected: only the import you just changed plus the import in `background.ts`. If there are more, swap them too (probably none).
+Expected: zero hits. If anything remains, it's leftover scaffolding — remove.
 
-- [ ] **Step 4: typecheck + build**
+- [ ] **Step 6: typecheck + build**
 
 ```bash
 yarn typecheck && yarn build
 ```
 
-Expected: pass.
+Expected: pass for `keystore.handler.ts`. Other files may still fail because `gateway-client.ts` and `signing-relay/` haven't been deleted yet — that's Task 11's job. If typecheck only complains about those, you're good.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
 git add entrypoints/background/handlers/keystore.handler.ts
-git commit -m "feat(keystore): use POST /auth/register-party instead of gateway createWallet"
+git commit -m "feat(keystore): replace gateway createWallet with /external-party/onboarding/* flow"
 ```
 
 ---
 
-## Task 11: Simplify `lib/network.ts` (drop signing-relay fields only)
+## Task 11: Simplify `lib/network.ts` (drop gateway + signing-relay fields)
 
-> **SCOPE ADJUSTED 2026-06-09 (Task 10 deferred):** Keep `gatewayUrl`, `gatewayAuth`, `GatewayAuthConfig`, and `clientId` because `keystore.handler.ts` still drives onboarding through `gateway-client.ts`. Only drop the signing-relay fields (`signingRelayUrl`, `signingRelayApiKey`) from `NetworkConfig` and the `NETWORKS` map. **Do NOT delete `entrypoints/background/gateway-client.ts`**; only delete `entrypoints/background/signing-relay/`. The replacement `lib/network.ts` body below should retain `gatewayUrl` and `gatewayAuth` per network; only strip the signing-relay-specific fields. The Step 2/3 deletion of `gateway-client.ts` is **cancelled**.
+**Also folds in deletion of `entrypoints/background/gateway-client.ts` and `entrypoints/background/signing-relay/`, plus cleanup of the now-dead `connectSigningRelay*` functions in `entrypoints/background/handlers/session.handler.ts`.** All callers were updated in Tasks 9 (`dapp-api.handler.ts`) and 10 (`keystore.handler.ts`).
 
 **Why:** Per-network config no longer needs `gatewayUrl`, `gatewayAuth`, `signingRelayUrl`, or `signingRelayApiKey`. The facade client uses the existing `apiBaseUrl`. `GatewayAuthConfig` is dead.
 
@@ -1547,7 +1626,29 @@ rm -rf entrypoints/background/signing-relay/
 
 (All callers have been updated in Tasks 9 and 10. The Task 12 wiring update will handle the remaining `background.ts` references.)
 
-- [ ] **Step 4: typecheck again — see what's left**
+- [ ] **Step 4: Clean up dead `connectSigningRelay*` helpers in `entrypoints/background/handlers/session.handler.ts`**
+
+`connectSigningRelay()` and `connectSigningRelayForOnboarding()` were re-exports from `session.handler.ts` that wrapped the signing-relay. With `signing-relay/` deleted in Step 3, these functions are either now broken (importing from a non-existent path) or dead (no callers after Task 10's onboarding rewrite). Find and remove them:
+
+```bash
+grep -nE "connectSigningRelay|signing-relay|signingRelay" entrypoints/background/handlers/session.handler.ts
+```
+
+Delete:
+- Any `import` line referencing `'../signing-relay/...'`.
+- The `connectSigningRelay()` function and its export.
+- The `connectSigningRelayForOnboarding()` function and its export.
+- Any other helper whose only purpose was driving the relay (e.g., a `disconnectSigningRelay()` if present).
+
+Then verify nothing else still imports them:
+
+```bash
+grep -rn "connectSigningRelay" entrypoints/ lib/
+```
+
+Expected: zero hits.
+
+- [ ] **Step 5: typecheck again — see what's left**
 
 ```bash
 yarn typecheck
@@ -1555,10 +1656,13 @@ yarn typecheck
 
 Expected: errors only in `entrypoints/background.ts` (still imports from `gateway-client` and `signing-relay`). Task 12 fixes those.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
-git add lib/network.ts entrypoints/background/gateway-client.ts entrypoints/background/signing-relay/
+git add lib/network.ts \
+        entrypoints/background/gateway-client.ts \
+        entrypoints/background/signing-relay/ \
+        entrypoints/background/handlers/session.handler.ts
 git commit -m "refactor(network): drop gateway/relay config fields and remove dead modules"
 ```
 
@@ -1567,8 +1671,6 @@ git commit -m "refactor(network): drop gateway/relay config fields and remove de
 ---
 
 ## Task 12: Rewire `entrypoints/background.ts`
-
-> **SCOPE ADJUSTED 2026-06-09 (Task 10 deferred):** Keep the `setGatewayBaseUrl(NETWORKS[net].gatewayUrl)` and `setGatewayAuth(NETWORKS[net].gatewayAuth)` init calls; onboarding still needs them. **Add** `setGatewayFacadeBaseUrl(NETWORKS[net].apiBaseUrl)` alongside them. Only remove signing-relay setup + alarms.
 
 **Why:** Replace the legacy `setGatewayBaseUrl`/`setGatewayAuth` calls with the new facade-client init, and remove all signing-relay setup + alarms.
 
@@ -1707,14 +1809,8 @@ Expected: every command exits 0. `yarn build:all` builds both Chrome MV3 and Fir
 
 - [ ] **Step 2: Confirm dead-code removal**
 
-> **SCOPE ADJUSTED 2026-06-09 (Task 10 deferred):** Onboarding still drives through `gateway-client.ts`, so `wallet-gateway`, `gatewayClient`, `gatewayUrl`, `clientId`, `GatewayAuthConfig`, `ensureGatewaySession` will still appear in `entrypoints/background/gateway-client.ts`, `lib/network.ts`, and `entrypoints/background.ts`. Only `signing-relay` / `signingRelay` / `signingRelayUrl` references should be zero. Use this narrower grep instead:
-
 ```bash
-grep -rn "signing-relay\|signingRelay\|signingRelayUrl\|signingRelayApiKey" entrypoints/ lib/
-```
-
-```bash
-grep -rn "wallet-gateway\|signing-relay\|gatewayClient\|signingRelay\|gatewayUrl\|signingRelayUrl\|clientId\|GatewayAuthConfig\|ensureGatewaySession" entrypoints/ lib/
+grep -rn "wallet-gateway\|signing-relay\|gatewayClient\|signingRelay\|gatewayUrl\|signingRelayUrl\|clientId\|GatewayAuthConfig\|ensureGatewaySession\|connectSigningRelay\|CreateWalletResult\|CreateWalletParams" entrypoints/ lib/
 ```
 
 Expected: zero hits (or only hits in comment/doc lines that explicitly reference past behavior — e.g., a migration note). If runtime code still references any of these, fix it.
