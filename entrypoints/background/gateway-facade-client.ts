@@ -8,6 +8,8 @@
  *   docs/superpowers/specs/2026-06-09-ginkgo-cip-0103-facade-migration-design.md
  */
 
+import { sessionStore } from '@lib/storage';
+
 export class FacadeRpcError extends Error {
   constructor(
     public readonly code: number,
@@ -108,6 +110,11 @@ export function gatewayFacadeUserRpc<T = unknown>(
 }
 
 async function facadeRpc<T>(path: string, method: string, params: unknown): Promise<T> {
+  const token = await sessionStore.get('authToken');
+  if (!token) {
+    throw new FacadeAuthRequiredError();
+  }
+
   const envelope: JsonRpcRequest = {
     jsonrpc: '2.0',
     id: crypto.randomUUID(),
@@ -116,7 +123,10 @@ async function facadeRpc<T>(path: string, method: string, params: unknown): Prom
   };
   const response = await fetch(`${currentBaseUrl}${path}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
     body: JSON.stringify(envelope),
   });
   const data = (await response.json()) as JsonRpcResponse<T>;

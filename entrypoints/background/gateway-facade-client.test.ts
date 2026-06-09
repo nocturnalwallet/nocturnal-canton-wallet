@@ -12,6 +12,7 @@ import {
   gatewayFacadeUserRpc,
   setGatewayFacadeBaseUrl,
 } from './gateway-facade-client';
+import { sessionStore } from '@lib/storage';
 
 // Mock sessionStore so Bearer reads return a stable token in these happy-path tests
 vi.mock('@lib/storage', () => ({
@@ -137,5 +138,46 @@ describe('successful dispatch', () => {
     await gatewayFacadeDappRpc('connect', {});
     const [url] = fetchSpy.mock.calls[0];
     expect(url).toBe('https://other.test/api/v0/dapp');
+  });
+});
+
+describe('auth header', () => {
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
+  const sessionGetMock = vi.mocked(sessionStore.get);
+
+  beforeEach(() => {
+    setGatewayFacadeBaseUrl('https://backend.test');
+    sessionGetMock.mockReset();
+    fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({ jsonrpc: '2.0', id: 'r1', result: null }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    );
+  });
+
+  afterEach(() => fetchSpy.mockRestore());
+
+  it('sends Authorization: Bearer <sessionStore.authToken>', async () => {
+    sessionGetMock.mockResolvedValue('the-token');
+    await gatewayFacadeDappRpc('connect', {});
+    const [, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
+    const headers = init.headers as Record<string, string>;
+    expect(headers['Authorization']).toBe('Bearer the-token');
+  });
+
+  it('throws FacadeAuthRequiredError when sessionStore.authToken is missing', async () => {
+    sessionGetMock.mockResolvedValue(null);
+    await expect(gatewayFacadeDappRpc('connect', {})).rejects.toBeInstanceOf(
+      FacadeAuthRequiredError,
+    );
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('throws FacadeAuthRequiredError when sessionStore.authToken is empty string', async () => {
+    sessionGetMock.mockResolvedValue('');
+    await expect(gatewayFacadeDappRpc('connect', {})).rejects.toBeInstanceOf(
+      FacadeAuthRequiredError,
+    );
   });
 });
