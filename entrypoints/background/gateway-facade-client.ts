@@ -67,3 +67,58 @@ export class FacadeNetworkError extends Error {
     this.name = 'FacadeNetworkError';
   }
 }
+
+let currentBaseUrl = '';
+
+export function setGatewayFacadeBaseUrl(url: string): void {
+  // Strip trailing slash so `${url}/api/v0/dapp` doesn't double-slash.
+  currentBaseUrl = url.replace(/\/+$/, '');
+}
+
+export function getGatewayFacadeBaseUrl(): string {
+  return currentBaseUrl;
+}
+
+interface JsonRpcRequest {
+  jsonrpc: '2.0';
+  id: string;
+  method: string;
+  params: unknown;
+}
+
+interface JsonRpcResponse<T = unknown> {
+  jsonrpc: '2.0';
+  id: string | number | null;
+  result?: T;
+  error?: { code: number; message: string; data?: unknown };
+}
+
+export function gatewayFacadeDappRpc<T = unknown>(
+  method: string,
+  params: unknown,
+): Promise<T> {
+  return facadeRpc<T>('/api/v0/dapp', method, params);
+}
+
+export function gatewayFacadeUserRpc<T = unknown>(
+  method: string,
+  params: unknown,
+): Promise<T> {
+  return facadeRpc<T>('/api/v0/user', method, params);
+}
+
+async function facadeRpc<T>(path: string, method: string, params: unknown): Promise<T> {
+  const envelope: JsonRpcRequest = {
+    jsonrpc: '2.0',
+    id: crypto.randomUUID(),
+    method,
+    params,
+  };
+  const response = await fetch(`${currentBaseUrl}${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(envelope),
+  });
+  const data = (await response.json()) as JsonRpcResponse<T>;
+  return data.result as T;
+}
