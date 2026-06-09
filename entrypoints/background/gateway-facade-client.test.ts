@@ -13,6 +13,7 @@ import {
   setGatewayFacadeBaseUrl,
 } from './gateway-facade-client';
 import { sessionStore } from '@lib/storage';
+import { refreshAuthTokenOnce } from '@lib/auth-refresh';
 
 // Mock sessionStore so Bearer reads return a stable token in these happy-path tests
 vi.mock('@lib/storage', () => ({
@@ -24,6 +25,10 @@ vi.mock('@lib/storage', () => ({
   },
   localStore: { get: vi.fn(), set: vi.fn() },
   networkStore: { get: vi.fn(), set: vi.fn() },
+}));
+
+vi.mock('@lib/auth-refresh', () => ({
+  refreshAuthTokenOnce: vi.fn(),
 }));
 
 describe('error classes', () => {
@@ -293,5 +298,83 @@ describe('transport errors', () => {
     await expect(gatewayFacadeDappRpc('connect', {})).rejects.toBeInstanceOf(
       FacadeRpcError,
     );
+  });
+});
+
+describe('401 refresh-and-retry', () => {
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
+  const sessionGetMock = vi.mocked(sessionStore.get);
+  const refreshMock = vi.mocked(refreshAuthTokenOnce);
+
+  beforeEach(() => {
+    setGatewayFacadeBaseUrl('https://backend.test');
+    sessionGetMock.mockReset();
+    refreshMock.mockReset();
+  });
+
+  afterEach(() => fetchSpy?.mockRestore());
+
+  it('refreshes and retries once on HTTP 401', async () => {
+    sessionGetMock.mockResolvedValueOnce('old').mockResolvedValueOnce('new');
+    refreshMock.mockResolvedValue('new');
+    fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response('unauthorized', { status: 401 }))
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ jsonrpc: '2.0', id: 'r1', result: { ok: true } }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      );
+    const result = await gatewayFacadeDappRpc<{ ok: boolean }>('connect', {});
+    expect(result).toEqual({ ok: true });
+    expect(refreshMock).toHaveBeenCalledOnce();
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    const [, secondInit] = fetchSpy.mock.calls[1] as [string, RequestInit];
+    expect((secondInit.headers as Record<string, string>)['Authorization']).toBe(
+      'Bearer new',
+    );
+  });
+
+  it('throws FacadeAuthRequiredError when refresh returns null', async () => {
+    sessionGetMock.mockResolvedValue('old');
+    refreshMock.mockResolvedValue(null);
+    fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response('unauthorized', { status: 401 }));
+    await expect(gatewayFacadeDappRpc('connect', {})).rejects.toBeInstanceOf(
+      FacadeAuthRequiredError,
+    );
+    expect(fetchSpy).toHaveBeenCalledOnce();
+  });
+
+  it('throws FacadeAuthRequiredError when retry also returns 401', async () => {
+    sessionGetMock.mockResolvedValueOnce('old').mockResolvedValueOnce('new');
+    refreshMock.mockResolvedValue('new');
+    fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response('unauthorized', { status: 401 }));
+    await expect(gatewayFacadeDappRpc('connect', {})).rejects.toBeInstanceOf(
+      FacadeAuthRequiredError,
+    );
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('uses the new token from sessionStore after refresh', async () => {
+    sessionGetMock.mockResolvedValueOnce('old').mockResolvedValueOnce('new');
+    refreshMock.mockResolvedValue('new');
+    fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response('unauthorized', { status: 401 }))
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ jsonrpc: '2.0', id: 'r1', result: null }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      );
+    await gatewayFacadeDappRpc('connect', {});
+    const calls = fetchSpy.mock.calls as Array<[string, RequestInit]>;
+    expect((calls[0][1].headers as Record<string, string>)['Authorization']).toBe('Bearer old');
+    expect((calls[1][1].headers as Record<string, string>)['Authorization']).toBe('Bearer new');
   });
 });

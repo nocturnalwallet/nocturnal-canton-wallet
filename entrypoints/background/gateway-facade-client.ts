@@ -9,6 +9,7 @@
  */
 
 import { sessionStore } from '@lib/storage';
+import { refreshAuthTokenOnce } from '@lib/auth-refresh';
 
 export class FacadeRpcError extends Error {
   constructor(
@@ -110,11 +111,6 @@ export function gatewayFacadeUserRpc<T = unknown>(
 }
 
 async function facadeRpc<T>(path: string, method: string, params: unknown): Promise<T> {
-  const token = await sessionStore.get('authToken');
-  if (!token) {
-    throw new FacadeAuthRequiredError();
-  }
-
   const envelope: JsonRpcRequest = {
     jsonrpc: '2.0',
     id: crypto.randomUUID(),
@@ -122,21 +118,20 @@ async function facadeRpc<T>(path: string, method: string, params: unknown): Prom
     params,
   };
 
-  let response: Response;
-  try {
-    response = await fetch(`${currentBaseUrl}${path}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify(envelope),
-    });
-  } catch (cause) {
-    throw new FacadeNetworkError(`facade unreachable at ${currentBaseUrl}${path}`, cause);
+  let response = await sendOnce(path, envelope);
+
+  if (response.status === 401) {
+    const newToken = await refreshAuthTokenOnce(currentBaseUrl);
+    if (!newToken) {
+      throw new FacadeAuthRequiredError();
+    }
+    response = await sendOnce(path, envelope);
+    if (response.status === 401) {
+      throw new FacadeAuthRequiredError();
+    }
   }
 
-  if (!response.ok && response.status !== 401) {
+  if (!response.ok) {
     throw new FacadeRpcError(
       -32603,
       `facade HTTP ${response.status} ${response.statusText}`,
@@ -148,6 +143,25 @@ async function facadeRpc<T>(path: string, method: string, params: unknown): Prom
     throw mapJsonRpcError(data.error);
   }
   return data.result as T;
+}
+
+async function sendOnce(path: string, envelope: JsonRpcRequest): Promise<Response> {
+  const token = await sessionStore.get('authToken');
+  if (!token) {
+    throw new FacadeAuthRequiredError();
+  }
+  try {
+    return await fetch(`${currentBaseUrl}${path}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(envelope),
+    });
+  } catch (cause) {
+    throw new FacadeNetworkError(`facade unreachable at ${currentBaseUrl}${path}`, cause);
+  }
 }
 
 function mapJsonRpcError(error: {
