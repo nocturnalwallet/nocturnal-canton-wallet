@@ -16,7 +16,7 @@
 
 These verifications resolve the spec's §9 open questions and the `createWallet` discovery from the planning explorer. Record outcomes inline as `< RESOLVED: ... >` notes before proceeding.
 
-- [ ] **Verify `createWallet` replacement endpoint exists in `canton-exchange-backend`.** Ginkgo's `entrypoints/background/handlers/keystore.handler.ts:141` calls `gatewayUserRpc('createWallet', { partyHint, publicKey, ... })`. After Phase 3 this returns `-32601 MethodNotFound` from the facade (it's in `SKIPPED_USER_API`). The backend ships `POST /auth/register-party` for the same purpose. Confirm:
+- [x] **Verify `createWallet` replacement endpoint exists in `canton-exchange-backend`.** Ginkgo's `entrypoints/background/handlers/keystore.handler.ts:141` calls `gatewayUserRpc('createWallet', { partyHint, publicKey, ... })`. After Phase 3 this returns `-32601 MethodNotFound` from the facade (it's in `SKIPPED_USER_API`). The backend ships `POST /auth/register-party` for the same purpose. Confirm:
   - Endpoint path: `POST /auth/register-party`
   - Request body shape (party hint, optional public key, etc.)
   - Response shape (created `partyId`, status, etc.)
@@ -24,28 +24,71 @@ These verifications resolve the spec's §9 open questions and the `createWallet`
   - Run `curl` against a local backend or check the controller in `canton-exchange-backend/src/modules/auth/auth.controller.ts` to verify.
   Record: `< RESOLVED YYYY-MM-DD: endpoint shape is ... >`
 
-- [ ] **Confirm `apiBaseUrl` is the correct facade base URL.** Inspect `lib/network.ts`: `apiBaseUrl` is set to the backend (e.g., `http://localhost:3003/` for localnet, `https://api-devnet.kairo.ag/` for devnet). The facade endpoints live at `/api/v0/{dapp,user}` on the same backend. Verify with one `curl`:
+  `< RESOLVED 2026-06-09: /auth/register-party is NOT a drop-in replacement for createWallet — see auth.controller.ts:49-57 and auth.service.ts:290. Endpoint exists but semantics differ:`
+  - **Path:** `POST /auth/register-party` (no global prefix; raw path)
+  - **Auth:** `@UseGuards(JwtAuthGuard)` + `@ApiBearerAuth()` — same `Authorization: Bearer ${sessionStore.authToken}` Ginkgo already uses.
+  - **Request body (RegisterPartyDto, src/modules/external-onboarding/dto/register-party.dto.ts):** `{ partyId: string; publicKey?: string }` — **expects an existing partyId in `hint::fingerprint` form**, not a `partyHint` string.
+  - **Response (RegisterPartyResponseDto):** `{ partyId: string; onboardingStatus: string }`.
+  - **Service body verifies `topologyService.getPartyById(partyId)` returns a non-empty result, throwing `BadRequestException('Party not found on synchronizer')` otherwise.** It only **records the user↔party link** in the backend DB; it does not allocate a party on the synchronizer.
+  - **Discovery (blocking for Task 10):** Ginkgo's `keystore.handler.ts:154` *already* calls `apiClient.post('/auth/register-party', { partyId, publicKey })` immediately after `createWallet` succeeds. Removing the `createWallet` call leaves the wallet with no partyId to register, so this swap as written cannot work. The actual gateway-side allocation today uses the gateway's `signingProviderId: 'blockdaemon'` (gateway-managed key), which is what's becoming unreachable in Phase 2. A correct Phase 3 onboarding replacement requires the backend's `external-party/onboarding/{prepare,submit}` flow (`canton-exchange-backend/src/modules/external-onboarding/external-party.controller.ts:85,105`) so the wallet's local Ed25519 key allocates the party via signed topology transactions, then `/auth/register-party` records the link. This is a multi-step rewrite, not a one-line swap.
+  - **Action required:** human decision — see "Pre-flight escalation" block below before starting Task 1. `>`
+
+- [x] **Confirm `apiBaseUrl` is the correct facade base URL.** Inspect `lib/network.ts`: `apiBaseUrl` is set to the backend (e.g., `http://localhost:3003/` for localnet, `https://api-devnet.kairo.ag/` for devnet). The facade endpoints live at `/api/v0/{dapp,user}` on the same backend. Verify with one `curl`:
   ```bash
   curl -s -o /dev/null -w "%{http_code}\n" -X POST https://api-devnet.kairo.ag/api/v0/dapp -H "Content-Type: application/json" -d '{}'
   ```
   Expected: `401` (auth required) → proves the endpoint is reachable at that base.
   Record: `< RESOLVED YYYY-MM-DD: apiBaseUrl IS the facade base; no new field needed >`
 
-- [ ] **Confirm `chrome.storage` holds no cached self-signed gateway JWT.** Per `entrypoints/background/gateway-client.ts:9-11`, the JWT is held in **module-local memory** (`cachedGatewayJwt`, `cachedJwtExpiry`), not in any storage. Verify by grep:
+  `< RESOLVED 2026-06-09: apiBaseUrl IS the facade base — confirmed by code, NOT yet by HTTP probe on devnet (deployment lag).`
+  - Backend controllers: `cip-0103-facade/dapp-api.controller.ts:23` → `@Controller('api/v0/dapp')`; `cip-0103-facade/user-api.controller.ts:23` → `@Controller('api/v0/user')`. No NestJS global prefix; raw paths.
+  - `Cip0103FacadeModule` is wired in `src/app.module.ts:16,28` on backend branch `feat/CIP-0103_migration_phase2` — confirmed alongside auth, transfer, etc.
+  - Live probe `curl POST https://api-devnet.kairo.ag/api/v0/dapp` → **HTTP 404** (devnet runs an older backend without the facade). `curl POST https://api-devnet.kairo.ag/auth/login-with-google` → HTTP 400 (existing endpoint live), confirming the backend itself is reachable.
+  - Localnet (`http://localhost:3003`) not running locally; not probed.
+  - **Conclusion:** `apiBaseUrl` is structurally correct; no new `facadeBaseUrl` field needed. Devnet/testnet/mainnet must redeploy the Phase 2 backend before Ginkgo Phase 3 can be smoke-tested against them — out of scope for this Ginkgo work, tracked as a follow-up. Local manual verification (spec §8) will use a developer-run backend on `http://localhost:3003`. `>`
+
+- [x] **Confirm `chrome.storage` holds no cached self-signed gateway JWT.** Per `entrypoints/background/gateway-client.ts:9-11`, the JWT is held in **module-local memory** (`cachedGatewayJwt`, `cachedJwtExpiry`), not in any storage. Verify by grep:
   ```bash
   grep -rn "cachedGatewayJwt\|gatewayJwt" entrypoints/ lib/
   ```
   Expected: hits only in `gateway-client.ts`. No `chrome.storage` references → no migration needed.
   Record: `< RESOLVED YYYY-MM-DD: JWT is in-memory only; no storage migration needed >`
 
-- [ ] **Confirm `clientId` is used only for self-signed JWT minting.** Per planning explorer findings, the only references are `gateway-client.ts:134` (`auth.clientId` as JWT `sub`) and `lib/network.ts` (the field definition + localnet value). Re-grep to confirm:
+  `< RESOLVED 2026-06-09: JWT is in-memory only; no storage migration needed. All 7 hits for cachedGatewayJwt/gatewayJwt are inside entrypoints/background/gateway-client.ts (lines 18, 34, 45, 128, 129, 141, 143). No chrome.storage / localStore / sessionStore references. Task 11 deleting gateway-client.ts wipes the only holder. >`
+
+- [x] **Confirm `clientId` is used only for self-signed JWT minting.** Per planning explorer findings, the only references are `gateway-client.ts:134` (`auth.clientId` as JWT `sub`) and `lib/network.ts` (the field definition + localnet value). Re-grep to confirm:
   ```bash
   grep -rn "clientId\b" entrypoints/ lib/
   ```
   Expected: only the two listed sites. → safe to delete with the rest of `GatewayAuthConfig` in Task 11.
   Record: `< RESOLVED YYYY-MM-DD: clientId only used in JWT minting; safe to delete with GatewayAuthConfig >`
 
-Only proceed to Task 1 after every checkbox above has a resolution note.
+  `< RESOLVED 2026-06-09: clientId is only used for JWT minting; safe to delete with GatewayAuthConfig. Exactly three references across entrypoints/ and lib/:`
+  - `entrypoints/background/gateway-client.ts:134` — `const sub = auth.clientId;` (JWT `sub` claim).
+  - `lib/network.ts:9` — `clientId: string;` field declaration inside `GatewayAuthConfig`.
+  - `lib/network.ts:39` — `clientId: 'ledger-api-user'` (localnet value).
+
+  Deleting `GatewayAuthConfig` and `gateway-client.ts` (Task 11) removes all three. No popup UI, content script, or other handler references `clientId`. `>`
+
+---
+
+## Pre-flight escalation — Task 10 blocker (added 2026-06-09)
+
+The pre-flight surfaced a contradiction between the plan's Task 10 and the actual `canton-exchange-backend` semantics that **must** be resolved before Task 10 lands. Tasks 1–9, 11–14 are unaffected and may proceed.
+
+**What the plan assumes:** Task 10 swaps `gatewayUserRpc('createWallet', { partyHint, publicKey, ... })` (which the gateway currently uses with `signingProviderId: 'blockdaemon'` to allocate a party on the synchronizer) for `apiClient.post('/auth/register-party', { partyHint, publicKey })`.
+
+**What the backend actually offers:**
+- `POST /auth/register-party` only **records** an existing party-to-user link. Its service throws `BadRequestException('Party not found on synchronizer')` unless the party already exists.
+- Ginkgo's `keystore.handler.ts:154` already invokes this endpoint immediately after `createWallet` returns the partyId — it's not a substitute, it's the next step.
+- The actual party-allocation flow lives in `src/modules/external-onboarding/external-party.controller.ts` (`POST /external-party/onboarding/{prepare,submit}` with `create-key-pair`, `party-details`, `party-id`). Replacing `createWallet` requires the wallet to allocate the party itself using its local Ed25519 key via that multi-step flow, then call `/auth/register-party`.
+
+**Options for the human:**
+1. **Defer Task 10** — leave the `createWallet` call in place for now (gateway still reachable on localnet). Accept that onboarding breaks the moment backend Phase 2 makes the gateway private. Phase 3 ships as a facade-migration-only refactor; onboarding migration becomes its own follow-up phase. **Recommended** because §3 of the spec already calls onboarding out as deferrable.
+2. **Expand Task 10 in place** — design and implement the wallet-side multi-step `external-party/onboarding/{prepare,submit}` flow now. Significantly larger than a "one-line swap" and likely deserves its own plan.
+3. **Hybrid** — drop the unconditional `createWallet`/`register-party` calls from `handleCreateAccount`, and add a clear `TODO(onboarding-rewrite)` comment + early-return so onboarding fails fast with a typed error until Phase 3.5 lands.
+
+Only proceed to Task 1 after every checkbox above has a resolution note **and** the Task 10 option is chosen (Option 1 is the default if no decision is recorded here).
 
 ---
 
@@ -1347,6 +1390,8 @@ git commit -m "feat(dapp-api): route through gateway-facade-client and handle ty
 
 ## Task 10: Replace `createWallet` in `keystore.handler.ts`
 
+> **DEFERRED 2026-06-09** — Pre-flight Item 1 revealed `/auth/register-party` is not a substitute for `createWallet`. Ginkgo already calls it as the follow-up step (`keystore.handler.ts:154`). A correct replacement requires the wallet-side `external-party/onboarding/{prepare,submit}` flow, which is its own multi-step rewrite outside this phase's scope. **Skip this task entirely.** `keystore.handler.ts` continues to import `gatewayUserRpc` from `../gateway-client` and call `createWallet` directly against the gateway. Onboarding migration is tracked as a separate follow-up phase.
+
 **Why:** Pre-flight verification (Item 1) confirmed the backend provides `/auth/register-party`. Swap the gateway call for the REST call so onboarding works after the gateway becomes private.
 
 **Pre-condition:** Pre-flight Item 1 RESOLVED with the actual `POST /auth/register-party` request/response shape recorded.
@@ -1419,7 +1464,9 @@ git commit -m "feat(keystore): use POST /auth/register-party instead of gateway 
 
 ---
 
-## Task 11: Simplify `lib/network.ts` (drop gateway/relay fields)
+## Task 11: Simplify `lib/network.ts` (drop signing-relay fields only)
+
+> **SCOPE ADJUSTED 2026-06-09 (Task 10 deferred):** Keep `gatewayUrl`, `gatewayAuth`, `GatewayAuthConfig`, and `clientId` because `keystore.handler.ts` still drives onboarding through `gateway-client.ts`. Only drop the signing-relay fields (`signingRelayUrl`, `signingRelayApiKey`) from `NetworkConfig` and the `NETWORKS` map. **Do NOT delete `entrypoints/background/gateway-client.ts`**; only delete `entrypoints/background/signing-relay/`. The replacement `lib/network.ts` body below should retain `gatewayUrl` and `gatewayAuth` per network; only strip the signing-relay-specific fields. The Step 2/3 deletion of `gateway-client.ts` is **cancelled**.
 
 **Why:** Per-network config no longer needs `gatewayUrl`, `gatewayAuth`, `signingRelayUrl`, or `signingRelayApiKey`. The facade client uses the existing `apiBaseUrl`. `GatewayAuthConfig` is dead.
 
@@ -1520,6 +1567,8 @@ git commit -m "refactor(network): drop gateway/relay config fields and remove de
 ---
 
 ## Task 12: Rewire `entrypoints/background.ts`
+
+> **SCOPE ADJUSTED 2026-06-09 (Task 10 deferred):** Keep the `setGatewayBaseUrl(NETWORKS[net].gatewayUrl)` and `setGatewayAuth(NETWORKS[net].gatewayAuth)` init calls; onboarding still needs them. **Add** `setGatewayFacadeBaseUrl(NETWORKS[net].apiBaseUrl)` alongside them. Only remove signing-relay setup + alarms.
 
 **Why:** Replace the legacy `setGatewayBaseUrl`/`setGatewayAuth` calls with the new facade-client init, and remove all signing-relay setup + alarms.
 
@@ -1657,6 +1706,12 @@ yarn typecheck && yarn lint && yarn test && yarn build:all
 Expected: every command exits 0. `yarn build:all` builds both Chrome MV3 and Firefox extensions.
 
 - [ ] **Step 2: Confirm dead-code removal**
+
+> **SCOPE ADJUSTED 2026-06-09 (Task 10 deferred):** Onboarding still drives through `gateway-client.ts`, so `wallet-gateway`, `gatewayClient`, `gatewayUrl`, `clientId`, `GatewayAuthConfig`, `ensureGatewaySession` will still appear in `entrypoints/background/gateway-client.ts`, `lib/network.ts`, and `entrypoints/background.ts`. Only `signing-relay` / `signingRelay` / `signingRelayUrl` references should be zero. Use this narrower grep instead:
+
+```bash
+grep -rn "signing-relay\|signingRelay\|signingRelayUrl\|signingRelayApiKey" entrypoints/ lib/
+```
 
 ```bash
 grep -rn "wallet-gateway\|signing-relay\|gatewayClient\|signingRelay\|gatewayUrl\|signingRelayUrl\|clientId\|GatewayAuthConfig\|ensureGatewaySession" entrypoints/ lib/
