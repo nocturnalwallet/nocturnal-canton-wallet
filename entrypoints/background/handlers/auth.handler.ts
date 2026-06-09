@@ -5,7 +5,6 @@ import { sessionStore } from '@lib/storage';
 import apiClient from '../api-client';
 import { setCachedPrivateKey } from './session.handler';
 import { clearPreapprovalCache } from './keystore.handler';
-import { invalidateGatewayJwt } from '../gateway-client';
 
 // --- PKCE helpers ---
 
@@ -116,10 +115,6 @@ export async function handleGoogleAuth(): Promise<MessageResponse<GoogleAuthData
 
     // Store user in local storage (network-scoped, not user-scoped)
     await localStore.set('user', user);
-
-    // Invalidate cached Gateway JWT so it regenerates with the user's email claim.
-    // Required by wallet-gateway-remote >= 1.1.0 for Blockdaemon wallet allocation.
-    invalidateGatewayJwt();
 
     // Fetch party info
     const { data: meData } = await apiClient.get('/auth/me');
