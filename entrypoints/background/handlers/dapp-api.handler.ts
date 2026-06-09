@@ -27,7 +27,13 @@ import { sessionStore, localStore, networkStore } from '@lib/storage';
 import { NETWORKS } from '@lib/network';
 import { getCachedPrivateKey, resetAutoLockTimer } from './session.handler';
 import { APPROVAL_REQUIRED_METHODS, requestApproval } from './approval.handler';
-import { gatewayDappRpc, gatewayUserRpc, getGatewayBaseUrl } from '../gateway-client';
+import {
+  gatewayFacadeDappRpc,
+  gatewayFacadeUserRpc,
+  getGatewayFacadeBaseUrl,
+  FacadeAuthRequiredError,
+  FacadeRpcError,
+} from '../gateway-facade-client';
 
 // -- CIP-0103 Account type (matches @canton-network/dapp-sdk Wallet) --
 
@@ -222,8 +228,8 @@ async function handleSignTransaction(params: unknown): Promise<{
  * The signing relay handles Gateway-initiated signing independently.
  */
 async function handlePrepareExecute(params: unknown): Promise<unknown> {
-  if (!getGatewayBaseUrl()) {
-    throw new Error('Wallet Gateway not configured for this network');
+  if (!getGatewayFacadeBaseUrl()) {
+    throw new Error('Wallet facade not configured for this network');
   }
 
   const { partyId, isReady } = await getWalletState();
@@ -235,7 +241,7 @@ async function handlePrepareExecute(params: unknown): Promise<unknown> {
   const typedParams = params as PrepareExecuteParams;
 
   // 1. Forward to Gateway dApp API
-  const { userUrl } = await gatewayDappRpc<PrepareExecuteResponse>('prepareExecute', typedParams);
+  const { userUrl } = await gatewayFacadeDappRpc<PrepareExecuteResponse>('prepareExecute', typedParams);
 
   // 2. Extract commandId from userUrl
   const url = new URL(userUrl);
@@ -251,7 +257,7 @@ async function handlePrepareExecute(params: unknown): Promise<unknown> {
   if (!approved) {
     // Clean up the pending transaction from Gateway
     try {
-      await gatewayUserRpc('deleteTransaction', { commandId });
+      await gatewayFacadeUserRpc('deleteTransaction', { commandId });
     } catch {
       // Best-effort cleanup
     }
@@ -259,7 +265,7 @@ async function handlePrepareExecute(params: unknown): Promise<unknown> {
   }
 
   // 4. Get prepared transaction details from Gateway
-  const tx = await gatewayUserRpc<GatewayTransaction>('getTransaction', { commandId });
+  const tx = await gatewayFacadeUserRpc<GatewayTransaction>('getTransaction', { commandId });
 
   // 5. Sign locally
   const { signTransactionHash, getPublicKeyFromPrivate } = await import(
@@ -269,7 +275,7 @@ async function handlePrepareExecute(params: unknown): Promise<unknown> {
   const fingerprint = partyId.split('::')[1];
 
   // 6. Execute via Gateway
-  const result = await gatewayUserRpc('execute', {
+  const result = await gatewayFacadeUserRpc('execute', {
     commandId,
     signature,
     signedBy: fingerprint,
@@ -284,8 +290,8 @@ async function handlePrepareExecute(params: unknown): Promise<unknown> {
  * prepareExecuteAndWait: Same as prepareExecute but returns the full execution result.
  */
 async function handlePrepareExecuteAndWait(params: unknown): Promise<PrepareExecuteAndWaitResult> {
-  if (!getGatewayBaseUrl()) {
-    throw new Error('Wallet Gateway not configured for this network');
+  if (!getGatewayFacadeBaseUrl()) {
+    throw new Error('Wallet facade not configured for this network');
   }
 
   const { partyId, isReady } = await getWalletState();
@@ -296,7 +302,7 @@ async function handlePrepareExecuteAndWait(params: unknown): Promise<PrepareExec
 
   const typedParams = params as PrepareExecuteParams;
 
-  const { userUrl } = await gatewayDappRpc<PrepareExecuteResponse>('prepareExecute', typedParams);
+  const { userUrl } = await gatewayFacadeDappRpc<PrepareExecuteResponse>('prepareExecute', typedParams);
 
   const url = new URL(userUrl);
   const commandId = url.searchParams.get('commandId');
@@ -309,14 +315,14 @@ async function handlePrepareExecuteAndWait(params: unknown): Promise<PrepareExec
 
   if (!approved) {
     try {
-      await gatewayUserRpc('deleteTransaction', { commandId });
+      await gatewayFacadeUserRpc('deleteTransaction', { commandId });
     } catch {
       // Best-effort cleanup
     }
     throw new Error('User rejected the transaction');
   }
 
-  const tx = await gatewayUserRpc<GatewayTransaction>('getTransaction', { commandId });
+  const tx = await gatewayFacadeUserRpc<GatewayTransaction>('getTransaction', { commandId });
 
   const { signTransactionHash, getPublicKeyFromPrivate } = await import(
     '@canton-network/core-signing-lib'
@@ -324,7 +330,7 @@ async function handlePrepareExecuteAndWait(params: unknown): Promise<PrepareExec
   const signature = signTransactionHash(tx.preparedTransactionHash, privateKey);
   const fingerprint = partyId.split('::')[1];
 
-  const executeResult = await gatewayUserRpc('execute', {
+  const executeResult = await gatewayFacadeUserRpc('execute', {
     commandId,
     signature,
     signedBy: fingerprint,
@@ -350,8 +356,8 @@ async function handlePrepareExecuteAndWait(params: unknown): Promise<PrepareExec
  * and an object body.
  */
 async function handleLedgerApi(params: unknown): Promise<unknown> {
-  if (!getGatewayBaseUrl()) {
-    throw new Error('Wallet Gateway not configured for this network');
+  if (!getGatewayFacadeBaseUrl()) {
+    throw new Error('Wallet facade not configured for this network');
   }
 
   const { isReady } = await getWalletState();
@@ -367,7 +373,7 @@ async function handleLedgerApi(params: unknown): Promise<unknown> {
         : (raw.body as Record<string, unknown> | undefined),
   };
 
-  const result = await gatewayDappRpc('ledgerApi', normalized);
+  const result = await gatewayFacadeDappRpc('ledgerApi', normalized);
 
   resetAutoLockTimer();
   return result;
@@ -428,6 +434,16 @@ export async function handleDappApiRequest(
     const result = await handler(request.params);
     return jsonRpcSuccess(id, result);
   } catch (e) {
+    if (e instanceof FacadeAuthRequiredError) {
+      // Wallet's session is gone — generic envelope to dApp; the popup will route to sign-in
+      // (popup side-effect dispatched elsewhere; the dApp just needs to know to back off).
+      return jsonRpcError(id, RpcErrorCodes.INTERNAL_ERROR, 'Wallet locked');
+    }
+    if (e instanceof FacadeRpcError) {
+      // Forward the facade's code+message verbatim so the dApp sees the actual JSON-RPC
+      // error code (e.g., -32001/-32002/-32003/-32004/-32601) and a useful message.
+      return jsonRpcError(id, e.code, e.message);
+    }
     const message = e instanceof Error ? e.message : String(e);
     return jsonRpcError(id, RpcErrorCodes.INTERNAL_ERROR, message);
   }
