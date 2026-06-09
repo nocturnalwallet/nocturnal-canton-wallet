@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { sendMessage, MSG } from '@lib/messaging';
-import type { KeyPairData, OnboardingPrepareData } from '@lib/messaging';
+import type { KeyPairData } from '@lib/messaging';
 import { useAuthState } from './hooks/useAuth';
 import { useLockState } from './hooks/useLockState';
 import { useNetwork } from './hooks/useNetwork';
@@ -33,7 +33,6 @@ interface OnboardingState {
   isImport: boolean;
   partyStatus: string;
   existingPublicKey: string;
-  preparedParty: OnboardingPrepareData | null;
 }
 
 const EMPTY_ONBOARDING: OnboardingState = {
@@ -43,7 +42,6 @@ const EMPTY_ONBOARDING: OnboardingState = {
   isImport: false,
   partyStatus: 'PENDING',
   existingPublicKey: '',
-  preparedParty: null,
 };
 
 /** True when the app is running inside a full onboarding tab (not the extension popup). */
@@ -233,7 +231,6 @@ function App() {
             password={onboarding.password}
             privateKey={onboarding.privateKey}
             publicKey={onboarding.publicKey}
-            preparedParty={onboarding.preparedParty}
             onSuccess={() => {
               clearOnboarding();
               setScreen('dashboard');

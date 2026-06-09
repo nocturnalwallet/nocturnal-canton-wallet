@@ -1,20 +1,18 @@
 import { useState } from 'react';
 import { ArrowLeftIcon, Loader2Icon, AlertTriangleIcon } from 'lucide-react';
 import { TYPO_TEXT } from '@lib/constants';
-import type { OnboardingPrepareData } from '@lib/messaging';
 import { useCompleteOnboarding } from '../../hooks/useWallet';
 
 interface Props {
   password: string;
   privateKey: string;
   publicKey: string;
-  preparedParty: OnboardingPrepareData | null;
   onSuccess: () => void;
   onBack: () => void;
   isLocalnet?: boolean;
 }
 
-export function TypedConfirm({ password, privateKey, publicKey, preparedParty, onSuccess, onBack, isLocalnet }: Props) {
+export function TypedConfirm({ password, privateKey, publicKey, onSuccess, onBack, isLocalnet }: Props) {
   const [typed, setTyped] = useState(isLocalnet ? TYPO_TEXT : '');
   const [error, setError] = useState('');
   const completeOnboarding = useCompleteOnboarding();
@@ -29,7 +27,6 @@ export function TypedConfirm({ password, privateKey, publicKey, preparedParty, o
         password,
         privateKey,
         publicKey,
-        preparedParty: preparedParty ?? undefined,
       });
       onSuccess();
     } catch (e: unknown) {

@@ -37,7 +37,6 @@ export function useCompleteOnboarding() {
       password: string;
       privateKey: string;
       publicKey: string;
-      preparedParty?: OnboardingPrepareData;
     }) =>
       sendMessage<{ success: boolean }>({
         action: MSG.COMPLETE_ONBOARDING,
