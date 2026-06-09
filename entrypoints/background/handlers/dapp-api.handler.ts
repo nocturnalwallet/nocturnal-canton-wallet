@@ -32,6 +32,7 @@ import {
   gatewayFacadeUserRpc,
   getGatewayFacadeBaseUrl,
   FacadeAuthRequiredError,
+  FacadeNetworkError,
   FacadeRpcError,
 } from '../gateway-facade-client';
 
@@ -443,6 +444,10 @@ export async function handleDappApiRequest(
       // Forward the facade's code+message verbatim so the dApp sees the actual JSON-RPC
       // error code (e.g., -32001/-32002/-32003/-32004/-32601) and a useful message.
       return jsonRpcError(id, e.code, e.message);
+    }
+    if (e instanceof FacadeNetworkError) {
+      // Backend unreachable — generic envelope to dApp; don't leak the URL.
+      return jsonRpcError(id, RpcErrorCodes.INTERNAL_ERROR, 'Wallet unavailable');
     }
     const message = e instanceof Error ? e.message : String(e);
     return jsonRpcError(id, RpcErrorCodes.INTERNAL_ERROR, message);
