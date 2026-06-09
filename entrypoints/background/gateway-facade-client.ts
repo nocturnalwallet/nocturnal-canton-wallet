@@ -121,16 +121,29 @@ async function facadeRpc<T>(path: string, method: string, params: unknown): Prom
     method,
     params,
   };
-  const response = await fetch(`${currentBaseUrl}${path}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(envelope),
-  });
-  const data = (await response.json()) as JsonRpcResponse<T>;
 
+  let response: Response;
+  try {
+    response = await fetch(`${currentBaseUrl}${path}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(envelope),
+    });
+  } catch (cause) {
+    throw new FacadeNetworkError(`facade unreachable at ${currentBaseUrl}${path}`, cause);
+  }
+
+  if (!response.ok && response.status !== 401) {
+    throw new FacadeRpcError(
+      -32603,
+      `facade HTTP ${response.status} ${response.statusText}`,
+    );
+  }
+
+  const data = (await response.json()) as JsonRpcResponse<T>;
   if (data.error) {
     throw mapJsonRpcError(data.error);
   }

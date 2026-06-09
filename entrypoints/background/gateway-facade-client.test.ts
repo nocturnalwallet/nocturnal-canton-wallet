@@ -257,3 +257,41 @@ describe('JSON-RPC error envelope → typed subclasses', () => {
     });
   });
 });
+
+describe('transport errors', () => {
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
+  const sessionGetMock = vi.mocked(sessionStore.get);
+
+  beforeEach(() => {
+    setGatewayFacadeBaseUrl('https://backend.test');
+    sessionGetMock.mockResolvedValue('the-token');
+  });
+
+  afterEach(() => fetchSpy.mockRestore());
+
+  it('wraps fetch network failure as FacadeNetworkError', async () => {
+    fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockRejectedValue(new TypeError('fetch failed'));
+    const promise = gatewayFacadeDappRpc('connect', {});
+    await expect(promise).rejects.toBeInstanceOf(FacadeNetworkError);
+  });
+
+  it('wraps HTTP 5xx as FacadeRpcError(-32603)', async () => {
+    fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response('upstream error', { status: 502, statusText: 'Bad Gateway' }),
+    );
+    const promise = gatewayFacadeDappRpc('connect', {});
+    await expect(promise).rejects.toMatchObject({ code: -32603 });
+    await expect(promise).rejects.toBeInstanceOf(FacadeRpcError);
+  });
+
+  it('wraps HTTP 4xx (non-401) as FacadeRpcError(-32603)', async () => {
+    fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response('forbidden', { status: 403, statusText: 'Forbidden' }),
+    );
+    await expect(gatewayFacadeDappRpc('connect', {})).rejects.toBeInstanceOf(
+      FacadeRpcError,
+    );
+  });
+});
