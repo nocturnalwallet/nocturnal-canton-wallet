@@ -130,5 +130,24 @@ async function facadeRpc<T>(path: string, method: string, params: unknown): Prom
     body: JSON.stringify(envelope),
   });
   const data = (await response.json()) as JsonRpcResponse<T>;
+
+  if (data.error) {
+    throw mapJsonRpcError(data.error);
+  }
   return data.result as T;
+}
+
+function mapJsonRpcError(error: {
+  code: number;
+  message: string;
+  data?: unknown;
+}): FacadeRpcError {
+  switch (error.code) {
+    case -32001: return new FacadeNotOnboardedError(error.message, error.data);
+    case -32002: return new FacadeNotAuthorizedError(error.message, error.data);
+    case -32003: return new FacadeTemplateNotAllowedError(error.message, error.data);
+    case -32004: return new FacadeResourceNotAllowedError(error.message, error.data);
+    case -32601: return new FacadeMethodNotFoundError(error.message, error.data);
+    default:     return new FacadeRpcError(error.code, error.message, error.data);
+  }
 }

@@ -181,3 +181,79 @@ describe('auth header', () => {
     );
   });
 });
+
+describe('JSON-RPC error envelope → typed subclasses', () => {
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
+  const sessionGetMock = vi.mocked(sessionStore.get);
+
+  beforeEach(() => {
+    setGatewayFacadeBaseUrl('https://backend.test');
+    sessionGetMock.mockResolvedValue('the-token');
+  });
+
+  afterEach(() => fetchSpy.mockRestore());
+
+  function mockErrorResponse(code: number, message: string, data?: unknown) {
+    fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({ jsonrpc: '2.0', id: 'r1', error: { code, message, data } }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    );
+  }
+
+  it('throws FacadeNotOnboardedError for -32001', async () => {
+    mockErrorResponse(-32001, 'Complete onboarding');
+    await expect(gatewayFacadeUserRpc('addSession', {})).rejects.toBeInstanceOf(
+      FacadeNotOnboardedError,
+    );
+  });
+
+  it('throws FacadeNotAuthorizedError for -32002', async () => {
+    mockErrorResponse(-32002, 'NotAuthorized for one or more parties');
+    await expect(gatewayFacadeDappRpc('prepareExecute', {})).rejects.toMatchObject({
+      code: -32002,
+    });
+    mockErrorResponse(-32002, 'x');
+    await expect(gatewayFacadeDappRpc('prepareExecute', {})).rejects.toBeInstanceOf(
+      FacadeNotAuthorizedError,
+    );
+  });
+
+  it('throws FacadeTemplateNotAllowedError for -32003', async () => {
+    mockErrorResponse(-32003, 'Template+choice not allowed: x:y');
+    await expect(gatewayFacadeDappRpc('prepareExecute', {})).rejects.toBeInstanceOf(
+      FacadeTemplateNotAllowedError,
+    );
+  });
+
+  it('throws FacadeResourceNotAllowedError for -32004', async () => {
+    mockErrorResponse(-32004, 'Resource not allowed: GET /v2/admin/foo');
+    await expect(gatewayFacadeDappRpc('ledgerApi', {})).rejects.toBeInstanceOf(
+      FacadeResourceNotAllowedError,
+    );
+  });
+
+  it('throws FacadeMethodNotFoundError for -32601', async () => {
+    mockErrorResponse(-32601, 'Method not supported: signMessage');
+    await expect(gatewayFacadeUserRpc('signMessage', {})).rejects.toBeInstanceOf(
+      FacadeMethodNotFoundError,
+    );
+  });
+
+  it('throws generic FacadeRpcError for an unknown -32xxx code', async () => {
+    mockErrorResponse(-32099, 'something else');
+    const promise = gatewayFacadeDappRpc('whatever', {});
+    await expect(promise).rejects.toBeInstanceOf(FacadeRpcError);
+    await expect(promise).rejects.not.toBeInstanceOf(FacadeNotOnboardedError);
+  });
+
+  it('preserves error.message and error.data on the thrown subclass', async () => {
+    mockErrorResponse(-32003, 'Template+choice not allowed: Foo:Bar', { detail: 'x' });
+    await expect(gatewayFacadeDappRpc('prepareExecute', {})).rejects.toMatchObject({
+      code: -32003,
+      message: 'Template+choice not allowed: Foo:Bar',
+      data: { detail: 'x' },
+    });
+  });
+});
