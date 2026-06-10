@@ -27,13 +27,14 @@ The first-time-on-this-device path is already handled (see `KeySetup.tsx:13` —
 
 ### In scope
 
-- Detect at sign-in time (`handleGoogleAuth` after `/auth/me`) when `keystore.walletKey !== party.publicKey`.
+- Detect at sign-in time (`handleGoogleAuth` after `/auth/me`) when `keystore.walletKey !== party.publicKey`. Return the result in the Google-auth response.
 - New popup screen `pages/onboarding/KeyMismatch.tsx` presenting two clear recovery actions.
 - Identity card on the mismatch screen showing signed-in email, party identity, and current network.
 - "Sign out" recovery path (returns to Welcome; keystore untouched).
-- "Wipe and re-import" recovery path with typed-confirmation modal; wipes local keystore + onboardingComplete, then funnels through the existing onboarding-for-existing-user flow.
+- "Wipe and re-import" recovery path with typed-confirmation modal; dispatches a **new narrow background handler** that wipes the user-scoped keystore + flips `onboardingComplete=false` (does **NOT** clear `sessionStore`, so the `partyStatus = 'SUCCESSFULLY'` signal survives the wipe and `handleCompleteOnboarding` continues to short-circuit the party-creation block).
+- Persist `keyMismatch` as React state in `App.tsx` so the existing routing `useEffect` respects it across `authState` refetches.
 - Reuse of the existing `KeySetup.tsx` existing-user mode + `handleCompleteOnboarding`'s short-circuit (Phase 3 Task 10 already skips party-creation when `partyStatus === 'SUCCESSFULLY'`).
-- Unit tests for the new detection logic.
+- Unit tests for the new detection logic and the new background handler.
 
 ### Out of scope (deferred)
 
@@ -73,35 +74,53 @@ Unlock → enter password → 'dashboard' → try to sign
 Google sign-in → handleGoogleAuth
   → /auth/login-with-google ✓
   → /auth/me ✓
-  → existingKeystore = await localStore.get('keystore')
-  → keyMismatch = party.onboardingStatus === 'SUCCESSFULLY'
-                 && party.publicKey
+  → existingKeystore = await localStore.get('keystore')   // user-scope set inside background
+  → keyMismatch = partyStatus === 'SUCCESSFULLY'
+                 && party?.publicKey
                  && existingKeystore?.walletKey
                  && existingKeystore.walletKey !== party.publicKey
+  → if keyMismatch: console.warn('[Ginkgo] Keystore mismatch detected', {expected: …, actual: …})
   → return { ...existing fields, keyMismatch, partyId, publicKey, ... }
                 ↓
-App.tsx state machine:
-  if (keyMismatch)         → 'key-mismatch'                  ← NEW branch
-  else if (onboardingComplete) → 'unlock'
-  else                     → 'create-password' → KeySetup
+Welcome.onSuccess(data) → App.tsx:
+  1. If data.keyMismatch:
+       setKeyMismatch(true)
+       setKeyMismatchPartyId(data.partyId)
+       setOnboarding({ partyStatus: data.partyStatus, existingPublicKey: data.publicKey })
+       setScreen('key-mismatch')                          ← FIRST check (before onboardingComplete)
+       return
+  2. Else if data.onboardingComplete: setScreen('unlock')
+  3. Else: setOnboarding(...); setScreen('create-password')
+                ↓
+App.tsx routing useEffect (re-runs on every authState refetch):
+  if (loading)             → 'loading'
+  if (!isAuthenticated)    → 'welcome'
+  if (keyMismatch)         → 'key-mismatch'                ← NEW, checked BEFORE unlock to survive authState refetches
+  if (unlocked)            → 'dashboard'
+  if (onboardingComplete)  → 'unlock'
+  else                     → 'create-password'
                 ↓
 KeyMismatch screen:
   ┌─ Identity card (email, partyId, network) ─┐
-  │  Sign out                                  │ → handleLogout → 'welcome' (keystore untouched)
-  │  Wipe local key and import the correct one │ → confirm modal (typed DELETE)
+  │  Sign out                                  │ → handleLogout → setKeyMismatch(false) → 'welcome'
+  │  Wipe local key and import the correct one │ → ConfirmDeleteModal (typed DELETE)
   └────────────────────────────────────────────┘
                 ↓ (on wipe-confirm)
-  localStore.set('keystore', null)
-  localStore.set('onboardingComplete', false)
-  setOnboarding({ partyStatus: 'SUCCESSFULLY', existingPublicKey })
-  setScreen('create-password')
+  Dispatch MSG.RESET_KEYSTORE_FOR_RECOVERY → background handleResetKeystoreForRecovery
+    Inside the background (where setUserScope was already called for this user):
+      await localStore.set('keystore', null)              ← user-scoped wipe
+      await localStore.set('onboardingComplete', false)
+      // sessionStore intentionally NOT touched — partyStatus stays 'SUCCESSFULLY'
+  After the message resolves on the popup side:
+    setKeyMismatch(false)                                 ← lifts the routing gate
+    setScreen('create-password')                          ← onboarding.existingPublicKey already set
                 ↓
 CreatePassword → KeySetup (existing-user mode forces import + amber banner)
   → handleValidateImportKey({ privateKey, expectedPublicKey })  ← validates against backend's publicKey
-  → ShowPrivateKey / Acknowledgment / TypedConfirm
+  → Acknowledgment → TypedConfirm                          ← ShowPrivateKey skipped for imports (App.tsx:203)
   → handleCompleteOnboarding({ password, privateKey, publicKey })
-      // partyStatus === 'SUCCESSFULLY' so the party-creation block is skipped
-      // Just: encryptKey → localStore.set('keystore', ...) → onboardingComplete: true
+      // partyStatus === 'SUCCESSFULLY' (sessionStore was never cleared) so party-creation block is skipped
+      // Just: encryptKey → localStore.set('keystore', new bundle) → onboardingComplete: true
                 ↓
 Unlock → enter password → Dashboard → sign works ✓
 ```
@@ -109,9 +128,11 @@ Unlock → enter password → Dashboard → sign works ✓
 ### Load-bearing properties
 
 1. **One detection point.** Mismatch is computed exactly once per Google sign-in, in `handleGoogleAuth`, after `/auth/me` returns. Not on popup open. Not on unlock. Not on every API call.
-2. **No new background handlers.** Detection is inlined into the existing `handleGoogleAuth`. The recovery flow reuses `handleLogout`, `handleValidateImportKey`, `handleCompleteOnboarding` unchanged.
-3. **The wipe is committed before re-import.** Once the user types DELETE and confirms, `localStore.keystore` is set to `null` immediately. If the user backs out mid-import, they'll re-trigger the mismatch detection on the next sign-in. The keystore is never in a half-written state.
-4. **Per-user-scope.** Wiping affects only the currently-signed-in user's keystore (via `setUserScope(user.id)` already done in `handleGoogleAuth`). Other accounts' keystores on this device are untouched.
+2. **`keyMismatch` is persistent React state, not a one-shot `setScreen`.** Stored at the `App.tsx` level so the routing `useEffect` can survive `authState` query refetches without bouncing the user away from the mismatch screen. Cleared explicitly on sign-out and on successful re-import completion.
+3. **One new background handler.** `handleResetKeystoreForRecovery` exists ONLY for this narrow purpose: zero out the user-scoped keystore + `onboardingComplete` flag without touching `sessionStore`. We deliberately do **NOT** reuse `handleDeleteKeystore` (`MSG.DELETE_KEYSTORE`) because that one also calls `sessionStore.clear()`, which would erase `partyStatus = 'SUCCESSFULLY'` and cause the subsequent `handleCompleteOnboarding` to fall into the party-creation branch — re-running topology submission against the backend for an already-onboarded user.
+4. **The wipe runs in the background context.** All `localStore` writes go through a message to the background handler, where `setUserScope` has already been called during `handleGoogleAuth`. Writing directly from the popup would target an unscoped key (`${network}:keystore` instead of `${network}:${userId}:keystore`) and leave the actual bad keystore intact.
+5. **The wipe is committed before re-import.** Once the user types DELETE and confirms, the keystore is zeroed immediately. If the user backs out mid-import, the next sign-in finds no keystore → routes through the existing-user onboarding path (still safe; no mismatch screen since there's no keystore to mismatch).
+6. **Per-user-scope.** Wiping affects only the currently-signed-in user's keystore. Other accounts' keystores on this device are untouched.
 
 ## 5. Components
 
@@ -119,17 +140,19 @@ Unlock → enter password → Dashboard → sign works ✓
 
 | Path | Role |
 |---|---|
-| `entrypoints/popup/pages/onboarding/KeyMismatch.tsx` | The new mismatch screen. Renders the identity card and two action buttons. Wires the typed-DELETE confirmation flow for the wipe-and-re-import path. |
-| `entrypoints/popup/components/ConfirmDeleteModal.tsx` (or inline equivalent) | Reusable typed-confirmation modal: requires the user to type a configurable string (here "DELETE") to enable the destructive button. Tiny, generic — useful for any future destructive action too. If a similar modal pattern exists in the codebase, prefer reuse over creation. |
+| `entrypoints/popup/pages/onboarding/KeyMismatch.tsx` | The new mismatch screen. Renders the identity card and two action buttons. Wires the typed-DELETE confirmation flow for the wipe-and-re-import path. Receives `email`, `partyId`, `networkLabel`, and `expectedPublicKey` as props from `App.tsx`. |
+| `entrypoints/popup/pages/onboarding/ConfirmDeleteModal.tsx` (NEW — co-located with the page that uses it) | Typed-confirmation modal: requires the user to type a fixed string ("DELETE") to enable the destructive button. Mirrors `TypedConfirm.tsx`'s `isLocalnet` bypass (pre-fill the input on localnet for dev convenience). **Build new** — confirmed: `entrypoints/popup/components/` does not exist, no comparable modal pattern in the codebase. |
+| `entrypoints/background/handlers/keystore.handler.ts` — new export `handleResetKeystoreForRecovery` | Narrow recovery wipe. Does exactly: `await localStore.set('keystore', null); await localStore.set('onboardingComplete', false); return ok(null);`. **Critically does NOT clear `sessionStore`** (unlike the existing `handleDeleteKeystore` at lines 285–294, which we explicitly avoid reusing — see §4 load-bearing property 3). |
+| `lib/messaging/types.ts` — new `MSG.RESET_KEYSTORE_FOR_RECOVERY` constant + its `MessageRequest`/`MessageResponse` types | One-line per file. No payload needed. |
 
 ### Modified
 
 | Path | Change |
 |---|---|
-| `entrypoints/background/handlers/auth.handler.ts` | After `/auth/me` in `handleGoogleAuth`, read `localStore.get('keystore')` and compute `keyMismatch`. Return it in the response payload. `console.warn` the mismatch with truncated keys when detected (devtools breadcrumb). |
-| `lib/messaging/types.ts` | Extend the Google-auth response type with `keyMismatch?: boolean`. |
-| `entrypoints/popup/App.tsx` | Add `'key-mismatch'` to the screen union. Add the routing branch in the post-sign-in handler (highest priority — checked before `onboardingComplete`). Wire the new screen into the `renderScreen` switch. |
-| `entrypoints/popup/pages/onboarding/Welcome.tsx` | Forward `keyMismatch` (and `user` if not already passed) from the auth response into `onSuccess` so App.tsx can branch on it. |
+| `entrypoints/background/handlers/auth.handler.ts` | After `/auth/me` in `handleGoogleAuth`, read `localStore.get('keystore')` and compute `keyMismatch` using the already-extracted `partyStatus` and `publicKey` variables (do NOT re-read `party.onboardingStatus` to keep the null-safety chain consistent). Return `keyMismatch` in the response payload. `console.warn('[Ginkgo] Keystore mismatch detected', {expected: publicKey.slice(0,12)+'…', actual: existingKeystore.walletKey.slice(0,12)+'…'})` when detected. |
+| `lib/messaging/types.ts` | Extend the Google-auth response type (`GoogleAuthData`) with `keyMismatch?: boolean`. |
+| `entrypoints/popup/App.tsx` | (1) Add `'key-mismatch'` to the screen union. (2) Add new top-level state `const [keyMismatch, setKeyMismatch] = useState(false)` and `const [keyMismatchPartyId, setKeyMismatchPartyId] = useState('')`. (3) In `Welcome.onSuccess`, check `data.keyMismatch` **FIRST**, before the existing `data.onboardingComplete` branch — set the new state and route to `'key-mismatch'`. (4) Add a routing check `if (keyMismatch) { setScreen('key-mismatch'); return; }` in the screen-selection `useEffect` BEFORE the `lockState.unlocked` and `onboardingComplete` checks, AFTER the auth-required check. Include `keyMismatch` in the effect's dependency array. (5) Wire `KeyMismatch.tsx` into the `renderScreen` switch. (6) Clear `keyMismatch` state on sign-out and after successful re-import (the latter happens implicitly when `setScreen('unlock')` is reached — but explicit `setKeyMismatch(false)` defensively in `TypedConfirm.onNext` or its caller is cleaner). |
+| `entrypoints/popup/pages/onboarding/Welcome.tsx` | Forward `keyMismatch`, `partyId`, and (already present) `publicKey` from the auth response into the `onSuccess(data)` callback. The current callback already receives the full `GoogleAuthData` typed object, so this is a type-extension change in `lib/messaging/types.ts` plus a consumer update in `App.tsx`; no code change in `Welcome.tsx` itself if it already forwards `data` whole. |
 
 ### Deleted / removed
 
@@ -141,55 +164,79 @@ None. This is additive.
 
 ```
 1. User clicks "Sign in with Google" in Welcome
-2. handleGoogleAuth:
+2. handleGoogleAuth (in background, user-scope is set inside):
    POST /auth/login-with-google {credential} → 200 {token, user}
    sessionStore.setMany({authToken, refreshToken})
    localStore.set('user', user)
-   setUserScope(user.id)
+   setUserScope(user.id)                                   // user-scope active in background
    GET /auth/me → 200 {data: {party: {publicKey: PK_backend, onboardingStatus: 'SUCCESSFULLY', ...}}}
    sessionStore.set('partyId', partyId)
    sessionStore.set('partyStatus', 'SUCCESSFULLY')
-   existingKeystore = await localStore.get('keystore')   // returns {walletKey: PK_local, ...}
-   keyMismatch = PK_local !== PK_backend → TRUE
+   existingKeystore = await localStore.get('keystore')     // returns {walletKey: PK_local, ...}
+   keyMismatch = (partyStatus === 'SUCCESSFULLY') && PK_backend && existingKeystore?.walletKey
+                  && existingKeystore.walletKey !== PK_backend
+              → TRUE
    console.warn('[Ginkgo] Keystore mismatch detected', {expected: PK_backend.slice(0,12)+'…', actual: PK_local.slice(0,12)+'…'})
    return ok({ token, user, partyId, partyStatus, publicKey: PK_backend, onboardingComplete, keyMismatch: true })
-3. Welcome.tsx onSuccess(data) → App.tsx routing
-4. App.tsx sees data.keyMismatch === true → setScreen('key-mismatch')
-5. KeyMismatch renders with email/partyId/network
+3. Welcome.tsx → onSuccess(data) → App.tsx callback runs:
+   FIRST check: if (data.keyMismatch) {
+     setKeyMismatch(true)
+     setKeyMismatchPartyId(data.partyId)
+     setOnboarding({ partyStatus: data.partyStatus, existingPublicKey: data.publicKey })
+     setScreen('key-mismatch')
+     return
+   }
+4. KeyMismatch renders with email (data.user.email), partyId (keyMismatchPartyId), network (from useNetwork or NetworkSelector context)
+5. authState query refetch fires (from useGoogleAuth's invalidation) → routing useEffect re-runs:
+   isAuthenticated=true → keyMismatch=true → setScreen('key-mismatch')  // stays put
 6. User clicks "Sign out"
 7. dispatch LOGOUT message → handleLogout → clears sessionStore, clears user from localStore, sets unlocked=false
-8. App.tsx authState effect → !isAuthenticated → setScreen('welcome')
-9. User can now sign in with the correct account
+8. The popup's logout handler also calls setKeyMismatch(false) to drop the routing gate (defensive)
+9. App.tsx authState effect → !isAuthenticated → setScreen('welcome')
+10. User can now sign in with the correct account
 ```
 
 ### Flow 2 — Sign-in with mismatched keystore (Path B: Wipe and re-import)
 
 ```
 1-5. Same as Flow 1 through KeyMismatch render
+     (App.tsx now holds: keyMismatch=true, keyMismatchPartyId=PARTY_ID,
+      onboarding.existingPublicKey=PK_backend, onboarding.partyStatus='SUCCESSFULLY')
 6. User clicks "Wipe local key and import the correct one"
-7. ConfirmDeleteModal opens with copy: "This will delete your local signing key for kairo-devnet::1220…30d. You'll need the correct private key to continue. Type DELETE to confirm."
+7. ConfirmDeleteModal opens with body text referencing keyMismatchPartyId (passed as a prop):
+   "This will delete your local signing key for ${keyMismatchPartyId}.
+    You'll need the correct private key to continue. Type DELETE to confirm."
+   On localnet, the textarea is pre-filled with "DELETE" for dev convenience (mirrors TypedConfirm).
 8. User types "DELETE" → confirm button enables → click
-9. Sequence:
-   localStore.set('keystore', null)
-   localStore.set('onboardingComplete', false)
-   setOnboarding({partyStatus: 'SUCCESSFULLY', existingPublicKey: PK_backend})
-   setScreen('create-password')
-10. User flows CreatePassword → KeySetup (isExistingUser=true → forced import mode + amber banner)
-11. User pastes their correct private key SK_correct
-12. handleValidateImportKey({ privateKey: SK_correct, expectedPublicKey: PK_backend }) — already implemented
+9. Sequence (popup → background):
+   await sendMessage({ action: MSG.RESET_KEYSTORE_FOR_RECOVERY })
+   → background:handleResetKeystoreForRecovery (user-scope already set by handleGoogleAuth):
+       localStore.set('keystore', null)
+       localStore.set('onboardingComplete', false)
+       // sessionStore intentionally NOT cleared
+   Returns ok(null)
+10. Back in App.tsx (on the same wipe-confirm handler, after sendMessage resolves):
+    setKeyMismatch(false)                  // lifts the routing gate
+    invalidate authState query             // forces a refetch so onboardingComplete reflects the wipe
+    setScreen('create-password')           // onboarding.existingPublicKey already holds PK_backend
+11. User flows CreatePassword → KeySetup (isExistingUser=true → forced import mode + amber banner)
+12. User pastes their correct private key SK_correct
+13. handleValidateImportKey({ privateKey: SK_correct, expectedPublicKey: PK_backend }) — already implemented
     Derives PK from SK_correct; compares to PK_backend; compares fingerprint to partyId fingerprint. All must match.
     Returns ok({ privateKey, publicKey })  OR  err('The imported private key does not match …')
-13. (Existing) onboarding flow: ShowPrivateKey (may be skipped for imported keys) → Acknowledgment → TypedConfirm
-14. TypedConfirm → handleCompleteOnboarding({ password, privateKey, publicKey })
+14. (Existing) Acknowledgment → TypedConfirm  (ShowPrivateKey skipped at App.tsx:203 because data.isImport=true)
+15. TypedConfirm → handleCompleteOnboarding({ password, privateKey, publicKey })
     Inside:
-    - encryptKey + localStore.set('keystore', bundle) ← overwrites previous null
+    - encryptKey + localStore.set('keystore', new bundle) ← writes over the null
     - setCachedPrivateKey(privateKey)
-    - if (partyStatus !== 'SUCCESSFULLY') { ...party-creation block... }  ← skipped (already SUCCESSFULLY)
+    - if (partyStatus !== 'SUCCESSFULLY') { ...party-creation block... }
+      // sessionStore.partyStatus is still 'SUCCESSFULLY' (we never cleared it) → block skipped
     - localStore.set('onboardingComplete', true)
     - sessionStore.set('unlocked', true)
     Returns ok({success: true})
-15. App.tsx authState effect re-fires (onboardingComplete now true, unlocked now true) → setScreen('dashboard')
-16. User can now sign transactions; fingerprint check at signing time passes ✓
+16. App.tsx authState effect re-fires (onboardingComplete now true, unlocked now true,
+    keyMismatch still false from step 10) → setScreen('dashboard')
+17. User can now sign transactions; fingerprint check at signing time passes ✓
 ```
 
 ### Flow 3 — Sign-in with correct keystore (regression — must not break)
@@ -220,8 +267,13 @@ None. This is additive.
 | Source | Handled how |
 |---|---|
 | `/auth/me` fails or returns malformed payload | Fall back to existing behavior: `partyStatus = 'PENDING'`, `publicKey = ''`. `keyMismatch` evaluates to `false`. User proceeds through the existing flow; if their keystore was actually broken, they'll discover it at signing time (same as today — degraded UX but not a regression). |
+| `/auth/me` returns `party: null` | Same as malformed — `party?.publicKey` is `undefined`, `keyMismatch` short-circuits to `false`. User flows through new-user onboarding. |
 | `localStore.get('keystore')` throws (storage corruption) | Catch and treat as "no keystore" → `keyMismatch = false`, `onboardingComplete = false`. User goes through onboarding flow. Acceptable. |
-| `existingKeystore.walletKey` is undefined (legacy keystore shape) | The `&&` chain short-circuits to `false`. User proceeds to unlock; signing will fail with the existing mismatch error. This is a known-degraded path for legacy users; documenting only — no special handling. |
+| `existingKeystore.walletKey` is `undefined` (type-level uncertainty) | `lib/storage/schemas.ts` types `walletKey` as `z.string()` (non-optional), but `localStore.get` does NOT validate against the schema — it returns the raw value, which can be `undefined` at runtime if a pre-`walletKey` keystore exists on disk. The `&&` chain in the detection block short-circuits to `false` for this case. User proceeds to unlock and signing fails with the existing fingerprint-mismatch error — same as today's behavior for that pre-`walletKey` cohort, no regression. Migration of those keystores is out of scope. |
+
+### Critical: do not reuse `MSG.DELETE_KEYSTORE` for the wipe
+
+`handleDeleteKeystore` exists at `entrypoints/background/handlers/keystore.handler.ts:285–294` and is the natural-looking choice — but it calls `sessionStore.clear()`, which wipes `authToken`, `refreshToken`, `partyId`, and `partyStatus`. After that, `handleCompleteOnboarding` reads `partyStatus` from `sessionStore` and falls back to its default `'PENDING'`, which causes the party-creation block (`/external-party/onboarding/{prepare,submit}`) to fire — generating a fresh topology transaction for an already-onboarded user. This would either: (a) be rejected by the backend's external-party service because the user already has a party, OR (b) attempt to allocate a NEW party with different keys (depending on backend behavior). Neither outcome is what we want. The new `handleResetKeystoreForRecovery` exists to avoid this trap.
 
 ### Recovery-flow errors
 
@@ -251,12 +303,24 @@ describe('handleGoogleAuth — keystore mismatch detection', () => {
   it('returns keyMismatch: false when no keystore exists locally')
   it('returns keyMismatch: false when party.onboardingStatus is PENDING (even if walletKey differs)')
   it('returns keyMismatch: false when party.publicKey is empty string')
+  it('returns keyMismatch: false when /auth/me returns party: null')
+  it('returns keyMismatch: false when existingKeystore.walletKey is undefined (legacy shape)')
+  it('emits console.warn with truncated keys when mismatch detected')
   it('does not throw when localStore.get throws — falls back to keyMismatch: false')
-  it('does not throw when /auth/me returns an empty party — falls back to existing behavior')
 })
 ```
 
-Target: 7 cases, ~150 LOC.
+Plus new tests in `entrypoints/background/handlers/keystore.handler.test.ts` (file may not exist yet — create or extend):
+
+```
+describe('handleResetKeystoreForRecovery', () => {
+  it('sets keystore to null and onboardingComplete to false')
+  it('does NOT clear sessionStore (partyStatus, partyId, authToken untouched)')
+  it('does NOT call setUserScope or change the active user-scope')
+})
+```
+
+Target: ~12 cases, ~200 LOC.
 
 ### Manual (post-merge smoke)
 
@@ -291,9 +355,10 @@ Target: 7 cases, ~150 LOC.
 
 ## 9. Open questions
 
-1. **Does `ShowPrivateKey.tsx` need to be skipped for imported keys?** The existing flow may already handle this — verify during implementation. If `ShowPrivateKey` shows the imported key back to the user, that's redundant (they just pasted it) but not harmful. Confirm and adjust during the plan-writing step.
-2. **Does Ginkgo have an existing modal component to reuse for ConfirmDeleteModal?** Check `entrypoints/popup/components/` during implementation. If yes, reuse; if no, build a tiny one. Either way, low-risk.
+1. ~~**Does `ShowPrivateKey.tsx` need to be skipped for imported keys?**~~ **Resolved (audit 2026-06-10):** Confirmed at `App.tsx:203` — `setScreen(data.isImport ? 'acknowledgment' : 'show-key')` — imported keys skip `ShowPrivateKey` unconditionally. No special handling needed in the recovery flow.
+2. ~~**Does Ginkgo have an existing modal component to reuse for ConfirmDeleteModal?**~~ **Resolved (audit 2026-06-10):** Confirmed `entrypoints/popup/components/` does not exist. Build a new co-located `ConfirmDeleteModal.tsx` next to `KeyMismatch.tsx` in `entrypoints/popup/pages/onboarding/`.
 3. **Is `console.warn` an acceptable telemetry breadcrumb, or should mismatch detection write to a structured log?** Default is plain `console.warn` for V1 — structured logging is a separate concern.
+4. **`isLocalnet` pre-fill in the wipe modal.** `TypedConfirm.tsx` pre-fills its typed-confirmation input when running on localnet to ease developer iteration. The new `ConfirmDeleteModal` should mirror this behavior for consistency — included in §5's new-components row but worth flagging.
 
 ## 10. Constraints
 
@@ -305,10 +370,13 @@ Target: 7 cases, ~150 LOC.
 ## 11. Acceptance criteria
 
 - New `KeyMismatch.tsx` page renders correctly with the identity card (email + truncated partyId + network).
-- `handleGoogleAuth` returns `keyMismatch: true` only when all four conditions hold (party SUCCESSFULLY + non-empty publicKey + local keystore + walletKey mismatch).
-- "Sign out" path returns to Welcome with sessionStore cleared and keystore intact.
-- "Wipe and re-import" path wipes keystore + onboardingComplete on confirm, routes through the existing onboarding-for-existing-user flow, lands the user on a working dashboard.
-- All existing Vitest tests still pass (31 currently); new keystore-mismatch tests added.
+- New `ConfirmDeleteModal.tsx` requires the user to type "DELETE" to enable the destructive button; pre-fills the input on localnet (mirrors `TypedConfirm.tsx`).
+- `handleGoogleAuth` returns `keyMismatch: true` only when all four conditions hold (party SUCCESSFULLY + non-empty publicKey + local keystore + walletKey mismatch) and `false` in all other cases.
+- New `handleResetKeystoreForRecovery` (background) wipes only `localStore.keystore` and `localStore.onboardingComplete`; does NOT clear `sessionStore`.
+- `App.tsx` holds `keyMismatch` as React state and the routing `useEffect` checks it BEFORE the `lockState.unlocked` and `onboardingComplete` checks (so the mismatch screen survives `authState` refetches).
+- "Sign out" path from the mismatch screen calls existing `handleLogout`, clears the local `keyMismatch` state, and returns to Welcome with the bad keystore intentionally intact in storage.
+- "Wipe and re-import" path: ConfirmDeleteModal → `MSG.RESET_KEYSTORE_FOR_RECOVERY` background dispatch → keystore wiped + `onboardingComplete=false` → popup routes through `CreatePassword` → `KeySetup` (existing-user import mode) → `Acknowledgment` → `TypedConfirm` → `handleCompleteOnboarding` (party-creation block skipped because sessionStore.partyStatus is still SUCCESSFULLY) → unlock screen with the freshly-encrypted correct keystore.
+- All existing Vitest tests still pass (31 currently); new tests added per §8.
 - `yarn typecheck && yarn build:all` clean.
 - Manual smoke items 1–5 from §8 all pass.
 
