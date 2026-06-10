@@ -45,7 +45,6 @@ export type MessageRequest =
         password: string;
         privateKey: string;
         publicKey: string;
-        preparedParty?: OnboardingPrepareData;
       };
     }
   | {

@@ -3,10 +3,9 @@ import type { MessageResponse, NetworkData } from '@lib/messaging';
 import { NETWORKS, NETWORK_IDS, type NetworkId } from '@lib/network';
 import { networkStore, sessionStore, setNetworkPrefix, setUserScope } from '@lib/storage';
 import { setApiBaseUrl } from '../api-client';
-import { setGatewayBaseUrl, setGatewayAuth, resetGatewaySession } from '../gateway-client';
+import { setGatewayFacadeBaseUrl } from '../gateway-facade-client';
 import { setCachedPrivateKey } from './session.handler';
 import { clearPreapprovalCache } from './keystore.handler';
-import { signingRelay } from '../signing-relay/relay-client';
 
 export async function handleGetNetwork(): Promise<MessageResponse<NetworkData>> {
   try {
@@ -35,14 +34,9 @@ export async function handleSwitchNetwork(
     // Update local storage namespace
     setNetworkPrefix(network);
 
-    // Update API client base URLs
+    // Update API client base URLs (REST + JSON-RPC facade share the same base)
     setApiBaseUrl(NETWORKS[network].apiBaseUrl);
-    setGatewayBaseUrl(NETWORKS[network].gatewayUrl);
-    setGatewayAuth(NETWORKS[network].gatewayAuth);
-    resetGatewaySession();
-
-    // Disconnect signing relay (will reconnect on next unlock)
-    signingRelay.disconnect();
+    setGatewayFacadeBaseUrl(NETWORKS[network].apiBaseUrl);
 
     // Clear session — auth tokens are network-specific
     await sessionStore.clear();

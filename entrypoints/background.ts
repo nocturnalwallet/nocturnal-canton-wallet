@@ -54,7 +54,7 @@ import {
   handleSwitchNetwork,
 } from './background/handlers/network.handler';
 import { setApiBaseUrl } from './background/api-client';
-import { setGatewayBaseUrl, setGatewayAuth } from './background/gateway-client';
+import { setGatewayFacadeBaseUrl } from './background/gateway-facade-client';
 import { createCenteredPopup } from '@lib/utils';
 import { isSpliceMessage, WalletEvent } from '@lib/dapp-api/types';
 import { handleDappApiRequest } from './background/handlers/dapp-api.handler';
@@ -74,8 +74,7 @@ export default defineBackground(() => {
     const network = await networkStore.get();
     setNetworkPrefix(network);
     setApiBaseUrl(NETWORKS[network].apiBaseUrl);
-    setGatewayBaseUrl(NETWORKS[network].gatewayUrl);
-    setGatewayAuth(NETWORKS[network].gatewayAuth);
+    setGatewayFacadeBaseUrl(NETWORKS[network].apiBaseUrl);
 
     // Migrate existing keystore/onboardingComplete to per-user keys
     await migrateToUserScoped();

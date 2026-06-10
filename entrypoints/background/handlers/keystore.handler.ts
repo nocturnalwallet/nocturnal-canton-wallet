@@ -4,10 +4,14 @@ import type { MessageResponse, KeyPairData, OnboardingPrepareData, PreapprovalSt
 import { localStore, sessionStore } from '@lib/storage';
 import { getEncryptionProvider } from '../encryption';
 import apiClient from '../api-client';
-import { setCachedPrivateKey, getCachedPrivateKey, connectSigningRelay, connectSigningRelayForOnboarding } from './session.handler';
-import { signingRelay } from '../signing-relay/relay-client';
-import { gatewayUserRpc } from '../gateway-client';
-import type { CreateWalletParams, CreateWalletResult } from '@lib/dapp-api/gateway-types';
+import { setCachedPrivateKey, getCachedPrivateKey } from './session.handler';
+
+interface PreparedExternalParty {
+  partyId: string;
+  namespace: string;
+  multiHash: string;
+  topologyTransactions: string[];
+}
 
 export async function handleCreateKeypair(): Promise<MessageResponse<KeyPairData>> {
   try {
@@ -110,7 +114,6 @@ export async function handleCompleteOnboarding(payload: {
   password: string;
   privateKey: string;
   publicKey: string;
-  preparedParty?: OnboardingPrepareData;
 }): Promise<MessageResponse<{ success: boolean }>> {
   try {
     const { password, privateKey, publicKey } = payload;
@@ -121,48 +124,49 @@ export async function handleCompleteOnboarding(payload: {
     bundle.walletKey = publicKey;
     await localStore.set('keystore', bundle);
 
-    // 2. Cache private key in memory (needed for relay signing)
+    // 2. Cache private key in memory (needed for transaction signing)
     setCachedPrivateKey(privateKey);
 
     // Only run onboarding if the user is new (not already registered on the backend)
     const partyStatus = await sessionStore.get('partyStatus');
     if (partyStatus !== 'SUCCESSFULLY') {
-      // 3. Connect to relay + register key (before partyId exists)
-      await connectSigningRelayForOnboarding(privateKey);
+      const partyHint = import.meta.env.VITE_PARTY_HINT || 'ginkgo-wallet';
 
-      // 4. Enable autoApprove so the relay sign-request from Gateway is auto-signed
-      signingRelay.setAutoApprove(true);
-
-      try {
-        // 5. Call Gateway createWallet — this triggers relay signing internally
-        const partyHint = import.meta.env.VITE_PARTY_HINT || 'ginkgo-wallet';
-        console.log(`[Ginkgo] Calling createWallet with partyHint: ${partyHint}`);
-
-        const result = await gatewayUserRpc<CreateWalletResult>('createWallet', {
-          partyHint,
-          signingProviderId: 'blockdaemon',
-          primary: true,
-        } satisfies CreateWalletParams);
-
-        console.log(`[Ginkgo] createWallet result: ${result.wallet.partyId} ${result.wallet.status}`);
-
-        // 6. Store partyId from response
-        const partyId = result.wallet.partyId;
-        await sessionStore.set('partyId', partyId);
-
-        // 7. Register partyId + publicKey with dapp-core backend
-        await apiClient.post('/auth/register-party', { partyId, publicKey });
-        console.log('[Ginkgo] Registered party with dapp-core backend');
-
-        // 8. Reconnect relay with real partyId
-        await connectSigningRelay();
-      } finally {
-        // 9. Disable autoApprove
-        signingRelay.setAutoApprove(false);
+      // 3. Backend prepares a party-allocation topology transaction.
+      //    Returns { partyId, namespace, multiHash, topologyTransactions }.
+      console.log(`[Ginkgo] POST /external-party/onboarding/prepare hint=${partyHint}`);
+      const prepareResponse = await apiClient.post(
+        '/external-party/onboarding/prepare',
+        { publicKey, hint: partyHint },
+      );
+      const prepared = prepareResponse.data?.data as PreparedExternalParty;
+      if (!prepared?.multiHash || !prepared?.partyId) {
+        throw new Error('Onboarding prepare returned malformed response');
       }
+
+      // 4. Sign the multi-hash locally with the wallet's Ed25519 private key.
+      const signedHash = signTransactionHash(prepared.multiHash, privateKey);
+
+      // 5. Backend submits the signed topology to Canton and flips the party's
+      //    onboardingStatus to SUCCESSFULLY (which also persists the user↔party
+      //    link — no separate /auth/register-party call needed).
+      console.log(`[Ginkgo] POST /external-party/onboarding/submit partyId=${prepared.partyId}`);
+      const submitResponse = await apiClient.post(
+        '/external-party/onboarding/submit',
+        { signedHash, preparedParty: prepared },
+      );
+      const submitted = submitResponse.data?.data as { partyId: string; success: boolean };
+      if (!submitted?.success) {
+        throw new Error('Onboarding submit reported failure');
+      }
+
+      // 6. Persist partyId + onboarding status for the rest of the runtime.
+      await sessionStore.set('partyId', submitted.partyId);
+      await sessionStore.set('partyStatus', 'SUCCESSFULLY');
+      console.log(`[Ginkgo] Onboarding complete: ${submitted.partyId}`);
     }
 
-    // 10. Mark onboarding complete
+    // 7. Mark onboarding complete
     await localStore.set('onboardingComplete', true);
     await sessionStore.set('unlocked', true);
 
