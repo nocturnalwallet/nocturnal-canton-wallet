@@ -84,10 +84,16 @@ function App() {
   const [keyMismatch, setKeyMismatch] = useState(false);
   const [keyMismatchPartyId, setKeyMismatchPartyId] = useState('');
   const [keyMismatchEmail, setKeyMismatchEmail] = useState('');
+  // True between a successful wipe and the end of the re-import flow. Suppresses
+  // the IS_ONBOARDING_TAB auto-close — useAuthState still holds the stale
+  // onboardingComplete=true from sign-in time, which would otherwise close the
+  // tab and force the user into a fresh popup with no `onboarding` state.
+  const [postWipeRecovery, setPostWipeRecovery] = useState(false);
 
   // Wipe sensitive onboarding data when leaving the onboarding flow
   const clearOnboarding = useCallback(() => {
     setOnboarding(EMPTY_ONBOARDING);
+    setPostWipeRecovery(false);
   }, []);
 
   useEffect(() => {
@@ -113,8 +119,12 @@ function App() {
     }
 
     // Authenticated but locked — check if onboarding is done
-    // (onboardingComplete comes from the background via namespaced localStore)
-    if (authState.onboardingComplete) {
+    // (onboardingComplete comes from the background via namespaced localStore).
+    // During post-wipe recovery, treat this as not-yet-onboarded so the user can
+    // walk through CreatePassword → KeySetup (import) → Acknowledgment → TypedConfirm
+    // in the same React instance (with onboarding.partyStatus already pre-staged
+    // by Welcome.onSuccess).
+    if (authState.onboardingComplete && !postWipeRecovery) {
       // Onboarding already complete — if we're in the onboarding tab,
       // close it and let the user continue via the extension popup.
       if (IS_ONBOARDING_TAB) {
@@ -125,7 +135,7 @@ function App() {
     } else {
       setScreen('create-password');
     }
-  }, [authState, lockState, authLoading, lockLoading, keyMismatch]);
+  }, [authState, lockState, authLoading, lockLoading, keyMismatch, postWipeRecovery]);
 
   const renderScreen = () => {
     if (screen === 'loading') {
@@ -193,7 +203,10 @@ function App() {
               // Wipe committed in the background. Lift the routing gate and continue
               // through the existing-user onboarding flow. onboarding.existingPublicKey
               // and partyStatus were set in Welcome.onSuccess (step 4 above).
+              // postWipeRecovery suppresses the IS_ONBOARDING_TAB auto-close in the
+              // routing useEffect until clearOnboarding fires (on dashboard/logout).
               setKeyMismatch(false);
+              setPostWipeRecovery(true);
               setScreen('create-password');
             }}
           />
