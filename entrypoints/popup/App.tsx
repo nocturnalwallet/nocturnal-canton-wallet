@@ -6,6 +6,7 @@ import { useLockState } from './hooks/useLockState';
 import { useNetwork } from './hooks/useNetwork';
 
 import { Welcome } from './pages/onboarding/Welcome';
+import { KeyMismatch } from './pages/onboarding/KeyMismatch';
 import { CreatePassword } from './pages/onboarding/CreatePassword';
 import { KeySetup } from './pages/onboarding/KeySetup';
 import { ShowPrivateKey } from './pages/onboarding/ShowPrivateKey';
@@ -18,6 +19,7 @@ import { DappApproval } from './pages/approval/DappApproval';
 type Screen =
   | 'loading'
   | 'welcome'
+  | 'key-mismatch'
   | 'create-password'
   | 'key-setup'
   | 'show-key'
@@ -79,6 +81,9 @@ function App() {
   const isLocalnet = network === 'localnet';
   const [screen, setScreen] = useState<Screen>('loading');
   const [onboarding, setOnboarding] = useState<OnboardingState>(EMPTY_ONBOARDING);
+  const [keyMismatch, setKeyMismatch] = useState(false);
+  const [keyMismatchPartyId, setKeyMismatchPartyId] = useState('');
+  const [keyMismatchEmail, setKeyMismatchEmail] = useState('');
 
   // Wipe sensitive onboarding data when leaving the onboarding flow
   const clearOnboarding = useCallback(() => {
@@ -93,6 +98,12 @@ function App() {
 
     if (!authState?.isAuthenticated) {
       setScreen('welcome');
+      return;
+    }
+
+    // NEW: keystore mismatch detected at sign-in — force recovery flow
+    if (keyMismatch) {
+      setScreen('key-mismatch');
       return;
     }
 
@@ -114,7 +125,7 @@ function App() {
     } else {
       setScreen('create-password');
     }
-  }, [authState, lockState, authLoading, lockLoading]);
+  }, [authState, lockState, authLoading, lockLoading, keyMismatch]);
 
   const renderScreen = () => {
     if (screen === 'loading') {
@@ -130,16 +141,30 @@ function App() {
         return (
           <Welcome
             onSuccess={(data) => {
+              // ALWAYS sync keyMismatch to the latest auth response.
+              // Prevents stale state from a prior sign-in leaking into a fresh one.
+              setKeyMismatch(!!data.keyMismatch);
+
+              // FIRST check: mismatch takes precedence over onboardingComplete.
+              if (data.keyMismatch) {
+                setKeyMismatchPartyId(data.partyId);
+                setKeyMismatchEmail(data.user.email);
+                setOnboarding((prev) => ({
+                  ...prev,
+                  partyStatus: data.partyStatus,
+                  existingPublicKey: data.publicKey,
+                }));
+                setScreen('key-mismatch');
+                return;
+              }
+
               if (data.onboardingComplete) {
-                // User already has a keystore on this network — go straight to unlock.
-                // If in onboarding tab, close it (popup will show unlock via useEffect).
                 if (IS_ONBOARDING_TAB) {
                   window.close();
                   return;
                 }
                 setScreen('unlock');
               } else {
-                // Store party info for the onboarding flow
                 setOnboarding((prev) => ({
                   ...prev,
                   partyStatus: data.partyStatus,
@@ -147,6 +172,29 @@ function App() {
                 }));
                 setScreen('create-password');
               }
+            }}
+          />
+        );
+
+      case 'key-mismatch':
+        return (
+          <KeyMismatch
+            email={keyMismatchEmail}
+            partyId={keyMismatchPartyId}
+            networkLabel={network === 'localnet' ? 'Localnet' : network === 'devnet' ? 'Devnet' : network === 'testnet' ? 'Testnet' : 'Mainnet'}
+            isLocalnet={isLocalnet}
+            onSignOut={async () => {
+              await sendMessage({ action: MSG.LOGOUT });
+              setKeyMismatch(false);              // defensive — onSuccess will re-sync on next sign-in anyway
+              clearOnboarding();
+              setScreen('welcome');
+            }}
+            onWipeSuccess={() => {
+              // Wipe committed in the background. Lift the routing gate and continue
+              // through the existing-user onboarding flow. onboarding.existingPublicKey
+              // and partyStatus were set in Welcome.onSuccess (step 4 above).
+              setKeyMismatch(false);
+              setScreen('create-password');
             }}
           />
         );
