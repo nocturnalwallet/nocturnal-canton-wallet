@@ -83,8 +83,10 @@ Google sign-in → handleGoogleAuth
   → return { ...existing fields, keyMismatch, partyId, publicKey, ... }
                 ↓
 Welcome.onSuccess(data) → App.tsx:
+  // Always sync keyMismatch to the latest auth response (true OR false) so stale
+  // state from a prior sign-in doesn't bleed through into a fresh sign-in.
+  setKeyMismatch(!!data.keyMismatch)
   1. If data.keyMismatch:
-       setKeyMismatch(true)
        setKeyMismatchPartyId(data.partyId)
        setOnboarding({ partyStatus: data.partyStatus, existingPublicKey: data.publicKey })
        setScreen('key-mismatch')                          ← FIRST check (before onboardingComplete)
@@ -133,6 +135,7 @@ Unlock → enter password → Dashboard → sign works ✓
 4. **The wipe runs in the background context.** All `localStore` writes go through a message to the background handler, where `setUserScope` has already been called during `handleGoogleAuth`. Writing directly from the popup would target an unscoped key (`${network}:keystore` instead of `${network}:${userId}:keystore`) and leave the actual bad keystore intact.
 5. **The wipe is committed before re-import.** Once the user types DELETE and confirms, the keystore is zeroed immediately. If the user backs out mid-import, the next sign-in finds no keystore → routes through the existing-user onboarding path (still safe; no mismatch screen since there's no keystore to mismatch).
 6. **Per-user-scope.** Wiping affects only the currently-signed-in user's keystore. Other accounts' keystores on this device are untouched.
+7. **Two intentional typed confirmations across the recovery flow.** The user types `"DELETE"` in `ConfirmDeleteModal` (Flow 2 step 8 — guards the irreversible local-keystore wipe), then later types `TYPO_TEXT` in `TypedConfirm.tsx` (Flow 2 step 14 — guards the same `acknowledge-you-understand` step every onboarding completes with). These are two independent guards over two different destructive actions (wipe vs. complete onboarding), not a redundancy. Both are intentional. On localnet both pre-fill their inputs to keep dev-loop friction low.
 
 ## 5. Components
 
@@ -151,7 +154,7 @@ Unlock → enter password → Dashboard → sign works ✓
 |---|---|
 | `entrypoints/background/handlers/auth.handler.ts` | After `/auth/me` in `handleGoogleAuth`, read `localStore.get('keystore')` and compute `keyMismatch` using the already-extracted `partyStatus` and `publicKey` variables (do NOT re-read `party.onboardingStatus` to keep the null-safety chain consistent). Return `keyMismatch` in the response payload. `console.warn('[Ginkgo] Keystore mismatch detected', {expected: publicKey.slice(0,12)+'…', actual: existingKeystore.walletKey.slice(0,12)+'…'})` when detected. |
 | `lib/messaging/types.ts` | Extend the Google-auth response type (`GoogleAuthData`) with `keyMismatch?: boolean`. |
-| `entrypoints/popup/App.tsx` | (1) Add `'key-mismatch'` to the screen union. (2) Add new top-level state `const [keyMismatch, setKeyMismatch] = useState(false)` and `const [keyMismatchPartyId, setKeyMismatchPartyId] = useState('')`. (3) In `Welcome.onSuccess`, check `data.keyMismatch` **FIRST**, before the existing `data.onboardingComplete` branch — set the new state and route to `'key-mismatch'`. (4) Add a routing check `if (keyMismatch) { setScreen('key-mismatch'); return; }` in the screen-selection `useEffect` BEFORE the `lockState.unlocked` and `onboardingComplete` checks, AFTER the auth-required check. Include `keyMismatch` in the effect's dependency array. (5) Wire `KeyMismatch.tsx` into the `renderScreen` switch. (6) Clear `keyMismatch` state on sign-out and after successful re-import (the latter happens implicitly when `setScreen('unlock')` is reached — but explicit `setKeyMismatch(false)` defensively in `TypedConfirm.onNext` or its caller is cleaner). |
+| `entrypoints/popup/App.tsx` | (1) Add `'key-mismatch'` to the screen union. (2) Add new top-level state `const [keyMismatch, setKeyMismatch] = useState(false)` and `const [keyMismatchPartyId, setKeyMismatchPartyId] = useState('')`. (3) In `Welcome.onSuccess`, **always** call `setKeyMismatch(!!data.keyMismatch)` to sync React state to the freshest auth response (this avoids stale state after a sign-out / re-sign-in sequence — see §4 load-bearing property 2). Then, if `data.keyMismatch` is true, also set `keyMismatchPartyId`, set `onboarding`, and `setScreen('key-mismatch')`. This `keyMismatch` check must come **FIRST**, before the existing `data.onboardingComplete` branch. (4) Add a routing check `if (keyMismatch) { setScreen('key-mismatch'); return; }` in the screen-selection `useEffect` BEFORE the `lockState.unlocked` and `onboardingComplete` checks, AFTER the auth-required check. Include `keyMismatch` in the effect's dependency array. (5) Wire `KeyMismatch.tsx` into the `renderScreen` switch. (6) Canonical clearing point for `keyMismatch=false` is the wipe-confirm handler (Flow 2 step 10), after `MSG.RESET_KEYSTORE_FOR_RECOVERY` resolves. The logout handler also calls `setKeyMismatch(false)` — this is **defensive only** (paranoia-safe) because the next sign-in's `onSuccess` re-syncs the state regardless. |
 | `entrypoints/popup/pages/onboarding/Welcome.tsx` | Forward `keyMismatch`, `partyId`, and (already present) `publicKey` from the auth response into the `onSuccess(data)` callback. The current callback already receives the full `GoogleAuthData` typed object, so this is a type-extension change in `lib/messaging/types.ts` plus a consumer update in `App.tsx`; no code change in `Welcome.tsx` itself if it already forwards `data` whole. |
 
 ### Deleted / removed
@@ -179,8 +182,8 @@ None. This is additive.
    console.warn('[Ginkgo] Keystore mismatch detected', {expected: PK_backend.slice(0,12)+'…', actual: PK_local.slice(0,12)+'…'})
    return ok({ token, user, partyId, partyStatus, publicKey: PK_backend, onboardingComplete, keyMismatch: true })
 3. Welcome.tsx → onSuccess(data) → App.tsx callback runs:
+   setKeyMismatch(!!data.keyMismatch)            // ALWAYS syncs, true OR false — see N4 below
    FIRST check: if (data.keyMismatch) {
-     setKeyMismatch(true)
      setKeyMismatchPartyId(data.partyId)
      setOnboarding({ partyStatus: data.partyStatus, existingPublicKey: data.publicKey })
      setScreen('key-mismatch')
@@ -191,8 +194,8 @@ None. This is additive.
    isAuthenticated=true → keyMismatch=true → setScreen('key-mismatch')  // stays put
 6. User clicks "Sign out"
 7. dispatch LOGOUT message → handleLogout → clears sessionStore, clears user from localStore, sets unlocked=false
-8. The popup's logout handler also calls setKeyMismatch(false) to drop the routing gate (defensive)
-9. App.tsx authState effect → !isAuthenticated → setScreen('welcome')
+8. The popup's logout handler ALSO calls setKeyMismatch(false) — defensive only since onSuccess always re-syncs keyMismatch on the next sign-in (see step 3 of this flow). Kept for paranoia / robustness against future onSuccess refactors that forget to re-sync.
+9. App.tsx authState effect → !isAuthenticated → setScreen('welcome') (this guard fires before the keyMismatch check, so stale state would not cause routing breakage even without step 8)
 10. User can now sign in with the correct account
 ```
 
@@ -216,9 +219,11 @@ None. This is additive.
        // sessionStore intentionally NOT cleared
    Returns ok(null)
 10. Back in App.tsx (on the same wipe-confirm handler, after sendMessage resolves):
-    setKeyMismatch(false)                  // lifts the routing gate
-    invalidate authState query             // forces a refetch so onboardingComplete reflects the wipe
+    setKeyMismatch(false)                  // canonical clear — lifts the routing gate
     setScreen('create-password')           // onboarding.existingPublicKey already holds PK_backend
+    // No explicit authState invalidation needed here: setScreen drives the immediate
+    // render; handleCompleteOnboarding (later, in step 15) flips onboardingComplete=true
+    // and invalidates authState itself, so step 16's effect will see the fresh value.
 11. User flows CreatePassword → KeySetup (isExistingUser=true → forced import mode + amber banner)
 12. User pastes their correct private key SK_correct
 13. handleValidateImportKey({ privateKey: SK_correct, expectedPublicKey: PK_backend }) — already implemented
