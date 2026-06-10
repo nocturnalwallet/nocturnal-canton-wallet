@@ -138,6 +138,7 @@ export async function handleGoogleAuth(): Promise<MessageResponse<GoogleAuthData
       partyStatus,
       publicKey,
       onboardingComplete,
+      keyMismatch: false,
     });
   } catch (e: unknown) {
     return err(e instanceof Error ? e.message : 'Google auth failed');
