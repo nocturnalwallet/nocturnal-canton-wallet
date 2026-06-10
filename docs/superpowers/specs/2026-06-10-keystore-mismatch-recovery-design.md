@@ -288,6 +288,7 @@ None. This is additive.
 | User backs out of import screen after wipe | Keystore is null, onboardingComplete is false. Next sign-in re-triggers the existing-user flow (not the mismatch screen, since there's no keystore to mismatch). They land on CreatePassword → KeySetup → can paste their key. Functionally equivalent. |
 | User imports a key that still doesn't match | `handleValidateImportKey` rejects with "The imported private key does not match your account's public key." User stays on KeySetup, can try again. |
 | `handleCompleteOnboarding` throws during encrypt/save | Returns `err(...)` to the popup; user sees the error and stays on TypedConfirm. They can retry. |
+| `MSG.RESET_KEYSTORE_FOR_RECOVERY` dispatch fails or returns an error (background unreachable, storage write error, etc.) | The wipe was NOT committed. Surface the error inside `ConfirmDeleteModal` (inline error message under the typed-DELETE input). Keep the modal open. Do NOT call `setKeyMismatch(false)`. Do NOT call `setScreen('create-password')`. The user remains on the `key-mismatch` screen with the bad keystore still intact — they can retry the wipe, click "Sign out" instead, or close the popup. The wipe is only considered committed once the background message resolves successfully. |
 
 ### Information disclosure
 
@@ -379,7 +380,7 @@ Target: ~12 cases, ~200 LOC.
 - `handleGoogleAuth` returns `keyMismatch: true` only when all four conditions hold (party SUCCESSFULLY + non-empty publicKey + local keystore + walletKey mismatch) and `false` in all other cases.
 - New `handleResetKeystoreForRecovery` (background) wipes only `localStore.keystore` and `localStore.onboardingComplete`; does NOT clear `sessionStore`.
 - `App.tsx` holds `keyMismatch` as React state and the routing `useEffect` checks it BEFORE the `lockState.unlocked` and `onboardingComplete` checks (so the mismatch screen survives `authState` refetches).
-- "Sign out" path from the mismatch screen calls existing `handleLogout`, clears the local `keyMismatch` state, and returns to Welcome with the bad keystore intentionally intact in storage.
+- "Sign out" path from the mismatch screen calls existing `handleLogout`, defensively clears the local `keyMismatch` state (paranoia-safe — `onSuccess` re-syncs on the next sign-in regardless), and returns to Welcome with the bad keystore intentionally intact in storage.
 - "Wipe and re-import" path: ConfirmDeleteModal → `MSG.RESET_KEYSTORE_FOR_RECOVERY` background dispatch → keystore wiped + `onboardingComplete=false` → popup routes through `CreatePassword` → `KeySetup` (existing-user import mode) → `Acknowledgment` → `TypedConfirm` → `handleCompleteOnboarding` (party-creation block skipped because sessionStore.partyStatus is still SUCCESSFULLY) → unlock screen with the freshly-encrypted correct keystore.
 - All existing Vitest tests still pass (31 currently); new tests added per §8.
 - `yarn typecheck && yarn build:all` clean.
