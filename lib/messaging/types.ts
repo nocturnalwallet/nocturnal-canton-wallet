@@ -52,6 +52,7 @@ export type MessageRequest =
       payload: { password: string };
     }
   | { action: typeof MSG.DELETE_KEYSTORE }
+  | { action: typeof MSG.RESET_KEYSTORE_FOR_RECOVERY }
   // Transfer pre-approval
   | { action: typeof MSG.REGISTER_TRANSFER_PREAPPROVAL }
   | { action: typeof MSG.GET_PREAPPROVAL_STATUS }
@@ -158,6 +159,7 @@ export interface GoogleAuthData {
   partyStatus: 'PENDING' | 'SUCCESSFULLY' | 'DEACTIVATED';
   publicKey: string;
   onboardingComplete: boolean;
+  keyMismatch: boolean;
 }
 
 export interface LockStateData {

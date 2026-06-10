@@ -131,6 +131,29 @@ export async function handleGoogleAuth(): Promise<MessageResponse<GoogleAuthData
     // Check if this user has already completed onboarding on this network
     const onboardingComplete = !!(await localStore.get('onboardingComplete'));
 
+    // Detect keystore-vs-party-publicKey mismatch for already-onboarded users
+    // who are signing in with a stale or wrong local keystore.
+    // See: docs/superpowers/specs/2026-06-10-keystore-mismatch-recovery-design.md
+    let keyMismatch = false;
+    try {
+      const existingKeystore = await localStore.get('keystore');
+      if (
+        partyStatus === 'SUCCESSFULLY' &&
+        publicKey &&
+        existingKeystore?.walletKey &&
+        existingKeystore.walletKey !== publicKey
+      ) {
+        keyMismatch = true;
+        console.warn('[Ginkgo] Keystore mismatch detected', {
+          expected: publicKey.slice(0, 12) + '…',
+          actual: existingKeystore.walletKey.slice(0, 12) + '…',
+        });
+      }
+    } catch (e) {
+      // Storage read failed — treat as no-mismatch (no regression vs. today's behavior)
+      console.warn('[Ginkgo] Could not read keystore for mismatch check:', e);
+    }
+
     return ok({
       token,
       user,
@@ -138,6 +161,7 @@ export async function handleGoogleAuth(): Promise<MessageResponse<GoogleAuthData
       partyStatus,
       publicKey,
       onboardingComplete,
+      keyMismatch,
     });
   } catch (e: unknown) {
     return err(e instanceof Error ? e.message : 'Google auth failed');

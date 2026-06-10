@@ -293,6 +293,26 @@ export async function handleDeleteKeystore(): Promise<MessageResponse<void>> {
   }
 }
 
+/**
+ * Narrow recovery wipe for the keystore-mismatch-recovery flow.
+ *
+ * Unlike handleDeleteKeystore, this does NOT clear sessionStore — preserving
+ * sessionStore.partyStatus='SUCCESSFULLY' so that the subsequent
+ * handleCompleteOnboarding call skips the party-creation block (it would
+ * otherwise re-run /external-party/onboarding/* for an already-onboarded user).
+ *
+ * See: docs/superpowers/specs/2026-06-10-keystore-mismatch-recovery-design.md §4 property 3.
+ */
+export async function handleResetKeystoreForRecovery(): Promise<MessageResponse<null>> {
+  try {
+    await localStore.set('keystore', null);
+    await localStore.set('onboardingComplete', false);
+    return ok(null);
+  } catch (e: unknown) {
+    return err(e instanceof Error ? e.message : 'Failed to reset keystore for recovery');
+  }
+}
+
 function base64ToHex(b64: string): string {
   const raw = atob(b64);
   let hex = '';
