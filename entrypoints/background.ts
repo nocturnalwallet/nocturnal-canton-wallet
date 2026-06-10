@@ -25,6 +25,7 @@ import {
   handleCompleteOnboarding,
   handleExportPrivateKey,
   handleDeleteKeystore,
+  handleResetKeystoreForRecovery,
   handleRegisterTransferPreapproval,
   handleGetPreapprovalStatus,
 } from './background/handlers/keystore.handler';
@@ -172,6 +173,8 @@ async function routeMessage(message: MessageRequest) {
       return handleExportPrivateKey(message.payload.password);
     case MSG.DELETE_KEYSTORE:
       return handleDeleteKeystore();
+    case MSG.RESET_KEYSTORE_FOR_RECOVERY:
+      return handleResetKeystoreForRecovery();
 
     // Transfer pre-approval
     case MSG.REGISTER_TRANSFER_PREAPPROVAL:
