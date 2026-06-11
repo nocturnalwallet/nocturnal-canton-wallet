@@ -8,7 +8,7 @@
  * - prepareExecute / prepareExecuteAndWait (via Wallet Gateway)
  * - ledgerApi (proxy to Wallet Gateway)
  */
-import { signTransactionHash, getPublicKeyFromPrivate } from '@canton-network/core-signing-lib';
+import { signMessage, signTransactionHash, getPublicKeyFromPrivate } from '@canton-network/core-signing-lib';
 import {
   type SpliceMessage,
   WalletEvent,
@@ -163,7 +163,11 @@ async function handleGetPrimaryAccount(): Promise<DappAccount> {
   return account;
 }
 
-async function handleSignMessage(params: unknown): Promise<string> {
+async function handleSignMessage(params: unknown): Promise<{
+  signature: string;
+  publicKey: string;
+  fingerprint: string;
+}> {
   const { message } = (params || {}) as { message?: string };
   if (!message || typeof message !== 'string') {
     throw new Error('Missing or invalid "message" parameter');
@@ -174,23 +178,31 @@ async function handleSignMessage(params: unknown): Promise<string> {
     throw new Error('Wallet must be unlocked and onboarded to sign');
   }
 
-  // Get cached private key (set during unlock)
   const privateKey = getCachedPrivateKey();
   if (!privateKey) {
     throw new Error('Private key not available — please unlock the wallet');
   }
 
-  // Hash the message to produce a valid input for signTransactionHash.
-  // signTransactionHash expects a hex-encoded hash, not raw text.
-  const msgBytes = new TextEncoder().encode(message);
-  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', msgBytes));
-  const hexHash = Array.from(digest).map((b) => b.toString(16).padStart(2, '0')).join('');
-
-  const signature = signTransactionHash(hexHash, privateKey);
+  // CIP-0103 canonical signMessage: Ed25519 over UTF-8(message) directly.
+  // The kernel's signMessage does nacl.sign.detached(utf8(message), sk) and
+  // base64-encodes the signature — the only shape any standard Ed25519
+  // verifier will accept against the bare message bytes.
+  const signature = signMessage(message, privateKey);
+  const publicKey = getPublicKeyFromPrivate(privateKey);
+  const fingerprint = partyId.split('::')[1];
 
   resetAutoLockTimer();
-  return signature;
+  return { signature, publicKey, fingerprint };
 }
+
+// Strict base64 (standard + url-safe + optional padding). signTransactionHash
+// silently base64-decodes its input and signs the resulting bytes, so a hex
+// string would decode to garbage and sign that. Reject anything that's not
+// unambiguously base64 to surface the failure mode loudly.
+const BASE64_PATTERN = /^[A-Za-z0-9+/_-]+={0,2}$/;
+// 64-char lowercase hex is the most common "looks like base64 but isn't"
+// input — every char (0-9, a-f) is also a base64 char. Catch it explicitly.
+const HEX_64_PATTERN = /^[0-9a-f]{64}$/;
 
 async function handleSignTransaction(params: unknown): Promise<{
   signature: string;
@@ -198,7 +210,14 @@ async function handleSignTransaction(params: unknown): Promise<{
   fingerprint: string;
 }> {
   const { transactionHash } = (params || {}) as { transactionHash?: string };
-  if (!transactionHash) throw new Error('Missing "transactionHash" parameter');
+  if (!transactionHash || typeof transactionHash !== 'string') {
+    throw new Error('Missing or invalid "transactionHash" parameter');
+  }
+  if (!BASE64_PATTERN.test(transactionHash) || HEX_64_PATTERN.test(transactionHash)) {
+    throw new Error(
+      '"transactionHash" must be base64-encoded (got something that looks like hex or contains invalid chars)',
+    );
+  }
 
   const { partyId, isReady } = await getWalletState();
   if (!isReady || !partyId) throw new Error('Wallet must be unlocked and onboarded');
