@@ -350,7 +350,10 @@ async function handlePrepareExecuteAndWait(params: unknown): Promise<PrepareExec
   const signature = signTransactionHash(tx.preparedTransactionHash, privateKey);
   const fingerprint = partyId.split('::')[1];
 
-  const executeResult = await gatewayFacadeUserRpc('execute', {
+  const executeResult = await gatewayFacadeUserRpc<{
+    updateId: string;
+    completionOffset: number;
+  }>('execute', {
     commandId,
     signature,
     signedBy: fingerprint,
@@ -359,11 +362,13 @@ async function handlePrepareExecuteAndWait(params: unknown): Promise<PrepareExec
 
   resetAutoLockTimer();
 
+  // CIP-0103 TxChangedExecutedEvent: flat { status, commandId, payload: { updateId, completionOffset } }
   return {
-    tx: {
-      status: 'executed',
-      commandId,
-      payload: executeResult,
+    status: 'executed',
+    commandId,
+    payload: {
+      updateId: executeResult.updateId,
+      completionOffset: executeResult.completionOffset,
     },
   };
 }

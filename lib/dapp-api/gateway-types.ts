@@ -59,12 +59,21 @@ export interface ExecuteParams {
   partyId: string;
 }
 
-/** Result returned by `prepareExecuteAndWait`. */
+/**
+ * Result returned by `prepareExecuteAndWait`.
+ *
+ * Matches CIP-0103's `TxChangedExecutedEvent` shape — a flat object with
+ * status discriminator + commandId + normalized payload. Earlier releases
+ * wrapped this in `{ tx: { ... } }` and passed through the raw gateway
+ * response as payload; that shape was non-spec and broke schema-validating
+ * SDKs (notably @canton-network/dapp-sdk's TxChangedEvent type).
+ */
 export interface PrepareExecuteAndWaitResult {
-  tx: {
-    status: string;
-    commandId: string;
-    payload?: unknown;
+  status: 'executed';
+  commandId: string;
+  payload: {
+    updateId: string;
+    completionOffset: number;
   };
 }
 
