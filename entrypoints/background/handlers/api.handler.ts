@@ -64,6 +64,17 @@ export async function handlePrepareTransferTokenStandard(
   }
 }
 
+// The backend's /transfer-offer/* endpoints return { page, totalPages, total, limit, <items> }
+// but do NOT return has_next / has_previous (see canton-exchange-backend
+// transfer.service.ts getTransferHistory/getIncomingTransferRequests/getOutgoingTransferRequests).
+// Derive them from page + totalPages so the Prev/Next buttons in the UI are clickable.
+function derivePagination(page: number, totalPages: number) {
+  return {
+    has_previous: page > 1,
+    has_next: page < totalPages,
+  };
+}
+
 export async function handleFetchIncomingOffers(
   payload: GetIncomingRequestsQuery,
 ): Promise<MessageResponse<PaginatedOffersData>> {
@@ -78,8 +89,7 @@ export async function handleFetchIncomingOffers(
       page: result.page,
       total: result.total,
       totalPages: result.totalPages,
-      has_next: result.has_next,
-      has_previous: result.has_previous,
+      ...derivePagination(result.page, result.totalPages),
     });
   } catch (e: unknown) {
     return err(e instanceof Error ? e.message : 'Failed to fetch offers');
@@ -100,8 +110,7 @@ export async function handleFetchOutgoingOffers(
       page: result.page,
       total: result.total,
       totalPages: result.totalPages,
-      has_next: result.has_next,
-      has_previous: result.has_previous,
+      ...derivePagination(result.page, result.totalPages),
     });
   } catch (e: unknown) {
     return err(e instanceof Error ? e.message : 'Failed to fetch offers');
@@ -122,8 +131,7 @@ export async function handleFetchHistoryOffers(
       page: result.page,
       total: result.total,
       totalPages: result.totalPages,
-      has_next: result.has_next,
-      has_previous: result.has_previous,
+      ...derivePagination(result.page, result.totalPages),
     });
   } catch (e: unknown) {
     return err(e instanceof Error ? e.message : 'Failed to fetch history');
