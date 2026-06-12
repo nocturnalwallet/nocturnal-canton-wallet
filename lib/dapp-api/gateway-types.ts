@@ -60,21 +60,34 @@ export interface ExecuteParams {
 }
 
 /**
- * Result returned by `prepareExecuteAndWait`.
+ * `TxChangedExecutedEvent` inner shape — payload of an executed transaction.
  *
- * Matches CIP-0103's `TxChangedExecutedEvent` shape — a flat object with
- * status discriminator + commandId + normalized payload. Earlier releases
- * wrapped this in `{ tx: { ... } }` and passed through the raw gateway
- * response as payload; that shape was non-spec and broke schema-validating
- * SDKs (notably @canton-network/dapp-sdk's TxChangedEvent type).
+ * Defined by the canonical CIP-0103 OpenRPC schema at
+ * splice-wallet-kernel/api-specs/openrpc-dapp-api.json:582-602.
  */
-export interface PrepareExecuteAndWaitResult {
+export interface TxChangedExecutedEvent {
   status: 'executed';
   commandId: string;
   payload: {
     updateId: string;
     completionOffset: number;
   };
+}
+
+/**
+ * Result returned by `prepareExecuteAndWait`.
+ *
+ * Per the canonical CIP-0103 OpenRPC spec at
+ * splice-wallet-kernel/api-specs/openrpc-dapp-api.json:95-105, the result is
+ * { tx: TxChangedExecutedEvent } — wrapped in `tx`, not flat. The published
+ * @canton-network/dapp-sdk 1.2.0 confirms the same: its PrepareExecuteAndWaitResult
+ * type is `{ tx: TxChangedExecutedEvent }`.
+ *
+ * (A previous release flattened this shape based on a mistaken audit reading;
+ * we re-wrap to match the canonical spec + SDK type.)
+ */
+export interface PrepareExecuteAndWaitResult {
+  tx: TxChangedExecutedEvent;
 }
 
 /** Parameters for the Gateway User API `createWallet` method. */

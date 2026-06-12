@@ -279,7 +279,7 @@ async function handleSignTransaction(params: unknown): Promise<{
  * The extension signs locally (not via relay) since the private key is in memory.
  * The signing relay handles Gateway-initiated signing independently.
  */
-async function handlePrepareExecute(params: unknown): Promise<unknown> {
+async function handlePrepareExecute(params: unknown): Promise<null> {
   if (!getGatewayFacadeBaseUrl()) {
     throw new RpcError(RpcErrorCodes.RESOURCE_UNAVAILABLE, 'Wallet facade not configured for this network');
   }
@@ -326,8 +326,11 @@ async function handlePrepareExecute(params: unknown): Promise<unknown> {
   const signature = signTransactionHash(tx.preparedTransactionHash, privateKey);
   const fingerprint = partyId.split('::')[1];
 
-  // 6. Execute via Gateway
-  const result = await gatewayFacadeUserRpc('execute', {
+  // 6. Execute via Gateway. Result is discarded — the spec defines
+  // prepareExecute's result schema as `Null` (openrpc-dapp-api.json:80-82).
+  // dApps that want the execute result should call prepareExecuteAndWait
+  // instead, which returns { tx: TxChangedExecutedEvent }.
+  await gatewayFacadeUserRpc('execute', {
     commandId,
     signature,
     signedBy: fingerprint,
@@ -335,7 +338,7 @@ async function handlePrepareExecute(params: unknown): Promise<unknown> {
   });
 
   resetAutoLockTimer();
-  return result;
+  return null;
 }
 
 /**
@@ -394,13 +397,18 @@ async function handlePrepareExecuteAndWait(params: unknown): Promise<PrepareExec
 
   resetAutoLockTimer();
 
-  // CIP-0103 TxChangedExecutedEvent: flat { status, commandId, payload: { updateId, completionOffset } }
+  // CIP-0103 prepareExecuteAndWait result schema (openrpc-dapp-api.json:95-105):
+  // { tx: TxChangedExecutedEvent }, where TxChangedExecutedEvent is
+  // { status: 'executed', commandId, payload: { updateId, completionOffset } }.
+  // The published @canton-network/dapp-sdk 1.2.0 type confirms the same wrap.
   return {
-    status: 'executed',
-    commandId,
-    payload: {
-      updateId: executeResult.updateId,
-      completionOffset: executeResult.completionOffset,
+    tx: {
+      status: 'executed',
+      commandId,
+      payload: {
+        updateId: executeResult.updateId,
+        completionOffset: executeResult.completionOffset,
+      },
     },
   };
 }

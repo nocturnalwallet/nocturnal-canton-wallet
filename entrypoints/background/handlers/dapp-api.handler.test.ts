@@ -38,7 +38,8 @@ vi.mock('../gateway-facade-client', () => ({
 
 vi.mock('./approval.handler', () => ({
   APPROVAL_REQUIRED_METHODS: new Set<string>(),
-  requestApproval: vi.fn(),
+  // Default: auto-approve. Individual tests can override.
+  requestApproval: vi.fn(async () => true),
 }));
 
 vi.mock('./session.handler', () => ({
@@ -48,6 +49,7 @@ vi.mock('./session.handler', () => ({
 
 import { sessionStore, localStore } from '@lib/storage';
 import { getCachedPrivateKey } from './session.handler';
+import { gatewayFacadeDappRpc, gatewayFacadeUserRpc } from '../gateway-facade-client';
 import { handleDappApiRequest } from './dapp-api.handler';
 import { WalletEvent } from '@lib/dapp-api/types';
 import type { SpliceMessage } from '@lib/dapp-api/types';
@@ -230,5 +232,50 @@ describe('handleStatus — CIP-0103 StatusEvent shape', () => {
     const res = await handleDappApiRequest(dappReq('status', {}));
     const status = unwrapResult<{ session?: Record<string, unknown> }>(res);
     expect(status.session).toBeUndefined();
+  });
+});
+
+describe('prepareExecute / prepareExecuteAndWait — CIP-0103 result shapes', () => {
+  const { publicKey, privateKey } = createKeyPair();
+  // Random 32-byte hash mock — what /api/v0/user.getTransaction would return.
+  const fakeHashBytes = new Uint8Array(32);
+  crypto.getRandomValues(fakeHashBytes);
+  const fakeHash = naclUtil.encodeBase64(fakeHashBytes);
+  const fakeCommandId = 'transfer-offer-test-cmd-1234';
+
+  beforeEach(() => {
+    setupUnlockedWallet(publicKey, privateKey);
+    // 1. Gateway's dapp-side prepareExecute returns { userUrl: '?commandId=...' }
+    vi.mocked(gatewayFacadeDappRpc).mockResolvedValue({
+      userUrl: `https://gateway.example/user?commandId=${fakeCommandId}`,
+    });
+    // 2. Gateway's user-side getTransaction → transaction with preparedTransactionHash;
+    //    Gateway's user-side execute → { updateId, completionOffset }.
+    vi.mocked(gatewayFacadeUserRpc).mockImplementation(async (method: string) => {
+      if (method === 'getTransaction') return { preparedTransactionHash: fakeHash };
+      if (method === 'execute') return { updateId: 'tx-update-id', completionOffset: 42 };
+      if (method === 'deleteTransaction') return null;
+      throw new Error(`Unexpected gateway method: ${method}`);
+    });
+  });
+
+  it('prepareExecute returns null per openrpc-dapp-api.json:80-82 (result schema: Null)', async () => {
+    const res = await handleDappApiRequest(dappReq('prepareExecute', { commands: [] }));
+    const result = unwrapResult<unknown>(res);
+    expect(result).toBeNull();
+  });
+
+  it('prepareExecuteAndWait returns { tx: TxChangedExecutedEvent } per openrpc-dapp-api.json:95-105', async () => {
+    const res = await handleDappApiRequest(dappReq('prepareExecuteAndWait', { commands: [] }));
+    const result = unwrapResult<{ tx: { status: string; commandId: string; payload: { updateId: string; completionOffset: number } } }>(res);
+    // Top-level shape: { tx: ... } wrapped per spec.
+    expect(Object.keys(result).sort()).toEqual(['tx']);
+    // Inner TxChangedExecutedEvent shape per openrpc-dapp-api.json:582-602.
+    expect(result.tx.status).toBe('executed');
+    expect(result.tx.commandId).toBe(fakeCommandId);
+    expect(result.tx.payload).toEqual({
+      updateId: 'tx-update-id',
+      completionOffset: 42,
+    });
   });
 });
