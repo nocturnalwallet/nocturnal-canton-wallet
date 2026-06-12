@@ -102,18 +102,15 @@ describe('handleSignMessage — Ed25519 signature over UTF-8(message)', () => {
   it('produces a signature that nacl.sign.detached.verify accepts against UTF-8(message) and publicKey', async () => {
     const message = 'Hello from Canton Test dApp!';
     const res = await handleDappApiRequest(dappReq('signMessage', { message }));
-    const { signature, publicKey: returnedPk, fingerprint } = unwrapResult<{
-      signature: string;
-      publicKey: string;
-      fingerprint: string;
-    }>(res);
+    const result = unwrapResult<{ signature: string }>(res);
 
-    expect(returnedPk).toBe(publicKey);
-    expect(fingerprint).toBe(TEST_PARTY_ID.split('::')[1]);
+    // CIP-0103 mandates { signature } only — no publicKey/fingerprint extras.
+    expect(Object.keys(result).sort()).toEqual(['signature']);
 
+    // dApps verify with a publicKey sourced separately (e.g., getPrimaryAccount).
     const verified = nacl.sign.detached.verify(
       new TextEncoder().encode(message),
-      naclUtil.decodeBase64(signature),
+      naclUtil.decodeBase64(result.signature),
       naclUtil.decodeBase64(publicKey),
     );
     expect(verified).toBe(true);

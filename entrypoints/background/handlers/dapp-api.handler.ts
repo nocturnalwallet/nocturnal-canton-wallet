@@ -163,11 +163,7 @@ async function handleGetPrimaryAccount(): Promise<DappAccount> {
   return account;
 }
 
-async function handleSignMessage(params: unknown): Promise<{
-  signature: string;
-  publicKey: string;
-  fingerprint: string;
-}> {
+async function handleSignMessage(params: unknown): Promise<{ signature: string }> {
   const { message } = (params || {}) as { message?: string };
   if (!message || typeof message !== 'string') {
     throw new Error('Missing or invalid "message" parameter');
@@ -187,12 +183,13 @@ async function handleSignMessage(params: unknown): Promise<{
   // The kernel's signMessage does nacl.sign.detached(utf8(message), sk) and
   // base64-encodes the signature — the only shape any standard Ed25519
   // verifier will accept against the bare message bytes.
+  //
+  // Return shape is { signature } only per CIP-0103 OpenRPC schema and CIP text.
+  // dApps source publicKey/partyId via getPrimaryAccount or listAccounts.
   const signature = signMessage(message, privateKey);
-  const publicKey = getPublicKeyFromPrivate(privateKey);
-  const fingerprint = partyId.split('::')[1];
 
   resetAutoLockTimer();
-  return { signature, publicKey, fingerprint };
+  return { signature };
 }
 
 // Strict base64 (standard + url-safe + optional padding). signTransactionHash
