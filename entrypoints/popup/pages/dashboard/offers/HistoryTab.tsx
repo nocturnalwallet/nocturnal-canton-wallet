@@ -75,7 +75,7 @@ export function HistoryTab() {
           <button
             disabled={!data.has_previous}
             onClick={() => setPage((p) => Math.max(1, p - 1))}
-            className="px-3 py-1 rounded text-xs bg-secondary text-foreground disabled:opacity-30"
+            className="px-3 py-1 rounded text-xs bg-secondary text-foreground transition-colors hover:bg-primary/10 active:bg-primary/20 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-secondary"
           >
             Prev
           </button>
@@ -85,7 +85,7 @@ export function HistoryTab() {
           <button
             disabled={!data.has_next}
             onClick={() => setPage((p) => p + 1)}
-            className="px-3 py-1 rounded text-xs bg-secondary text-foreground disabled:opacity-30"
+            className="px-3 py-1 rounded text-xs bg-secondary text-foreground transition-colors hover:bg-primary/10 active:bg-primary/20 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-secondary"
           >
             Next
           </button>

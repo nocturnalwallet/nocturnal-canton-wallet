@@ -111,14 +111,15 @@ export function OutgoingTab() {
               <div className="flex gap-2">
                 <button
                   onClick={() => { setActiveContract(null); setPreparedData(null); setPassword(''); setWithdrawError(''); }}
-                  className="flex-1 rounded-lg border border-muted-foreground/40 bg-muted-foreground/15 text-foreground py-2 text-xs font-medium"
+                  disabled={signWithdraw.isPending}
+                  className="flex-1 rounded-lg border border-muted-foreground/40 bg-muted-foreground/15 text-foreground py-2 text-xs font-medium transition-colors hover:bg-muted-foreground/25 active:bg-muted-foreground/35 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleSignWithdraw}
                   disabled={!password || signWithdraw.isPending}
-                  className="flex-1 flex items-center justify-center gap-1 rounded-lg bg-red-500/20 border border-red-500/30 text-red-400 py-2 text-xs font-medium disabled:opacity-40"
+                  className="flex-1 flex items-center justify-center gap-1 rounded-lg bg-red-500/20 border border-red-500/30 text-red-400 py-2 text-xs font-medium transition-colors hover:bg-red-500/30 hover:border-red-500/50 active:bg-red-500/40 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {signWithdraw.isPending ? (
                     <Loader2Icon className="w-4 h-4 animate-spin mx-auto" />
@@ -132,7 +133,7 @@ export function OutgoingTab() {
             <button
               onClick={() => handlePrepareWithdraw(item.contractId, item.instrumentId?.id ?? '')}
               disabled={prepareWithdraw.isPending && activeContract === item.contractId}
-              className="w-full flex items-center justify-center gap-1 rounded-lg bg-red-500/20 border border-red-500/30 text-red-400 py-2 text-xs font-medium"
+              className="w-full flex items-center justify-center gap-1 rounded-lg bg-red-500/20 border border-red-500/30 text-red-400 py-2 text-xs font-medium transition-colors hover:bg-red-500/30 hover:border-red-500/50 active:bg-red-500/40 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <XCircleIcon className="w-3.5 h-3.5" /> Withdraw
             </button>
@@ -145,7 +146,7 @@ export function OutgoingTab() {
           <button
             disabled={!data.has_previous}
             onClick={() => setPage((p) => Math.max(1, p - 1))}
-            className="px-3 py-1 rounded text-xs bg-secondary text-foreground disabled:opacity-30"
+            className="px-3 py-1 rounded text-xs bg-secondary text-foreground transition-colors hover:bg-primary/10 active:bg-primary/20 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-secondary"
           >
             Prev
           </button>
@@ -155,7 +156,7 @@ export function OutgoingTab() {
           <button
             disabled={!data.has_next}
             onClick={() => setPage((p) => p + 1)}
-            className="px-3 py-1 rounded text-xs bg-secondary text-foreground disabled:opacity-30"
+            className="px-3 py-1 rounded text-xs bg-secondary text-foreground transition-colors hover:bg-primary/10 active:bg-primary/20 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-secondary"
           >
             Next
           </button>
