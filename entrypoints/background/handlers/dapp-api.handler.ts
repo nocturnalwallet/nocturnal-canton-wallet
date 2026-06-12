@@ -15,6 +15,7 @@ import {
   jsonRpcSuccess,
   jsonRpcError,
   RpcErrorCodes,
+  RpcError,
 } from '@lib/dapp-api/types';
 import type {
   PrepareExecuteParams,
@@ -163,24 +164,26 @@ async function handleListAccounts(): Promise<DappAccount[]> {
 
 async function handleGetPrimaryAccount(): Promise<DappAccount> {
   const account = await buildDappAccount();
-  if (!account) throw new Error('No active account — wallet must be unlocked and onboarded');
+  if (!account) {
+    throw new RpcError(RpcErrorCodes.UNAUTHORIZED, 'No active account — wallet must be unlocked and onboarded');
+  }
   return account;
 }
 
 async function handleSignMessage(params: unknown): Promise<{ signature: string }> {
   const { message } = (params || {}) as { message?: string };
   if (!message || typeof message !== 'string') {
-    throw new Error('Missing or invalid "message" parameter');
+    throw new RpcError(RpcErrorCodes.INVALID_PARAMS, 'Missing or invalid "message" parameter');
   }
 
   const { partyId, isReady } = await getWalletState();
   if (!isReady || !partyId) {
-    throw new Error('Wallet must be unlocked and onboarded to sign');
+    throw new RpcError(RpcErrorCodes.UNAUTHORIZED, 'Wallet must be unlocked and onboarded to sign');
   }
 
   const privateKey = getCachedPrivateKey();
   if (!privateKey) {
-    throw new Error('Private key not available — please unlock the wallet');
+    throw new RpcError(RpcErrorCodes.UNAUTHORIZED, 'Private key not available — please unlock the wallet');
   }
 
   // CIP-0103 canonical signMessage: Ed25519 over UTF-8(message) directly.
@@ -212,19 +215,24 @@ async function handleSignTransaction(params: unknown): Promise<{
 }> {
   const { transactionHash } = (params || {}) as { transactionHash?: string };
   if (!transactionHash || typeof transactionHash !== 'string') {
-    throw new Error('Missing or invalid "transactionHash" parameter');
+    throw new RpcError(RpcErrorCodes.INVALID_PARAMS, 'Missing or invalid "transactionHash" parameter');
   }
   if (!BASE64_PATTERN.test(transactionHash) || HEX_64_PATTERN.test(transactionHash)) {
-    throw new Error(
+    throw new RpcError(
+      RpcErrorCodes.INVALID_PARAMS,
       '"transactionHash" must be base64-encoded (got something that looks like hex or contains invalid chars)',
     );
   }
 
   const { partyId, isReady } = await getWalletState();
-  if (!isReady || !partyId) throw new Error('Wallet must be unlocked and onboarded');
+  if (!isReady || !partyId) {
+    throw new RpcError(RpcErrorCodes.UNAUTHORIZED, 'Wallet must be unlocked and onboarded');
+  }
 
   const privateKey = getCachedPrivateKey();
-  if (!privateKey) throw new Error('Private key not available — unlock wallet');
+  if (!privateKey) {
+    throw new RpcError(RpcErrorCodes.UNAUTHORIZED, 'Private key not available — unlock wallet');
+  }
 
   const signature = signTransactionHash(transactionHash, privateKey);
   const publicKey = getPublicKeyFromPrivate(privateKey);
@@ -250,14 +258,14 @@ async function handleSignTransaction(params: unknown): Promise<{
  */
 async function handlePrepareExecute(params: unknown): Promise<unknown> {
   if (!getGatewayFacadeBaseUrl()) {
-    throw new Error('Wallet facade not configured for this network');
+    throw new RpcError(RpcErrorCodes.RESOURCE_UNAVAILABLE, 'Wallet facade not configured for this network');
   }
 
   const { partyId, isReady } = await getWalletState();
-  if (!isReady || !partyId) throw new Error('Wallet must be unlocked and onboarded');
+  if (!isReady || !partyId) throw new RpcError(RpcErrorCodes.UNAUTHORIZED, 'Wallet must be unlocked and onboarded');
 
   const privateKey = getCachedPrivateKey();
-  if (!privateKey) throw new Error('Private key not available — unlock wallet');
+  if (!privateKey) throw new RpcError(RpcErrorCodes.UNAUTHORIZED, 'Private key not available — unlock wallet');
 
   const typedParams = params as PrepareExecuteParams;
 
@@ -267,7 +275,7 @@ async function handlePrepareExecute(params: unknown): Promise<unknown> {
   // 2. Extract commandId from userUrl
   const url = new URL(userUrl);
   const commandId = url.searchParams.get('commandId');
-  if (!commandId) throw new Error('No commandId in Gateway response');
+  if (!commandId) throw new RpcError(RpcErrorCodes.INTERNAL_ERROR, 'No commandId in Gateway response');
 
   // 3. Show approval popup
   const approved = await requestApproval('prepareExecute', 'dApp', {
@@ -282,7 +290,7 @@ async function handlePrepareExecute(params: unknown): Promise<unknown> {
     } catch {
       // Best-effort cleanup
     }
-    throw new Error('User rejected the transaction');
+    throw new RpcError(RpcErrorCodes.USER_REJECTED, 'User rejected the transaction');
   }
 
   // 4. Get prepared transaction details from Gateway
@@ -312,14 +320,14 @@ async function handlePrepareExecute(params: unknown): Promise<unknown> {
  */
 async function handlePrepareExecuteAndWait(params: unknown): Promise<PrepareExecuteAndWaitResult> {
   if (!getGatewayFacadeBaseUrl()) {
-    throw new Error('Wallet facade not configured for this network');
+    throw new RpcError(RpcErrorCodes.RESOURCE_UNAVAILABLE, 'Wallet facade not configured for this network');
   }
 
   const { partyId, isReady } = await getWalletState();
-  if (!isReady || !partyId) throw new Error('Wallet must be unlocked and onboarded');
+  if (!isReady || !partyId) throw new RpcError(RpcErrorCodes.UNAUTHORIZED, 'Wallet must be unlocked and onboarded');
 
   const privateKey = getCachedPrivateKey();
-  if (!privateKey) throw new Error('Private key not available — unlock wallet');
+  if (!privateKey) throw new RpcError(RpcErrorCodes.UNAUTHORIZED, 'Private key not available — unlock wallet');
 
   const typedParams = params as PrepareExecuteParams;
 
@@ -327,7 +335,7 @@ async function handlePrepareExecuteAndWait(params: unknown): Promise<PrepareExec
 
   const url = new URL(userUrl);
   const commandId = url.searchParams.get('commandId');
-  if (!commandId) throw new Error('No commandId in Gateway response');
+  if (!commandId) throw new RpcError(RpcErrorCodes.INTERNAL_ERROR, 'No commandId in Gateway response');
 
   const approved = await requestApproval('prepareExecuteAndWait', 'dApp', {
     commandId,
@@ -340,7 +348,7 @@ async function handlePrepareExecuteAndWait(params: unknown): Promise<PrepareExec
     } catch {
       // Best-effort cleanup
     }
-    throw new Error('User rejected the transaction');
+    throw new RpcError(RpcErrorCodes.USER_REJECTED, 'User rejected the transaction');
   }
 
   const tx = await gatewayFacadeUserRpc<GatewayTransaction>('getTransaction', { commandId });
@@ -383,11 +391,11 @@ async function handlePrepareExecuteAndWait(params: unknown): Promise<PrepareExec
  */
 async function handleLedgerApi(params: unknown): Promise<unknown> {
   if (!getGatewayFacadeBaseUrl()) {
-    throw new Error('Wallet facade not configured for this network');
+    throw new RpcError(RpcErrorCodes.RESOURCE_UNAVAILABLE, 'Wallet facade not configured for this network');
   }
 
   const { isReady } = await getWalletState();
-  if (!isReady) throw new Error('Wallet must be unlocked and onboarded');
+  if (!isReady) throw new RpcError(RpcErrorCodes.UNAUTHORIZED, 'Wallet must be unlocked and onboarded');
 
   const raw = params as Partial<LedgerApiParams> & { requestMethod?: string; body?: unknown };
   const normalized: LedgerApiParams = {
@@ -473,6 +481,10 @@ export async function handleDappApiRequest(
     if (e instanceof FacadeNetworkError) {
       // Backend unreachable — generic envelope to dApp; don't leak the URL.
       return jsonRpcError(id, RpcErrorCodes.INTERNAL_ERROR, 'Wallet unavailable');
+    }
+    // RpcError carries an explicit code from the handler.
+    if (e instanceof RpcError) {
+      return jsonRpcError(id, e.code, e.message, e.data);
     }
     const message = e instanceof Error ? e.message : String(e);
     return jsonRpcError(id, RpcErrorCodes.INTERNAL_ERROR, message);

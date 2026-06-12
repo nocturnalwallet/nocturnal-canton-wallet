@@ -148,6 +148,8 @@ describe('handleSignTransaction — input validation', () => {
     const hexLooking = 'a'.repeat(64);
     const err = unwrapError(await handleDappApiRequest(dappReq('signTransaction', { transactionHash: hexLooking })));
     expect(err.message).toMatch(/base64/i);
+    // CIP-0103 INVALID_PARAMS, not the catch-all INTERNAL_ERROR.
+    expect(err.code).toBe(-32602);
   });
 
   it('accepts a valid base64-encoded 32-byte hash and produces a verifiable signature over those raw bytes', async () => {

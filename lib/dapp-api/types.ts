@@ -119,16 +119,44 @@ export function walletEvent(event: string, data: unknown): SpliceMessage {
   };
 }
 
-// Standard JSON-RPC / EIP-1193 error codes
+// Standard JSON-RPC / EIP-1193 / CIP-0103 error codes
 export const RpcErrorCodes = {
+  // JSON-RPC 2.0 reserved range
   PARSE_ERROR: -32700,
   INVALID_REQUEST: -32600,
   METHOD_NOT_FOUND: -32601,
   INVALID_PARAMS: -32602,
   INTERNAL_ERROR: -32603,
+  // CIP-0103 application-defined codes (-32000 to -32099)
+  INVALID_INPUT: -32000,
+  RESOURCE_NOT_FOUND: -32001,
+  RESOURCE_UNAVAILABLE: -32002,
+  TRANSACTION_REJECTED: -32003,
+  METHOD_NOT_SUPPORTED: -32004,
+  LIMIT_EXCEEDED: -32005,
+  // EIP-1193 provider codes
   USER_REJECTED: 4001,
   UNAUTHORIZED: 4100,
   UNSUPPORTED_METHOD: 4200,
   DISCONNECTED: 4900,
   CHAIN_DISCONNECTED: 4901,
 } as const;
+
+/**
+ * Typed error for dApp API handlers. Carries a JSON-RPC error code so the
+ * dispatcher in handleDappApiRequest can preserve it on the wire instead of
+ * collapsing every throw to INTERNAL_ERROR (-32603).
+ *
+ * Handlers should throw RpcError with the most specific code; the catch-all
+ * stays INTERNAL_ERROR for unexpected throws (storage failures, etc.).
+ */
+export class RpcError extends Error {
+  readonly code: number;
+  readonly data?: unknown;
+  constructor(code: number, message: string, data?: unknown) {
+    super(message);
+    this.name = 'RpcError';
+    this.code = code;
+    this.data = data;
+  }
+}
