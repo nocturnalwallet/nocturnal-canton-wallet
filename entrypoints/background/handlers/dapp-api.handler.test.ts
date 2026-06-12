@@ -12,10 +12,20 @@ import { createKeyPair } from '@canton-network/core-signing-lib';
 vi.mock('@lib/storage', () => ({
   sessionStore: { get: vi.fn(), set: vi.fn(), setMany: vi.fn(), clear: vi.fn() },
   localStore: { get: vi.fn(), set: vi.fn() },
-  networkStore: { get: vi.fn(), set: vi.fn() },
+  networkStore: { get: vi.fn(async () => 'localnet'), set: vi.fn() },
 }));
 
-vi.mock('@lib/network', () => ({ NETWORKS: { localnet: { id: 'localnet' } } }));
+vi.mock('@lib/network', () => ({
+  NETWORKS: {
+    localnet: {
+      id: 'localnet',
+      label: 'Localnet',
+      apiBaseUrl: 'http://localhost:3003/',
+      explorerUrl: '',
+      faucetEnabled: true,
+    },
+  },
+}));
 
 vi.mock('../gateway-facade-client', () => ({
   gatewayFacadeDappRpc: vi.fn(),
@@ -166,5 +176,59 @@ describe('handleSignTransaction — input validation', () => {
       naclUtil.decodeBase64(publicKey),
     );
     expect(ok).toBe(true);
+  });
+});
+
+describe('handleStatus — CIP-0103 StatusEvent shape', () => {
+  const { publicKey, privateKey } = createKeyPair();
+
+  beforeEach(() => {
+    setupUnlockedWallet(publicKey, privateKey);
+    // setupUnlockedWallet already provides authToken via sessionStore mock.
+    // Add user.id via localStore mock so session emission has all required fields.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(localStore.get).mockImplementation((async (key: string) => {
+      if (key === 'keystore') {
+        return { walletKey: publicKey, cantonKey: '', hashedKey: '', backend: 'webcrypto', version: 1 };
+      }
+      if (key === 'onboardingComplete') return true;
+      if (key === 'currentNetwork') return 'localnet';
+      if (key === 'user') return { id: 'test-user-id', email: 'x@y', firstName: 'X', lastName: 'Y', isActive: true };
+      return null;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    }) as any);
+  });
+
+  it('connection has all required ConnectResult fields per openrpc-dapp-api.json:712-741', async () => {
+    const res = await handleDappApiRequest(dappReq('status', {}));
+    const status = unwrapResult<{ connection: Record<string, unknown> }>(res);
+    // Spec required: isConnected, isNetworkConnected. Both must be booleans.
+    expect(typeof status.connection.isConnected).toBe('boolean');
+    expect(typeof status.connection.isNetworkConnected).toBe('boolean');
+    // Spec optional but Ginkgo always emits: reason, networkReason.
+    expect(typeof status.connection.reason).toBe('string');
+    expect(typeof status.connection.networkReason).toBe('string');
+  });
+
+  it('session has spec shape { accessToken, userId } per openrpc-dapp-api.json:819-834 (additionalProperties: false)', async () => {
+    const res = await handleDappApiRequest(dappReq('status', {}));
+    const status = unwrapResult<{ session?: Record<string, unknown> }>(res);
+    expect(status.session).toBeDefined();
+    expect(Object.keys(status.session!).sort()).toEqual(['accessToken', 'userId']);
+    expect(status.session!.accessToken).toBe('test-token');
+    expect(status.session!.userId).toBe('test-user-id');
+  });
+
+  it('omits session entirely when authToken is absent', async () => {
+    vi.mocked(sessionStore.get).mockImplementation(async (key: string) => {
+      if (key === 'partyId') return TEST_PARTY_ID;
+      if (key === 'unlocked') return true;
+      if (key === 'partyStatus') return 'SUCCESSFULLY';
+      // authToken returns null → no Google session → omit session field
+      return null;
+    });
+    const res = await handleDappApiRequest(dappReq('status', {}));
+    const status = unwrapResult<{ session?: Record<string, unknown> }>(res);
+    expect(status.session).toBeUndefined();
   });
 });
