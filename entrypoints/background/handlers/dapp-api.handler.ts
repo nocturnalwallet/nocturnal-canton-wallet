@@ -139,25 +139,43 @@ async function handleStatus(): Promise<unknown> {
   const networkId = await networkStore.get();
   const config = NETWORKS[networkId];
 
+  // F1: ConnectResult per spec (openrpc-dapp-api.json:712-741) requires both
+  // `isConnected` and `isNetworkConnected`. The previous handleStatus emitted
+  // only { isConnected, reason }, which schema-validating SDKs reject. Match
+  // handleConnect's shape exactly so the same ConnectResult appears in both
+  // places.
+  const connection = {
+    isConnected: isReady,
+    reason: !unlocked ? 'Wallet is locked' : !partyId ? 'No party onboarded' : 'OK',
+    isNetworkConnected: true,
+    networkReason: 'OK',
+  };
+
+  // F3: Session per spec (openrpc-dapp-api.json:819-834) requires
+  // { accessToken: string, userId: string } with additionalProperties: false.
+  // The previous handleStatus emitted { isAuthenticated, partyId } — neither
+  // field is in the spec. Emit the spec shape sourced from the OAuth session
+  // when present; omit the optional `session` field entirely when the user
+  // hasn't signed in (rather than emit a half-populated object).
+  const authToken = await sessionStore.get('authToken');
+  const user = await localStore.get('user');
+  const session = authToken && user?.id
+    ? { accessToken: authToken, userId: user.id }
+    : undefined;
+
   return {
     provider: {
       id: 'ginkgo',
       version: '0.2.0',
       providerType: 'browser',
     },
-    connection: {
-      isConnected: isReady,
-      reason: !unlocked ? 'Wallet is locked' : !partyId ? 'No party onboarded' : 'OK',
-    },
+    connection,
     network: {
       networkId,
       ledgerApi: config.apiBaseUrl,
       name: config.label,
     },
-    session: {
-      isAuthenticated: unlocked,
-      partyId: partyId || undefined,
-    },
+    ...(session ? { session } : {}),
   };
 }
 
