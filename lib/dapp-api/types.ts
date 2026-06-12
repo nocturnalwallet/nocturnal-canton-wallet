@@ -24,6 +24,24 @@ export enum WalletEvent {
   SPLICE_WALLET_EVENT = 'SPLICE_WALLET_EVENT',
 }
 
+// -- EIP-6963-style provider discovery --
+//
+// Constants and detail shape mirror @canton-network/core-types and the
+// upstream SDK's `requestAnnouncedProviders` consumer. dApps fire REQUEST,
+// extensions reply with ANNOUNCE carrying { id, name, icon?, target? }.
+// Inlined (vs. imported from core-types) for the same Zod-version reason
+// documented at the top of this file; revisit when that constraint lifts.
+
+export const CANTON_REQUEST_PROVIDER_EVENT = 'canton:requestProvider';
+export const CANTON_ANNOUNCE_PROVIDER_EVENT = 'canton:announceProvider';
+
+/**
+ * Display name surfaced to multi-wallet pickers. Mirrors the WXT manifest's
+ * `name` field (wxt.config.ts). Single source of truth for the announce
+ * detail's name; if the manifest name ever changes, update here too.
+ */
+export const PROVIDER_NAME = 'Ginkgo';
+
 // -- JSON-RPC 2.0 types --
 
 export interface JsonRpcRequest {
