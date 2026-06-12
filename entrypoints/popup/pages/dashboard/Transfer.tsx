@@ -59,7 +59,8 @@ export function Transfer() {
           assetAmount: amount,
           receiverPartyId: recipient,
           reason: 'Transfer from Ginkgo',
-          maxTimeToExecute: 24,
+          // milliseconds — backend computes executeBefore = now + maxTimeToExecute
+          maxTimeToExecute: 24 * 60 * 60 * 1000,
         });
       }
 
