@@ -118,10 +118,13 @@ async function handleIsConnected(): Promise<unknown> {
 async function handleGetActiveNetwork(): Promise<unknown> {
   const networkId = await networkStore.get();
   const config = NETWORKS[networkId];
+  // Field names follow CIP-0103 `Network`: `networkId` (CAIP-2-like identifier)
+  // and `ledgerApi` (URI). `name` is kept as a Ginkgo extension for UI display
+  // and is permitted under additionalProperties.
   return {
-    id: networkId,
+    networkId,
+    ledgerApi: config.apiBaseUrl,
     name: config.label,
-    apiBaseUrl: config.apiBaseUrl,
   };
 }
 
@@ -141,7 +144,8 @@ async function handleStatus(): Promise<unknown> {
       reason: !unlocked ? 'Wallet is locked' : !partyId ? 'No party onboarded' : 'OK',
     },
     network: {
-      id: networkId,
+      networkId,
+      ledgerApi: config.apiBaseUrl,
       name: config.label,
     },
     session: {
