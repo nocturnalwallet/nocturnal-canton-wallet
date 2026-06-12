@@ -21,6 +21,17 @@ export default defineContentScript({
   runAt: 'document_start',
 
   main() {
+    // Routing key for multi-wallet pickers. dApps that want to address a
+    // specific wallet set `target` on outbound messages to this value;
+    // wallets ignore messages whose target doesn't match. EXT_ACK echoes
+    // target back so the dApp can correlate which wallet replied.
+    const runtimeId = chrome.runtime?.id;
+    const shouldHandle = (target: string | undefined): boolean => {
+      if (!target) return true;
+      if (!runtimeId) return false;
+      return target === runtimeId;
+    };
+
     window.addEventListener('message', async (event: MessageEvent) => {
       const msg = event.data;
       if (!isSpliceMessage(msg)) return;
@@ -28,8 +39,12 @@ export default defineContentScript({
       // EXT_READY can come from the SDK's discovery popup (a different window),
       // so we must NOT restrict it to event.source === window.
       if (msg.type === WalletEvent.SPLICE_WALLET_EXT_READY) {
+        if (!shouldHandle(msg.target)) return;
         window.postMessage(
-          { type: WalletEvent.SPLICE_WALLET_EXT_ACK } satisfies SpliceMessage,
+          {
+            type: WalletEvent.SPLICE_WALLET_EXT_ACK,
+            target: msg.target ?? runtimeId,
+          } satisfies SpliceMessage,
           '*',
         );
         return;
@@ -40,6 +55,7 @@ export default defineContentScript({
 
       // Forward JSON-RPC requests to the background script
       if (msg.type === WalletEvent.SPLICE_WALLET_REQUEST) {
+        if (!shouldHandle(msg.target)) return;
         try {
           const response = await chrome.runtime.sendMessage(msg);
           if (response && isSpliceMessage(response)) {
@@ -53,6 +69,7 @@ export default defineContentScript({
 
       // Forward UI open requests to the background script
       if (msg.type === WalletEvent.SPLICE_WALLET_EXT_OPEN) {
+        if (!shouldHandle(msg.target)) return;
         try {
           await chrome.runtime.sendMessage(msg);
         } catch {

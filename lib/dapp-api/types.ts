@@ -14,6 +14,13 @@ export enum WalletEvent {
   SPLICE_WALLET_EXT_READY = 'SPLICE_WALLET_EXT_READY',
   SPLICE_WALLET_EXT_ACK = 'SPLICE_WALLET_EXT_ACK',
   SPLICE_WALLET_EXT_OPEN = 'SPLICE_WALLET_EXT_OPEN',
+  // Auth flow envelopes — accepted/parsed but unused (Ginkgo holds keys
+  // locally, no IdP login flow). Listed in upstream core-types/index.ts:70-81.
+  SPLICE_WALLET_IDP_AUTH_SUCCESS = 'SPLICE_WALLET_IDP_AUTH_SUCCESS',
+  SPLICE_WALLET_LOGOUT = 'SPLICE_WALLET_LOGOUT',
+  // Ginkgo extension — wallet→dApp event channel (not in upstream spec).
+  // Used by entrypoints/background/handlers/event-broadcaster.ts to push
+  // statusChanged/accountsChanged. Documented as a Ginkgo deviation.
   SPLICE_WALLET_EVENT = 'SPLICE_WALLET_EVENT',
 }
 
@@ -46,12 +53,21 @@ export type JsonRpcResponse = JsonRpcSuccessResponse | JsonRpcErrorResponse;
 
 // -- SpliceMessage discriminated union --
 
+/**
+ * `target` is an optional routing key set by the dApp when multiple Canton
+ * wallet extensions are installed. Per upstream convention (splice-wallet-kernel
+ * content-script.ts), wallets compare it to their own chrome.runtime.id and
+ * ignore messages whose target doesn't match. EXT_ACK echoes the target back
+ * so dApps can correlate which wallet replied.
+ */
 export type SpliceMessage =
-  | { type: WalletEvent.SPLICE_WALLET_REQUEST; request: JsonRpcRequest }
+  | { type: WalletEvent.SPLICE_WALLET_REQUEST; request: JsonRpcRequest; target?: string }
   | { type: WalletEvent.SPLICE_WALLET_RESPONSE; response: JsonRpcResponse }
-  | { type: WalletEvent.SPLICE_WALLET_EXT_READY }
-  | { type: WalletEvent.SPLICE_WALLET_EXT_ACK }
-  | { type: WalletEvent.SPLICE_WALLET_EXT_OPEN; url: string }
+  | { type: WalletEvent.SPLICE_WALLET_EXT_READY; target?: string }
+  | { type: WalletEvent.SPLICE_WALLET_EXT_ACK; target?: string }
+  | { type: WalletEvent.SPLICE_WALLET_EXT_OPEN; url: string; target?: string }
+  | { type: WalletEvent.SPLICE_WALLET_IDP_AUTH_SUCCESS; token: string; sessionId: string }
+  | { type: WalletEvent.SPLICE_WALLET_LOGOUT }
   | { type: WalletEvent.SPLICE_WALLET_EVENT; event: string; data: unknown };
 
 export type SpliceMessageEvent = MessageEvent<SpliceMessage>;
