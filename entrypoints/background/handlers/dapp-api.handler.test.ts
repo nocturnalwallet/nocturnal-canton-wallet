@@ -25,6 +25,7 @@ vi.mock('@lib/network', () => ({
       faucetEnabled: true,
     },
   },
+  toCaip2NetworkId: (id: string) => `canton:${id}`,
 }));
 
 vi.mock('../gateway-facade-client', () => ({
@@ -277,5 +278,40 @@ describe('prepareExecute / prepareExecuteAndWait — CIP-0103 result shapes', ()
       updateId: 'tx-update-id',
       completionOffset: 42,
     });
+  });
+});
+
+describe('Network shape conformance — CIP-0103', () => {
+  const { publicKey, privateKey } = createKeyPair();
+
+  beforeEach(() => {
+    setupUnlockedWallet(publicKey, privateKey);
+  });
+
+  it('getActiveNetwork emits only { networkId, ledgerApi } — no name (openrpc-dapp-api.json:791-816, additionalProperties: false)', async () => {
+    const res = await handleDappApiRequest(dappReq('getActiveNetwork', {}));
+    const network = unwrapResult<Record<string, unknown>>(res);
+    expect(Object.keys(network).sort()).toEqual(['ledgerApi', 'networkId']);
+    expect(network).not.toHaveProperty('name');
+  });
+
+  it('getActiveNetwork emits networkId in CAIP-2 form (canton:<network>)', async () => {
+    const res = await handleDappApiRequest(dappReq('getActiveNetwork', {}));
+    const { networkId } = unwrapResult<{ networkId: string }>(res);
+    expect(networkId).toBe('canton:localnet');
+    expect(networkId).toMatch(/^canton:/);
+  });
+
+  it('status.network has same shape — { networkId, ledgerApi } in CAIP-2 form, no name', async () => {
+    const res = await handleDappApiRequest(dappReq('status', {}));
+    const status = unwrapResult<{ network: Record<string, unknown> }>(res);
+    expect(Object.keys(status.network).sort()).toEqual(['ledgerApi', 'networkId']);
+    expect(status.network.networkId).toBe('canton:localnet');
+  });
+
+  it('getPrimaryAccount emits Wallet.networkId in CAIP-2 form (openrpc-dapp-api.json:874-877)', async () => {
+    const res = await handleDappApiRequest(dappReq('getPrimaryAccount', {}));
+    const account = unwrapResult<{ networkId: string }>(res);
+    expect(account.networkId).toBe('canton:localnet');
   });
 });
