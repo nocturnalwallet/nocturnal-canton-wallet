@@ -42,7 +42,12 @@ import {
 interface DappAccount {
   primary: boolean;
   partyId: string;
-  status: 'initialized' | 'allocated';
+  // CIP-0103 Wallet.status union — Ginkgo currently only writes 'allocated'
+  // but advertises 'removed' for type parity with @canton-network/dapp-sdk's
+  // Wallet type. Schema-validating SDKs reject status values outside the
+  // spec union; widening the declared type here keeps future emissions
+  // type-safe without changing runtime behavior today.
+  status: 'initialized' | 'allocated' | 'removed';
   hint: string;
   publicKey: string;
   namespace: string;

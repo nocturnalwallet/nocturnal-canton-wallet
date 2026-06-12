@@ -18,6 +18,13 @@ export default defineConfig({
       'https://*.kairo.ag/*',
       'http://localhost/*',
     ],
+    // Make the extension icon fetchable by dApp pages so multi-wallet pickers
+    // can render Ginkgo's icon from the canton:announceProvider event's
+    // `detail.icon` URL. Without this, Chrome rewrites the URL to
+    // chrome-extension://invalid/ and the picker shows a broken image.
+    web_accessible_resources: [
+      { resources: ['icon/*.png'], matches: ['<all_urls>'] },
+    ],
   },
   imports: false,
   vite: () => ({

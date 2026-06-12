@@ -13,6 +13,9 @@ import { defineContentScript } from 'wxt/utils/define-content-script';
 import {
   isSpliceMessage,
   WalletEvent,
+  CANTON_REQUEST_PROVIDER_EVENT,
+  CANTON_ANNOUNCE_PROVIDER_EVENT,
+  PROVIDER_NAME,
   type SpliceMessage,
 } from '@lib/dapp-api/types';
 
@@ -31,6 +34,25 @@ export default defineContentScript({
       if (!runtimeId) return false;
       return target === runtimeId;
     };
+
+    // Respond to provider-discovery requests with our identity. Mirrors
+    // splice-wallet-kernel/wallet-gateway/extension/src/content-script.ts:20-31.
+    // Fires every time the dApp's request event lands (the SDK may fire it
+    // multiple times during a session); cheap and idempotent on the dApp side.
+    if (runtimeId) {
+      const announce = () =>
+        window.dispatchEvent(
+          new CustomEvent(CANTON_ANNOUNCE_PROVIDER_EVENT, {
+            detail: {
+              id: runtimeId,
+              name: PROVIDER_NAME,
+              icon: chrome.runtime.getURL('icon/128.png'),
+              target: runtimeId,
+            },
+          }),
+        );
+      window.addEventListener(CANTON_REQUEST_PROVIDER_EVENT, announce);
+    }
 
     window.addEventListener('message', async (event: MessageEvent) => {
       const msg = event.data;
