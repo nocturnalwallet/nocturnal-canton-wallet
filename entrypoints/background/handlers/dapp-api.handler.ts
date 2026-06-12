@@ -25,7 +25,7 @@ import type {
   PrepareExecuteAndWaitResult,
 } from '@lib/dapp-api/gateway-types';
 import { sessionStore, localStore, networkStore } from '@lib/storage';
-import { NETWORKS } from '@lib/network';
+import { NETWORKS, toCaip2NetworkId } from '@lib/network';
 import { getCachedPrivateKey, resetAutoLockTimer } from './session.handler';
 import { APPROVAL_REQUIRED_METHODS, requestApproval } from './approval.handler';
 import {
@@ -94,7 +94,10 @@ export async function buildDappAccount(): Promise<DappAccount | null> {
     hint: hint || '',
     publicKey,
     namespace: namespace || '',
-    networkId,
+    // Wallet.networkId is a CAIP-2-compliant chain identifier per the spec
+    // schema at openrpc-dapp-api.json:874-877; we emit the converted form
+    // (e.g. `canton:devnet`), keeping the internal short ID for storage keys.
+    networkId: toCaip2NetworkId(networkId),
     signingProviderId: 'ginkgo',
   };
 }
@@ -124,13 +127,14 @@ async function handleIsConnected(): Promise<unknown> {
 async function handleGetActiveNetwork(): Promise<unknown> {
   const networkId = await networkStore.get();
   const config = NETWORKS[networkId];
-  // Field names follow CIP-0103 `Network`: `networkId` (CAIP-2-like identifier)
-  // and `ledgerApi` (URI). `name` is kept as a Ginkgo extension for UI display
-  // and is permitted under additionalProperties.
+  // CIP-0103 Network schema (openrpc-dapp-api.json:791-816) declares
+  // additionalProperties: false. The previous release emitted an extra
+  // `name` field — that was a misreading of the spec; the schema forbids
+  // additional properties. dApps that want a display name should source
+  // it from their own copy of NETWORKS or hardcode a label based on networkId.
   return {
-    networkId,
+    networkId: toCaip2NetworkId(networkId),
     ledgerApi: config.apiBaseUrl,
-    name: config.label,
   };
 }
 
@@ -171,9 +175,8 @@ async function handleStatus(): Promise<unknown> {
     },
     connection,
     network: {
-      networkId,
+      networkId: toCaip2NetworkId(networkId),
       ledgerApi: config.apiBaseUrl,
-      name: config.label,
     },
     ...(session ? { session } : {}),
   };

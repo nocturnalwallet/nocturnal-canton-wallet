@@ -12,9 +12,10 @@ export interface NetworkConfig {
 export const NETWORKS: Record<NetworkId, NetworkConfig> = {
   localnet: {
     id: 'localnet',
-    label: 'Localnet',
+    label: 'Local Devnet',
     apiBaseUrl: 'http://localhost:3003/',
-    explorerUrl: '',
+    // apiBaseUrl: 'http://192.168.0.108:3003/',
+    explorerUrl: 'https://lighthouse.devnet.cantonloop.com',
     faucetEnabled: true,
   },
   devnet: {
@@ -43,3 +44,17 @@ export const NETWORKS: Record<NetworkId, NetworkConfig> = {
 export const DEFAULT_NETWORK: NetworkId = 'devnet';
 
 export const NETWORK_IDS = Object.keys(NETWORKS) as NetworkId[];
+
+/**
+ * Convert an internal NetworkId to a CAIP-2-compliant identifier for the
+ * CIP-0103 dApp API surface. The canonical Network schema mandates a CAIP-2
+ * chain ID like `canton:da-mainnet` (openrpc-dapp-api.json:791-816). Internal
+ * wallet code keeps the bare ID (`'localnet'`, `'devnet'`, ...) because it's
+ * embedded in chrome.storage.local keys, React Query cache keys, popup state,
+ * and the user-facing network picker — changing the internal form would force
+ * a storage migration for every installed user. We convert only at the dApp
+ * API boundary (handleGetActiveNetwork, handleStatus.network, buildDappAccount).
+ */
+export function toCaip2NetworkId(id: NetworkId): string {
+  return `canton:${id}`;
+}
