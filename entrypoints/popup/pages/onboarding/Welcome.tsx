@@ -48,6 +48,16 @@ export function Welcome({ onSuccess }: Props) {
     await switchNetwork(id);
   };
 
+  const doAuth = async () => {
+    setError('');
+    try {
+      const data = await googleAuth.mutateAsync();
+      onSuccess(data);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Sign in failed');
+    }
+  };
+
   // Auto-trigger auth when opened in an onboarding tab with ?action=sign-in
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -59,17 +69,8 @@ export function Welcome({ onSuccess }: Props) {
       window.history.replaceState({}, '', window.location.pathname + (qs ? `?${qs}` : ''));
       doAuth();
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- intentional one-time trigger
-
-  const doAuth = async () => {
-    setError('');
-    try {
-      const data = await googleAuth.mutateAsync();
-      onSuccess(data);
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Sign in failed');
-    }
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional one-time trigger
+  }, []);
 
   const handleGoogleSignIn = async () => {
     if (isOnboardingTab()) {
@@ -93,18 +94,18 @@ export function Welcome({ onSuccess }: Props) {
   };
 
   return (
-    <div className="flex flex-col items-center justify-between h-full p-6 bg-background">
-      <div className="flex-1 flex flex-col items-center justify-center gap-6">
-        <IconLogo className="w-20 h-20" />
-        <h1 className="text-2xl font-bold text-foreground">Ginkgo</h1>
-        <p className="text-sm text-muted-foreground text-center">
+    <div className="bg-background flex h-full flex-col items-center justify-between p-6">
+      <div className="flex flex-1 flex-col items-center justify-center gap-6">
+        <IconLogo className="h-20 w-20" />
+        <h1 className="text-foreground text-2xl font-bold">Ginkgo</h1>
+        <p className="text-muted-foreground text-center text-sm">
           Securely manage your Canton Network tokens
         </p>
       </div>
 
       <div className="w-full space-y-3">
         {error && (
-          <p className="text-sm text-destructive text-center">{error}</p>
+          <p className="text-destructive text-center text-sm">{error}</p>
         )}
 
         {/* Network selector */}
@@ -112,28 +113,28 @@ export function Welcome({ onSuccess }: Props) {
           <button
             onClick={() => setNetworkOpen(!networkOpen)}
             disabled={isSwitching}
-            className="w-full flex items-center justify-center gap-2 rounded-xl border border-primary/30 bg-primary/5 py-2.5 px-4 text-sm font-medium text-foreground/70 hover:bg-primary/10 transition-colors disabled:opacity-50"
+            className="border-primary/30 bg-primary/5 text-foreground/70 hover:bg-primary/10 flex w-full items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-medium transition-colors disabled:opacity-50"
           >
-            <span className={`w-2 h-2 rounded-full ${network ? NETWORK_DOT_COLORS[network] : 'bg-gray-400'}`} />
+            <span className={`h-2 w-2 rounded-full ${network ? NETWORK_DOT_COLORS[network] : 'bg-gray-400'}`} />
             {network ? NETWORKS[network].label : '...'}
-            <ChevronDownIcon className="w-3.5 h-3.5" />
+            <ChevronDownIcon className="h-3.5 w-3.5" />
           </button>
 
           {networkOpen && (
-            <div className="absolute left-0 right-0 bottom-full mb-1 z-50 rounded-lg border border-primary/20 bg-card shadow-lg shadow-black/30">
+            <div className="border-primary/20 bg-card absolute right-0 bottom-full left-0 z-50 mb-1 rounded-lg border shadow-lg shadow-black/30">
               {NETWORK_IDS.map((id) => (
                 <button
                   key={id}
                   onClick={() => handleSwitchNetwork(id)}
-                  className={`w-full flex items-center gap-2 px-3 py-2 text-sm transition-colors first:rounded-t-lg last:rounded-b-lg ${
+                  className={`flex w-full items-center gap-2 px-3 py-2 text-sm transition-colors first:rounded-t-lg last:rounded-b-lg ${
                     id === network
                       ? 'bg-primary/10 text-foreground font-medium'
                       : 'text-muted-foreground hover:bg-primary/5 hover:text-foreground'
                   }`}
                 >
-                  <span className={`w-2 h-2 rounded-full ${NETWORK_DOT_COLORS[id]}`} />
+                  <span className={`h-2 w-2 rounded-full ${NETWORK_DOT_COLORS[id]}`} />
                   {NETWORKS[id].label}
-                  {id === network && <span className="ml-auto text-primary">&#10003;</span>}
+                  {id === network && <span className="text-primary ml-auto">&#10003;</span>}
                 </button>
               ))}
             </div>
@@ -143,12 +144,12 @@ export function Welcome({ onSuccess }: Props) {
         <button
           onClick={handleGoogleSignIn}
           disabled={googleAuth.isPending || isSwitching}
-          className="w-full flex items-center justify-center gap-3 rounded-xl bg-white text-black py-3 px-4 font-medium hover:bg-gray-100 disabled:opacity-50 transition-colors"
+          className="flex w-full items-center justify-center gap-3 rounded-xl bg-white px-4 py-3 font-medium text-black transition-colors hover:bg-gray-100 disabled:opacity-50"
         >
           {googleAuth.isPending ? (
-            <div className="animate-spin rounded-full h-5 w-5 border-2 border-gray-400 border-t-transparent" />
+            <div className="h-5 w-5 animate-spin rounded-full border-2 border-gray-400 border-t-transparent" />
           ) : (
-            <IconGoogle className="w-5 h-5" />
+            <IconGoogle className="h-5 w-5" />
           )}
           {googleAuth.isPending ? 'Signing in…' : 'Sign in with Google'}
         </button>

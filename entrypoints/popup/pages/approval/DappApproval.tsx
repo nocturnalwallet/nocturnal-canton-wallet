@@ -53,22 +53,22 @@ export function DappApproval({ requestId }: Props) {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full bg-background">
-        <Loader2Icon className="w-6 h-6 animate-spin text-primary" />
+      <div className="bg-background flex h-full items-center justify-center">
+        <Loader2Icon className="text-primary h-6 w-6 animate-spin" />
       </div>
     );
   }
 
   if (error || !details) {
     return (
-      <div className="flex flex-col items-center justify-center h-full bg-background p-6 gap-4">
-        <XIcon className="w-10 h-10 text-destructive" />
-        <p className="text-sm text-muted-foreground text-center">
+      <div className="bg-background flex h-full flex-col items-center justify-center gap-4 p-6">
+        <XIcon className="text-destructive h-10 w-10" />
+        <p className="text-muted-foreground text-center text-sm">
           {error || 'Approval request expired or not found.'}
         </p>
         <button
           onClick={() => window.close()}
-          className="text-sm text-primary hover:underline"
+          className="text-primary text-sm hover:underline"
         >
           Close
         </button>
@@ -83,29 +83,29 @@ export function DappApproval({ requestId }: Props) {
   const MethodIcon = methodInfo.icon;
 
   return (
-    <div className="flex flex-col h-full bg-background">
+    <div className="bg-background flex h-full flex-col">
       {/* Header */}
-      <div className="flex items-center justify-center gap-2 p-4 border-b border-border">
-        <IconLogo className="w-10 h-10" />
+      <div className="border-border flex items-center justify-center gap-2 border-b p-4">
+        <IconLogo className="h-10 w-10" />
       </div>
 
       {/* Content */}
-      <div className="flex-1 flex flex-col items-center gap-4 p-6 overflow-y-auto">
-        <div className="rounded-full bg-primary/10 p-3 shrink-0">
-          <MethodIcon className="w-6 h-6 text-primary" />
+      <div className="flex flex-1 flex-col items-center gap-4 overflow-y-auto p-6">
+        <div className="bg-primary/10 shrink-0 rounded-full p-3">
+          <MethodIcon className="text-primary h-6 w-6" />
         </div>
 
-        <div className="text-center space-y-1">
-          <h1 className="text-lg font-bold text-foreground">{methodInfo.label} Request</h1>
-          <p className="text-sm text-muted-foreground">
-            A dApp is requesting permission to <span className="font-medium text-foreground">{methodInfo.label.toLowerCase()}</span>
+        <div className="space-y-1 text-center">
+          <h1 className="text-foreground text-lg font-bold">{methodInfo.label} Request</h1>
+          <p className="text-muted-foreground text-sm">
+            A dApp is requesting permission to <span className="text-foreground font-medium">{methodInfo.label.toLowerCase()}</span>
           </p>
         </div>
 
         {/* Origin */}
-        <div className="w-full rounded-lg bg-secondary px-4 py-3">
-          <p className="text-xs text-muted-foreground mb-1">Origin</p>
-          <p className="text-sm font-medium text-foreground truncate">{details.origin}</p>
+        <div className="bg-secondary w-full rounded-lg px-4 py-3">
+          <p className="text-muted-foreground mb-1 text-xs">Origin</p>
+          <p className="text-foreground truncate text-sm font-medium">{details.origin}</p>
         </div>
 
         {/* Parameters preview (for sign methods) */}
@@ -115,9 +115,9 @@ export function DappApproval({ requestId }: Props) {
               ? details.params
               : JSON.stringify(details.params, null, 2);
           return (
-            <div className="w-full rounded-lg bg-secondary px-4 py-3">
-              <p className="text-xs text-muted-foreground mb-1">Parameters</p>
-              <pre className="text-xs text-foreground overflow-auto max-h-24 whitespace-pre-wrap break-all">
+            <div className="bg-secondary w-full rounded-lg px-4 py-3">
+              <p className="text-muted-foreground mb-1 text-xs">Parameters</p>
+              <pre className="text-foreground max-h-24 overflow-auto text-xs break-all whitespace-pre-wrap">
                 {paramsText}
               </pre>
             </div>
@@ -126,14 +126,14 @@ export function DappApproval({ requestId }: Props) {
       </div>
 
       {/* Actions — always pinned to bottom */}
-      <div className="shrink-0 px-4 pt-3 pb-5 space-y-2 border-t border-border">
+      <div className="border-border shrink-0 space-y-2 border-t px-4 pt-3 pb-5">
         <button
           onClick={() => handleResult(true)}
           disabled={submitting}
-          className="w-full rounded-xl bg-primary text-primary-foreground py-3 font-medium disabled:opacity-40 transition-opacity"
+          className="bg-primary text-primary-foreground w-full rounded-xl py-3 font-medium transition-opacity disabled:opacity-40"
         >
           {submitting ? (
-            <Loader2Icon className="w-5 h-5 animate-spin mx-auto" />
+            <Loader2Icon className="mx-auto h-5 w-5 animate-spin" />
           ) : (
             'Approve'
           )}
@@ -141,7 +141,7 @@ export function DappApproval({ requestId }: Props) {
         <button
           onClick={() => handleResult(false)}
           disabled={submitting}
-          className="w-full rounded-xl bg-secondary text-foreground py-3 font-medium disabled:opacity-40 transition-opacity hover:bg-secondary/80"
+          className="bg-secondary text-foreground hover:bg-secondary/80 w-full rounded-xl py-3 font-medium transition-opacity disabled:opacity-40"
         >
           Reject
         </button>

@@ -1,4 +1,3 @@
-import { useCallback } from 'react';
 import { sendMessage } from '@lib/messaging';
 import { MSG } from '@lib/messaging';
 import type { AuthStateData, GoogleAuthData } from '@lib/messaging';

@@ -26,54 +26,56 @@ export function CreatePassword({ onNext, onReset, isLocalnet }: Props) {
   const canProceed = allRulesPassed && passwordsMatch;
 
   return (
-    <div className="flex flex-col h-full p-6 bg-background">
-      <h1 className="text-xl font-bold text-foreground mb-2">Create Password</h1>
-      <p className="text-sm text-muted-foreground mb-6">
+    <div className="bg-background flex h-full flex-col p-6">
+      <h1 className="text-foreground mb-2 text-xl font-bold">Create Password</h1>
+      <p className="text-muted-foreground mb-6 text-sm">
         This password encrypts your private key locally.
       </p>
 
-      <div className="space-y-4 flex-1">
+      <div className="flex-1 space-y-4">
         <div>
-          <label className="text-sm text-muted-foreground">Password</label>
+          <label htmlFor="cp-password" className="text-muted-foreground text-sm">Password</label>
           <div className="relative mt-1">
             <input
+              id="cp-password"
               type={showPassword ? 'text' : 'password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-lg border border-primary/20 bg-primary/5 text-foreground px-4 py-3 pr-10 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+              className="border-primary/20 bg-primary/5 text-foreground focus:border-primary focus:ring-primary w-full rounded-lg border px-4 py-3 pr-10 text-sm outline-none focus:ring-1"
               placeholder="Enter password"
             />
             <button
               type="button"
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+              className="text-muted-foreground absolute top-1/2 right-3 -translate-y-1/2"
               onClick={() => setShowPassword(!showPassword)}
             >
-              {showPassword ? <EyeOffIcon className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />}
+              {showPassword ? <EyeOffIcon className="h-4 w-4" /> : <EyeIcon className="h-4 w-4" />}
             </button>
           </div>
         </div>
 
         <div>
-          <label className="text-sm text-muted-foreground">Confirm Password</label>
+          <label htmlFor="cp-confirm" className="text-muted-foreground text-sm">Confirm Password</label>
           <div className="relative mt-1">
             <input
+              id="cp-confirm"
               type={showConfirm ? 'text' : 'password'}
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
-              className="w-full rounded-lg border border-primary/20 bg-primary/5 text-foreground px-4 py-3 pr-10 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+              className="border-primary/20 bg-primary/5 text-foreground focus:border-primary focus:ring-primary w-full rounded-lg border px-4 py-3 pr-10 text-sm outline-none focus:ring-1"
               placeholder="Confirm password"
             />
             <button
               type="button"
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+              className="text-muted-foreground absolute top-1/2 right-3 -translate-y-1/2"
               onClick={() => setShowConfirm(!showConfirm)}
             >
-              {showConfirm ? <EyeOffIcon className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />}
+              {showConfirm ? <EyeOffIcon className="h-4 w-4" /> : <EyeIcon className="h-4 w-4" />}
             </button>
           </div>
           {confirm && !passwordsMatch && (
-            <div className="flex gap-2 items-center rounded-lg bg-red-500/10 border border-red-500/30 px-3 py-2 mt-1">
-              <AlertTriangleIcon className="w-4 h-4 text-red-400 shrink-0" />
+            <div className="mt-1 flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2">
+              <AlertTriangleIcon className="h-4 w-4 shrink-0 text-red-400" />
               <p className="text-sm text-red-400">Passwords do not match</p>
             </div>
           )}
@@ -82,7 +84,7 @@ export function CreatePassword({ onNext, onReset, isLocalnet }: Props) {
         <div className="space-y-1">
           {PASSWORD_RULES.map((rule) => (
             <div key={rule.label} className="flex items-center gap-2 text-xs">
-              <div className={`w-1.5 h-1.5 rounded-full ${rule.test(password) ? 'bg-positive' : 'bg-muted-foreground'}`} />
+              <div className={`h-1.5 w-1.5 rounded-full ${rule.test(password) ? 'bg-positive' : 'bg-muted-foreground'}`} />
               <span className={rule.test(password) ? 'text-positive' : 'text-muted-foreground'}>
                 {rule.label}
               </span>
@@ -94,16 +96,16 @@ export function CreatePassword({ onNext, onReset, isLocalnet }: Props) {
       <button
         onClick={() => canProceed && onNext(password)}
         disabled={!canProceed}
-        className="w-full rounded-xl bg-primary text-primary-foreground py-3 font-medium disabled:opacity-40 transition-opacity"
+        className="bg-primary text-primary-foreground w-full rounded-xl py-3 font-medium transition-opacity disabled:opacity-40"
       >
         Continue
       </button>
 
       <button
         onClick={onReset}
-        className="w-full flex items-center justify-center gap-1.5 mt-2 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+        className="text-muted-foreground hover:text-foreground mt-2 flex w-full items-center justify-center gap-1.5 py-2 text-sm transition-colors"
       >
-        <LogOutIcon className="w-3.5 h-3.5" />
+        <LogOutIcon className="h-3.5 w-3.5" />
         Sign out & reset
       </button>
     </div>

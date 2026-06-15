@@ -1,5 +1,3 @@
-import type { SessionData } from './schemas';
-
 export interface SessionStorageSchema {
   authToken: string | null;
   refreshToken: string | null;

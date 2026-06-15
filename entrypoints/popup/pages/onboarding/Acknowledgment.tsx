@@ -23,31 +23,31 @@ export function Acknowledgment({ onNext, onBack, isLocalnet }: Props) {
   };
 
   return (
-    <div className="flex flex-col h-full p-6 bg-background">
-      <button onClick={onBack} className="flex items-center gap-1 text-sm text-muted-foreground mb-4">
-        <ArrowLeftIcon className="w-4 h-4" /> Back
+    <div className="bg-background flex h-full flex-col p-6">
+      <button onClick={onBack} className="text-muted-foreground mb-4 flex items-center gap-1 text-sm">
+        <ArrowLeftIcon className="h-4 w-4" /> Back
       </button>
 
-      <h1 className="text-xl font-bold text-foreground mb-2">Security Acknowledgment</h1>
-      <p className="text-sm text-muted-foreground mb-6">
+      <h1 className="text-foreground mb-2 text-xl font-bold">Security Acknowledgment</h1>
+      <p className="text-muted-foreground mb-6 text-sm">
         Please confirm you understand the following.
       </p>
 
-      <div className="space-y-4 flex-1">
+      <div className="flex-1 space-y-4">
         {CHECKS.map((text, i) => (
           <button
             key={i}
             onClick={() => toggle(i)}
-            className="w-full flex items-start gap-3 text-left rounded-xl bg-secondary p-4 hover:bg-accent transition-colors"
+            className="bg-secondary hover:bg-accent flex w-full items-start gap-3 rounded-xl p-4 text-left transition-colors"
           >
             <div
-              className={`mt-0.5 flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
+              className={`mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded border-2 transition-colors ${
                 checked[i] ? 'bg-primary border-primary' : 'border-muted-foreground'
               }`}
             >
-              {checked[i] && <CheckIcon className="w-3 h-3 text-primary-foreground" />}
+              {checked[i] && <CheckIcon className="text-primary-foreground h-3 w-3" />}
             </div>
-            <span className="text-sm text-foreground">{text}</span>
+            <span className="text-foreground text-sm">{text}</span>
           </button>
         ))}
       </div>
@@ -55,7 +55,7 @@ export function Acknowledgment({ onNext, onBack, isLocalnet }: Props) {
       <button
         onClick={onNext}
         disabled={!allChecked}
-        className="w-full rounded-xl bg-primary text-primary-foreground py-3 font-medium disabled:opacity-40 transition-opacity"
+        className="bg-primary text-primary-foreground w-full rounded-xl py-3 font-medium transition-opacity disabled:opacity-40"
       >
         Continue
       </button>

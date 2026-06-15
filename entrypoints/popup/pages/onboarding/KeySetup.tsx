@@ -49,47 +49,47 @@ export function KeySetup({ existingPublicKey, partyStatus, onNext, onBack }: Pro
 
   if (mode === 'import') {
     return (
-      <div className="flex flex-col h-full p-6 bg-background">
+      <div className="bg-background flex h-full flex-col p-6">
         <button
           onClick={() => (isExistingUser ? onBack() : setMode('choose'))}
-          className="flex items-center gap-1 text-sm text-muted-foreground mb-4"
+          className="text-muted-foreground mb-4 flex items-center gap-1 text-sm"
         >
-          <ArrowLeftIcon className="w-4 h-4" /> Back
+          <ArrowLeftIcon className="h-4 w-4" /> Back
         </button>
 
-        <h1 className="text-xl font-bold text-foreground mb-2">Import Key</h1>
+        <h1 className="text-foreground mb-2 text-xl font-bold">Import Key</h1>
 
         {isExistingUser && (
-          <div className="flex gap-3 rounded-xl bg-amber-400/10 border border-amber-400/30 p-3 mb-4">
-            <AlertTriangleIcon className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+          <div className="mb-4 flex gap-3 rounded-xl border border-amber-400/30 bg-amber-400/10 p-3">
+            <AlertTriangleIcon className="mt-0.5 h-5 w-5 shrink-0 text-amber-400" />
             <div className="text-sm">
-              <p className="font-medium text-foreground mb-1">
+              <p className="text-foreground mb-1 font-medium">
                 This account is already onboarded
               </p>
               <p className="text-muted-foreground">
                 You must import the private key that corresponds to your existing public key. Using a different key will result in failed transactions.
               </p>
-              <p className="text-xs text-muted-foreground mt-2 font-mono break-all">
+              <p className="text-muted-foreground mt-2 font-mono text-xs break-all">
                 Public key: {existingPublicKey}
               </p>
             </div>
           </div>
         )}
 
-        <p className="text-sm text-muted-foreground mb-6">
+        <p className="text-muted-foreground mb-6 text-sm">
           Paste your existing Canton private key (Base64 or Hex).
         </p>
 
         <textarea
           value={importKey}
           onChange={(e) => setImportKey(e.target.value)}
-          className="w-full flex-1 rounded-lg border border-primary/20 bg-primary/5 text-foreground p-4 text-sm font-mono outline-none focus:border-primary focus:ring-1 focus:ring-primary resize-none"
+          className="border-primary/20 bg-primary/5 text-foreground focus:border-primary focus:ring-primary w-full flex-1 resize-none rounded-lg border p-4 font-mono text-sm outline-none focus:ring-1"
           placeholder="Paste private key here..."
         />
 
         {error && (
-          <div className="flex gap-3 rounded-xl bg-red-500/10 border border-red-500/30 p-3 mt-3">
-            <AlertTriangleIcon className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+          <div className="mt-3 flex gap-3 rounded-xl border border-red-500/30 bg-red-500/10 p-3">
+            <AlertTriangleIcon className="mt-0.5 h-5 w-5 shrink-0 text-red-400" />
             <p className="text-sm text-red-400">{error}</p>
           </div>
         )}
@@ -97,57 +97,57 @@ export function KeySetup({ existingPublicKey, partyStatus, onNext, onBack }: Pro
         <button
           onClick={handleImport}
           disabled={isLoading}
-          className="w-full mt-4 rounded-xl bg-primary text-primary-foreground py-3 font-medium disabled:opacity-40"
+          className="bg-primary text-primary-foreground mt-4 w-full rounded-xl py-3 font-medium disabled:opacity-40"
         >
-          {isLoading ? <Loader2Icon className="w-5 h-5 animate-spin mx-auto" /> : 'Import & Continue'}
+          {isLoading ? <Loader2Icon className="mx-auto h-5 w-5 animate-spin" /> : 'Import & Continue'}
         </button>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-full p-6 bg-background">
-      <button onClick={onBack} className="flex items-center gap-1 text-sm text-muted-foreground mb-4">
-        <ArrowLeftIcon className="w-4 h-4" /> Back
+    <div className="bg-background flex h-full flex-col p-6">
+      <button onClick={onBack} className="text-muted-foreground mb-4 flex items-center gap-1 text-sm">
+        <ArrowLeftIcon className="h-4 w-4" /> Back
       </button>
 
-      <h1 className="text-xl font-bold text-foreground mb-2">Key Setup</h1>
-      <p className="text-sm text-muted-foreground mb-8">
+      <h1 className="text-foreground mb-2 text-xl font-bold">Key Setup</h1>
+      <p className="text-muted-foreground mb-8 text-sm">
         Create a new key pair or import an existing one.
       </p>
 
-      <div className="space-y-4 flex-1">
+      <div className="flex-1 space-y-4">
         <button
           onClick={handleCreate}
           disabled={isLoading}
-          className="w-full flex items-center gap-4 rounded-xl bg-secondary p-4 hover:bg-accent transition-colors text-left"
+          className="bg-secondary hover:bg-accent flex w-full items-center gap-4 rounded-xl p-4 text-left transition-colors"
         >
-          <div className="rounded-lg bg-primary/20 p-3">
-            <KeyRoundIcon className="w-6 h-6 text-primary" />
+          <div className="bg-primary/20 rounded-lg p-3">
+            <KeyRoundIcon className="text-primary h-6 w-6" />
           </div>
           <div>
-            <p className="font-medium text-foreground">Create New Key</p>
-            <p className="text-xs text-muted-foreground">Generate a fresh key pair</p>
+            <p className="text-foreground font-medium">Create New Key</p>
+            <p className="text-muted-foreground text-xs">Generate a fresh key pair</p>
           </div>
         </button>
 
         <button
           onClick={() => setMode('import')}
-          className="w-full flex items-center gap-4 rounded-xl bg-secondary p-4 hover:bg-accent transition-colors text-left"
+          className="bg-secondary hover:bg-accent flex w-full items-center gap-4 rounded-xl p-4 text-left transition-colors"
         >
-          <div className="rounded-lg bg-primary/20 p-3">
-            <ImportIcon className="w-6 h-6 text-primary" />
+          <div className="bg-primary/20 rounded-lg p-3">
+            <ImportIcon className="text-primary h-6 w-6" />
           </div>
           <div>
-            <p className="font-medium text-foreground">Import Existing Key</p>
-            <p className="text-xs text-muted-foreground">Use your existing private key</p>
+            <p className="text-foreground font-medium">Import Existing Key</p>
+            <p className="text-muted-foreground text-xs">Use your existing private key</p>
           </div>
         </button>
       </div>
 
       {error && (
-        <div className="flex gap-3 rounded-xl bg-red-500/10 border border-red-500/30 p-3 mt-3">
-          <AlertTriangleIcon className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+        <div className="mt-3 flex gap-3 rounded-xl border border-red-500/30 bg-red-500/10 p-3">
+          <AlertTriangleIcon className="mt-0.5 h-5 w-5 shrink-0 text-red-400" />
           <p className="text-sm text-red-400">{error}</p>
         </div>
       )}

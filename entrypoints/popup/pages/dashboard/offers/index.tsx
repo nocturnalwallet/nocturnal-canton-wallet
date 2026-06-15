@@ -27,15 +27,15 @@ export function Offers() {
   ];
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="flex items-center border-b border-border">
+    <div className="flex h-full flex-col">
+      <div className="border-border flex items-center border-b">
         {tabs.map(({ id, label }) => (
           <button
             key={id}
             onClick={() => setTab(id)}
             className={`flex-1 py-2 text-sm font-medium transition-colors ${
               tab === id
-                ? 'text-primary border-b-2 border-primary'
+                ? 'text-primary border-primary border-b-2'
                 : 'text-muted-foreground'
             }`}
           >
@@ -45,10 +45,10 @@ export function Offers() {
         <button
           onClick={handleRefresh}
           disabled={refreshing}
-          className="px-2 py-2 text-muted-foreground hover:text-foreground transition-colors"
+          className="text-muted-foreground hover:text-foreground px-2 py-2 transition-colors"
           title="Refresh offers"
         >
-          <RefreshCwIcon className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+          <RefreshCwIcon className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
         </button>
       </div>
 

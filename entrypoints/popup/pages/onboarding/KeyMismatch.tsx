@@ -62,54 +62,54 @@ export function KeyMismatch({
   };
 
   return (
-    <div className="flex flex-col h-full p-6 bg-background">
-      <div className="flex items-center gap-2 mb-1">
-        <AlertTriangleIcon className="w-5 h-5 text-amber-400" />
-        <h1 className="text-lg font-bold text-foreground">Wallet key mismatch</h1>
+    <div className="bg-background flex h-full flex-col p-6">
+      <div className="mb-1 flex items-center gap-2">
+        <AlertTriangleIcon className="h-5 w-5 text-amber-400" />
+        <h1 className="text-foreground text-lg font-bold">Wallet key mismatch</h1>
       </div>
-      <p className="text-sm text-muted-foreground mb-4">
+      <p className="text-muted-foreground mb-4 text-sm">
         Your local signing key doesn't match the public key registered for this account on the synchronizer.
       </p>
 
-      <div className="rounded-xl border border-border/60 bg-secondary/40 p-3 mb-5 space-y-2">
-        <div className="flex items-center gap-2 text-sm text-foreground">
-          <MailIcon className="w-4 h-4 text-muted-foreground shrink-0" />
+      <div className="border-border/60 bg-secondary/40 mb-5 space-y-2 rounded-xl border p-3">
+        <div className="text-foreground flex items-center gap-2 text-sm">
+          <MailIcon className="text-muted-foreground h-4 w-4 shrink-0" />
           <span className="truncate font-mono">{email}</span>
         </div>
-        <div className="flex items-center gap-2 text-sm text-foreground">
-          <Link2Icon className="w-4 h-4 text-muted-foreground shrink-0" />
+        <div className="text-foreground flex items-center gap-2 text-sm">
+          <Link2Icon className="text-muted-foreground h-4 w-4 shrink-0" />
           <span className="truncate font-mono">{truncatePartyId(partyId)}</span>
         </div>
-        <div className="flex items-center gap-2 text-sm text-foreground">
-          <GlobeIcon className="w-4 h-4 text-muted-foreground shrink-0" />
+        <div className="text-foreground flex items-center gap-2 text-sm">
+          <GlobeIcon className="text-muted-foreground h-4 w-4 shrink-0" />
           <span>{networkLabel}</span>
         </div>
       </div>
 
-      <div className="space-y-3 mt-2 flex-1">
+      <div className="mt-2 flex-1 space-y-3">
         <button
           onClick={onSignOut}
-          className="w-full flex items-center gap-3 rounded-xl bg-secondary p-4 hover:bg-accent transition-colors text-left"
+          className="bg-secondary hover:bg-accent flex w-full items-center gap-3 rounded-xl p-4 text-left transition-colors"
         >
-          <div className="rounded-lg bg-primary/20 p-2.5">
-            <LogOutIcon className="w-5 h-5 text-primary" />
+          <div className="bg-primary/20 rounded-lg p-2.5">
+            <LogOutIcon className="text-primary h-5 w-5" />
           </div>
           <div>
-            <p className="font-medium text-foreground">Sign out</p>
-            <p className="text-xs text-muted-foreground">Use a different Google account.</p>
+            <p className="text-foreground font-medium">Sign out</p>
+            <p className="text-muted-foreground text-xs">Use a different Google account.</p>
           </div>
         </button>
 
         <button
           onClick={() => setShowConfirm(true)}
-          className="w-full flex items-center gap-3 rounded-xl bg-red-500/10 border border-red-500/30 p-4 hover:bg-red-500/15 transition-colors text-left"
+          className="flex w-full items-center gap-3 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-left transition-colors hover:bg-red-500/15"
         >
           <div className="rounded-lg bg-red-500/20 p-2.5">
-            <KeyRoundIcon className="w-5 h-5 text-red-400" />
+            <KeyRoundIcon className="h-5 w-5 text-red-400" />
           </div>
           <div>
-            <p className="font-medium text-foreground">Wipe local key and import the correct one</p>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-foreground font-medium">Wipe local key and import the correct one</p>
+            <p className="text-muted-foreground text-xs">
               Replace this device's signing key with the matching private key.
             </p>
           </div>
