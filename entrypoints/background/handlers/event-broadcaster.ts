@@ -4,45 +4,12 @@
  * Listens to chrome.storage changes for `unlocked` and `partyId` keys,
  * then broadcasts SPLICE_WALLET_EVENT messages to all tabs via
  * chrome.tabs.sendMessage. The content script relays these to the page.
+ *
+ * The StatusEvent shape is built by `buildStatusEvent()` in dapp-api.handler.ts
+ * — same builder used by the `status` method — so the two paths cannot diverge.
  */
 import { walletEvent } from '@lib/dapp-api/types';
-import { sessionStore, networkStore } from '@lib/storage';
-import { NETWORKS } from '@lib/network';
-import { buildDappAccount } from './dapp-api.handler';
-
-/**
- * Build a StatusEvent matching the extension's handleStatus() shape.
- */
-async function buildStatusEvent() {
-  const unlocked = await sessionStore.get('unlocked');
-  const partyId = await sessionStore.get('partyId');
-  const networkId = await networkStore.get();
-  const config = NETWORKS[networkId];
-  const isConnected = Boolean(unlocked && partyId);
-
-  return {
-    provider: {
-      id: 'ginkgo',
-      version: '0.2.0',
-      providerType: 'browser',
-    },
-    connection: {
-      isConnected,
-      reason: !unlocked ? 'Wallet is locked' : !partyId ? 'No party onboarded' : 'OK',
-    },
-    network: {
-      id: networkId,
-      name: config.label,
-    },
-    session: {
-      isAuthenticated: Boolean(unlocked),
-      partyId: partyId || undefined,
-    },
-    // Top-level fields for SDK compatibility
-    isConnected,
-    isNetworkConnected: true,
-  };
-}
+import { buildDappAccount, buildStatusEvent } from './dapp-api.handler';
 
 /**
  * Broadcast an event message to all open tabs.

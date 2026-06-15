@@ -138,16 +138,21 @@ async function handleGetActiveNetwork(): Promise<unknown> {
   };
 }
 
-async function handleStatus(): Promise<unknown> {
+/**
+ * Build a CIP-0103 StatusEvent matching the dApp API spec.
+ *
+ * Single source of truth for the StatusEvent shape — used by both the
+ * `status` method handler AND the event-broadcaster's `statusChanged` push.
+ * Both paths MUST emit the same shape; dApps will silently break if a
+ * status-method response disagrees with statusChanged events.
+ */
+export async function buildStatusEvent(): Promise<unknown> {
   const { unlocked, partyId, isReady } = await getWalletState();
   const networkId = await networkStore.get();
   const config = NETWORKS[networkId];
 
-  // F1: ConnectResult per spec (openrpc-dapp-api.json:712-741) requires both
-  // `isConnected` and `isNetworkConnected`. The previous handleStatus emitted
-  // only { isConnected, reason }, which schema-validating SDKs reject. Match
-  // handleConnect's shape exactly so the same ConnectResult appears in both
-  // places.
+  // ConnectResult per spec (openrpc-dapp-api.json:712-741): both isConnected
+  // and isNetworkConnected are required booleans.
   const connection = {
     isConnected: isReady,
     reason: !unlocked ? 'Wallet is locked' : !partyId ? 'No party onboarded' : 'OK',
@@ -155,12 +160,8 @@ async function handleStatus(): Promise<unknown> {
     networkReason: 'OK',
   };
 
-  // F3: Session per spec (openrpc-dapp-api.json:819-834) requires
-  // { accessToken: string, userId: string } with additionalProperties: false.
-  // The previous handleStatus emitted { isAuthenticated, partyId } — neither
-  // field is in the spec. Emit the spec shape sourced from the OAuth session
-  // when present; omit the optional `session` field entirely when the user
-  // hasn't signed in (rather than emit a half-populated object).
+  // Session per spec (openrpc-dapp-api.json:819-834): { accessToken, userId }
+  // with additionalProperties: false. Omit entirely when the user hasn't signed in.
   const authToken = await sessionStore.get('authToken');
   const user = await localStore.get('user');
   const session = authToken && user?.id
@@ -180,6 +181,10 @@ async function handleStatus(): Promise<unknown> {
     },
     ...(session ? { session } : {}),
   };
+}
+
+async function handleStatus(): Promise<unknown> {
+  return buildStatusEvent();
 }
 
 async function handleListAccounts(): Promise<DappAccount[]> {
