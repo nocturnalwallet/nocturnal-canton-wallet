@@ -49,18 +49,28 @@ Captured during implementation, code review, and final audit of the `feat/keysto
 
 ---
 
-## D. Suggested grouping if filing tickets
+## D. UX issues surfaced during smoke testing
+
+Issues observed when smoke-testing subsequent work against the merged feature. Pre-existing — not introduced by `feat/keystore-mismatch-recovery` — but documenting here because the recovery flow shares the same code paths.
+
+| # | Item | Where it came up | Effort |
+|---|------|------------------|--------|
+| D1 | **Onboarding tab closes after OAuth for already-onboarded users** — when a user with a complete keystore signs in via Google in the full onboarding tab, the tab calls `window.close()` (`entrypoints/popup/App.tsx:144`, branch `IS_ONBOARDING_TAB && onboardingComplete && !postWipeRecovery`). The user must then click the extension icon to open the smaller popup and enter their password. UX is jarring — they just authed in a full tab, then have to chase the popup to unlock. Options: (a) keep the tab open and render `<Unlock>` inline; (b) auto-open the popup programmatically after closing the tab; (c) only close the tab on first-time setup, not on re-auth. | Smoke test of `chore/eslint-setup` against the unlock + dashboard flow (2026-06-10). | S–M |
+
+---
+
+## E. Suggested grouping if filing tickets
 
 1. **Mismatch recovery polish** — A1, A2, A6 (UX additions, small).
 2. **Mismatch detection on popup open** — A4 (needs design: refetch cadence, debouncing, idle handling).
-3. **App.tsx state-machine hardening** — B1, B6, B7, B10 (cohesive cleanup of the popup root component).
+3. **App.tsx state-machine hardening** — B1, B6, B7, B10, D1 (cohesive cleanup of the popup root component — D1 also lives in `App.tsx`).
 4. **Crypto hardening** — C2, C3 (needs careful migration plan).
 5. **Repo hygiene** — C1, B8 (low effort, broad benefit).
 6. **Test coverage gaps** — B3, B4, B5, B9, C4.
 
 ---
 
-## E. Out of scope for this list
+## F. Out of scope for this list
 
 Things that came up but aren't worth tracking:
 
