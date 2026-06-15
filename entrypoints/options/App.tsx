@@ -18,9 +18,9 @@ function App() {
   ];
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="max-w-3xl mx-auto py-8 px-6">
-        <h1 className="text-2xl font-bold text-foreground mb-8">Ginkgo Settings</h1>
+    <div className="bg-background min-h-screen">
+      <div className="mx-auto max-w-3xl px-6 py-8">
+        <h1 className="text-foreground mb-8 text-2xl font-bold">Ginkgo Settings</h1>
 
         <div className="flex gap-6">
           {/* Sidebar */}
@@ -29,13 +29,13 @@ function App() {
               <button
                 key={id}
                 onClick={() => setSection(id)}
-                className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
+                className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${
                   section === id
                     ? 'bg-primary text-primary-foreground'
                     : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
                 }`}
               >
-                <Icon className="w-4 h-4" />
+                <Icon className="h-4 w-4" />
                 {label}
               </button>
             ))}
@@ -118,39 +118,40 @@ function ExportKeySection() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-semibold text-foreground mb-1">Export Private Key</h2>
-        <p className="text-sm text-muted-foreground">
+        <h2 className="text-foreground mb-1 text-lg font-semibold">Export Private Key</h2>
+        <p className="text-muted-foreground text-sm">
           Enter your wallet password to decrypt and view your private key. Never share your private key with anyone.
         </p>
       </div>
 
-      <div className="rounded-xl bg-secondary p-4 space-y-4">
+      <div className="bg-secondary space-y-4 rounded-xl p-4">
         <div className="space-y-2">
-          <label className="text-sm font-medium text-foreground">Wallet Password</label>
+          <label htmlFor="export-password" className="text-foreground text-sm font-medium">Wallet Password</label>
           <div className="flex gap-2">
             <input
+              id="export-password"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleExport()}
-              className="flex-1 rounded-lg bg-background text-foreground px-3 py-2 text-sm outline-none border border-border focus:border-primary"
+              className="bg-background text-foreground border-border focus:border-primary flex-1 rounded-lg border px-3 py-2 text-sm outline-none"
               placeholder="Enter your password"
             />
             <button
               onClick={handleExport}
               disabled={!password || loading}
-              className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-medium disabled:opacity-40"
+              className="bg-primary text-primary-foreground rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-40"
             >
-              {loading ? <Loader2Icon className="w-4 h-4 animate-spin" /> : 'Decrypt'}
+              {loading ? <Loader2Icon className="h-4 w-4 animate-spin" /> : 'Decrypt'}
             </button>
           </div>
-          {error && <p className="text-xs text-destructive">{error}</p>}
+          {error && <p className="text-destructive text-xs">{error}</p>}
         </div>
 
         {privateKey && (
-          <div className="space-y-3 pt-3 border-t border-border">
+          <div className="border-border space-y-3 border-t pt-3">
             {/* Format toggle */}
-            <div className="flex rounded-md bg-background p-0.5 w-48">
+            <div className="bg-background flex w-48 rounded-md p-0.5">
               <button
                 onClick={() => setKeyFormat('base64')}
                 className={`flex-1 rounded py-1 text-xs font-medium transition-colors ${
@@ -172,28 +173,28 @@ function ExportKeySection() {
                 Hex
               </button>
             </div>
-            <div className="rounded-lg bg-background p-3">
-              <p className="text-sm font-mono break-all text-foreground">
+            <div className="bg-background rounded-lg p-3">
+              <p className="text-foreground font-mono text-sm break-all">
                 {revealed ? displayKey : '\u2022'.repeat(Math.min(displayKey.length, 60))}
               </p>
             </div>
             <div className="flex gap-3">
               <button
                 onClick={() => setRevealed(!revealed)}
-                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-xs"
               >
-                {revealed ? <EyeOffIcon className="w-3.5 h-3.5" /> : <EyeIcon className="w-3.5 h-3.5" />}
+                {revealed ? <EyeOffIcon className="h-3.5 w-3.5" /> : <EyeIcon className="h-3.5 w-3.5" />}
                 {revealed ? 'Hide' : 'Reveal'}
               </button>
               <button
                 onClick={handleCopy}
-                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-xs"
               >
-                {copied ? <CheckIcon className="w-3.5 h-3.5 text-positive" /> : <CopyIcon className="w-3.5 h-3.5" />}
+                {copied ? <CheckIcon className="text-positive h-3.5 w-3.5" /> : <CopyIcon className="h-3.5 w-3.5" />}
                 {copied ? 'Copied' : 'Copy'}
               </button>
             </div>
-            <p className="text-xs text-destructive">
+            <p className="text-destructive text-xs">
               Warning: Anyone with access to this key can steal your funds. Store it in a secure, offline location.
             </p>
           </div>
@@ -209,16 +210,16 @@ function EncryptionSection() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-semibold text-foreground mb-1">Encryption Info</h2>
-        <p className="text-sm text-muted-foreground">
+        <h2 className="text-foreground mb-1 text-lg font-semibold">Encryption Info</h2>
+        <p className="text-muted-foreground text-sm">
           Details about how your private key is encrypted and stored.
         </p>
       </div>
 
-      <div className="rounded-xl bg-secondary p-4 space-y-4">
+      <div className="bg-secondary space-y-4 rounded-xl p-4">
         <div>
-          <p className="text-xs text-muted-foreground mb-1">Active Backend</p>
-          <p className="text-sm font-medium text-foreground uppercase">{backend}</p>
+          <p className="text-muted-foreground mb-1 text-xs">Active Backend</p>
+          <p className="text-foreground text-sm font-medium uppercase">{backend}</p>
         </div>
 
         {backend === 'webcrypto' ? (
@@ -274,8 +275,8 @@ function EncryptionSection() {
         )}
       </div>
 
-      <div className="rounded-xl bg-secondary p-4 space-y-2">
-        <p className="text-sm font-medium text-foreground">Storage</p>
+      <div className="bg-secondary space-y-2 rounded-xl p-4">
+        <p className="text-foreground text-sm font-medium">Storage</p>
         <div className="space-y-2 text-sm">
           <div className="flex justify-between">
             <span className="text-muted-foreground">Encrypted Key</span>
@@ -315,13 +316,13 @@ function AboutSection() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-semibold text-foreground mb-1">About Ginkgo</h2>
-        <p className="text-sm text-muted-foreground">
+        <h2 className="text-foreground mb-1 text-lg font-semibold">About Ginkgo</h2>
+        <p className="text-muted-foreground text-sm">
           A secure browser extension wallet for the Canton Network.
         </p>
       </div>
 
-      <div className="rounded-xl bg-secondary p-4 space-y-2 text-sm">
+      <div className="bg-secondary space-y-2 rounded-xl p-4 text-sm">
         <div className="flex justify-between">
           <span className="text-muted-foreground">Version</span>
           <span className="text-foreground">{version}</span>
@@ -332,7 +333,7 @@ function AboutSection() {
         </div>
         <div className="flex justify-between">
           <span className="text-muted-foreground">API</span>
-          <span className="text-foreground truncate max-w-[280px]">
+          <span className="text-foreground max-w-[280px] truncate">
             {apiUrl}
           </span>
         </div>

@@ -29,22 +29,22 @@ export function Unlock({ onSuccess, onLogout }: Props) {
   };
 
   return (
-    <div className="flex flex-col items-center justify-between h-full p-6 bg-background">
-      <div className="flex-1 flex flex-col items-center justify-center gap-4">
-        <IconLogo className="w-16 h-16" />
-        <div className="rounded-full bg-secondary p-4">
-          <LockIcon className="w-8 h-8 text-primary" />
+    <div className="bg-background flex h-full flex-col items-center justify-between p-6">
+      <div className="flex flex-1 flex-col items-center justify-center gap-4">
+        <IconLogo className="h-16 w-16" />
+        <div className="bg-secondary rounded-full p-4">
+          <LockIcon className="text-primary h-8 w-8" />
         </div>
-        <h1 className="text-xl font-bold text-foreground">Wallet Locked</h1>
-        <p className="text-sm text-muted-foreground text-center">
+        <h1 className="text-foreground text-xl font-bold">Wallet Locked</h1>
+        <p className="text-muted-foreground text-center text-sm">
           Enter your password to unlock
         </p>
         {authState?.user?.email && (
-          <div className="flex items-center gap-2 rounded-lg bg-secondary px-3 py-1.5 mt-1">
-            <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center text-xs font-bold text-primary shrink-0">
+          <div className="bg-secondary mt-1 flex items-center gap-2 rounded-lg px-3 py-1.5">
+            <div className="bg-primary/20 text-primary flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold">
               {authState.user.email[0].toUpperCase()}
             </div>
-            <p className="text-sm font-medium text-foreground truncate">
+            <p className="text-foreground truncate text-sm font-medium">
               {authState.user.email}
             </p>
           </div>
@@ -52,7 +52,7 @@ export function Unlock({ onSuccess, onLogout }: Props) {
       </div>
 
       <div className="w-full space-y-3">
-        {error && <p className="text-sm text-destructive text-center">{error}</p>}
+        {error && <p className="text-destructive text-center text-sm">{error}</p>}
 
         <div className="relative">
           <input
@@ -60,26 +60,30 @@ export function Unlock({ onSuccess, onLogout }: Props) {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleUnlock()}
-            className="w-full rounded-lg border border-primary/20 bg-primary/5 text-foreground px-4 py-3 pr-10 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+            className="border-primary/20 bg-primary/5 text-foreground focus:border-primary focus:ring-primary w-full rounded-lg border px-4 py-3 pr-10 text-sm outline-none focus:ring-1"
             placeholder="Enter password"
+            // The unlock screen is the only thing on screen; autofocusing the
+            // password input lets users type immediately. Keyboard users still
+            // tab through; screen readers announce the focused input on load.
+            // eslint-disable-next-line jsx-a11y/no-autofocus
             autoFocus
           />
           <button
             type="button"
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+            className="text-muted-foreground absolute top-1/2 right-3 -translate-y-1/2"
             onClick={() => setShowPassword(!showPassword)}
           >
-            {showPassword ? <EyeOffIcon className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />}
+            {showPassword ? <EyeOffIcon className="h-4 w-4" /> : <EyeIcon className="h-4 w-4" />}
           </button>
         </div>
 
         <button
           onClick={handleUnlock}
           disabled={!password || unlock.isPending}
-          className="w-full rounded-xl bg-primary text-primary-foreground py-3 font-medium disabled:opacity-40 transition-opacity"
+          className="bg-primary text-primary-foreground w-full rounded-xl py-3 font-medium transition-opacity disabled:opacity-40"
         >
           {unlock.isPending ? (
-            <Loader2Icon className="w-5 h-5 animate-spin mx-auto" />
+            <Loader2Icon className="mx-auto h-5 w-5 animate-spin" />
           ) : (
             'Unlock'
           )}
@@ -91,9 +95,9 @@ export function Unlock({ onSuccess, onLogout }: Props) {
             onLogout();
           }}
           disabled={logout.isPending}
-          className="w-full flex items-center justify-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors py-2 disabled:opacity-40"
+          className="text-muted-foreground hover:text-foreground flex w-full items-center justify-center gap-2 py-2 text-sm transition-colors disabled:opacity-40"
         >
-          <LogOutIcon className="w-4 h-4" />
+          <LogOutIcon className="h-4 w-4" />
           Sign in with a different account
         </button>
       </div>

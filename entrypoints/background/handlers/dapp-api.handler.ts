@@ -323,9 +323,7 @@ async function handlePrepareExecute(params: unknown): Promise<null> {
   const tx = await gatewayFacadeUserRpc<GatewayTransaction>('getTransaction', { commandId });
 
   // 5. Sign locally
-  const { signTransactionHash, getPublicKeyFromPrivate } = await import(
-    '@canton-network/core-signing-lib'
-  );
+  const { signTransactionHash } = await import('@canton-network/core-signing-lib');
   const signature = signTransactionHash(tx.preparedTransactionHash, privateKey);
   const fingerprint = partyId.split('::')[1];
 
@@ -382,9 +380,7 @@ async function handlePrepareExecuteAndWait(params: unknown): Promise<PrepareExec
 
   const tx = await gatewayFacadeUserRpc<GatewayTransaction>('getTransaction', { commandId });
 
-  const { signTransactionHash, getPublicKeyFromPrivate } = await import(
-    '@canton-network/core-signing-lib'
-  );
+  const { signTransactionHash } = await import('@canton-network/core-signing-lib');
   const signature = signTransactionHash(tx.preparedTransactionHash, privateKey);
   const fingerprint = partyId.split('::')[1];
 

@@ -99,12 +99,12 @@ export function Dashboard({ onLock, onLogout }: Props) {
   }
 
   return (
-    <div className="flex flex-col h-full bg-background">
+    <div className="bg-background flex h-full flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-primary/15 bg-primary/5">
+      <div className="border-primary/15 bg-primary/5 flex items-center justify-between border-b px-4 py-3">
         <div className="flex items-center gap-1.5">
-          <IconLogo className="w-5 h-5" />
-          <h1 className="text-sm font-bold text-primary">Ginkgo</h1>
+          <IconLogo className="h-5 w-5" />
+          <h1 className="text-primary text-sm font-bold">Ginkgo</h1>
         </div>
 
         <div className="flex items-center gap-1.5">
@@ -113,28 +113,28 @@ export function Dashboard({ onLock, onLogout }: Props) {
             <button
               onClick={() => setNetworkDropdownOpen(!networkDropdownOpen)}
               disabled={isSwitching}
-              className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors disabled:opacity-50"
+              className="text-muted-foreground hover:bg-secondary hover:text-foreground flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium transition-colors disabled:opacity-50"
             >
-              <span className={`w-2 h-2 rounded-full ${network ? NETWORK_DOT_COLORS[network] : 'bg-gray-400'}`} />
+              <span className={`h-2 w-2 rounded-full ${network ? NETWORK_DOT_COLORS[network] : 'bg-gray-400'}`} />
               {network ? NETWORKS[network].label : '...'}
-              <ChevronDownIcon className="w-3 h-3" />
+              <ChevronDownIcon className="h-3 w-3" />
             </button>
 
             {networkDropdownOpen && (
-              <div className="absolute right-0 top-full mt-1 z-50 w-36 rounded-lg border border-primary/20 bg-card shadow-lg shadow-black/30">
+              <div className="border-primary/20 bg-card absolute top-full right-0 z-50 mt-1 w-36 rounded-lg border shadow-lg shadow-black/30">
                 {NETWORK_IDS.map((id) => (
                   <button
                     key={id}
                     onClick={() => handleSwitchNetwork(id)}
-                    className={`w-full flex items-center gap-2 px-3 py-2 text-xs transition-colors first:rounded-t-lg last:rounded-b-lg ${
+                    className={`flex w-full items-center gap-2 px-3 py-2 text-xs transition-colors first:rounded-t-lg last:rounded-b-lg ${
                       id === network
                         ? 'bg-primary/10 text-foreground font-medium'
                         : 'text-muted-foreground hover:bg-primary/5 hover:text-foreground'
                     }`}
                   >
-                    <span className={`w-2 h-2 rounded-full ${NETWORK_DOT_COLORS[id]}`} />
+                    <span className={`h-2 w-2 rounded-full ${NETWORK_DOT_COLORS[id]}`} />
                     {NETWORKS[id].label}
-                    {id === network && <span className="ml-auto text-primary">&#10003;</span>}
+                    {id === network && <span className="text-primary ml-auto">&#10003;</span>}
                   </button>
                 ))}
               </div>
@@ -144,9 +144,9 @@ export function Dashboard({ onLock, onLogout }: Props) {
           {/* Settings */}
           <button
             onClick={() => setShowSettings(true)}
-            className="rounded-lg p-1.5 hover:bg-secondary transition-colors"
+            className="hover:bg-secondary rounded-lg p-1.5 transition-colors"
           >
-            <SettingsIcon className="w-4 h-4 text-muted-foreground" />
+            <SettingsIcon className="text-muted-foreground h-4 w-4" />
           </button>
 
           {/* Expand to full tab */}
@@ -156,22 +156,22 @@ export function Dashboard({ onLock, onLogout }: Props) {
               chrome.tabs.create({ url });
               window.close();
             }}
-            className="rounded-lg p-1.5 hover:bg-secondary transition-colors"
+            className="hover:bg-secondary rounded-lg p-1.5 transition-colors"
           >
-            <Maximize2Icon className="w-4 h-4 text-muted-foreground" />
+            <Maximize2Icon className="text-muted-foreground h-4 w-4" />
           </button>
         </div>
       </div>
 
       {/* Account info */}
       {authState?.user && (
-        <div className="flex items-center gap-2.5 px-4 py-2 border-b border-border bg-secondary/50">
-          <WalletIcon className="w-7 h-7 text-primary shrink-0" />
+        <div className="border-border bg-secondary/50 flex items-center gap-2.5 border-b px-4 py-2">
+          <WalletIcon className="text-primary h-7 w-7 shrink-0" />
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold text-foreground truncate">{authState.user.email}</p>
+            <p className="text-foreground truncate text-sm font-semibold">{authState.user.email}</p>
             {authState.partyId && (
               <div className="flex items-center gap-1">
-                <p className="text-sm font-semibold text-foreground font-mono truncate flex-1">
+                <p className="text-foreground flex-1 truncate font-mono text-sm font-semibold">
                   {formatPartyId(authState.partyId)}
                 </p>
                 <button
@@ -180,12 +180,12 @@ export function Dashboard({ onLock, onLogout }: Props) {
                     setCopiedPartyId(true);
                     setTimeout(() => setCopiedPartyId(false), 2000);
                   }}
-                  className="shrink-0 p-0.5 text-muted-foreground hover:text-foreground transition-colors"
+                  className="text-muted-foreground hover:text-foreground shrink-0 p-0.5 transition-colors"
                 >
                   {copiedPartyId ? (
-                    <CheckIcon className="w-3 h-3 text-positive" />
+                    <CheckIcon className="text-positive h-3 w-3" />
                   ) : (
-                    <CopyIcon className="w-3 h-3" />
+                    <CopyIcon className="h-3 w-3" />
                   )}
                 </button>
             </div>
@@ -203,16 +203,16 @@ export function Dashboard({ onLock, onLogout }: Props) {
       </div>
 
       {/* Bottom nav */}
-      <div className="flex border-t border-border">
+      <div className="border-border flex border-t">
         {tabs.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
             onClick={() => setTab(id)}
-            className={`flex-1 flex flex-col items-center gap-0.5 py-2 text-xs transition-colors ${
+            className={`flex flex-1 flex-col items-center gap-0.5 py-2 text-xs transition-colors ${
               tab === id ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
             }`}
           >
-            <Icon className="w-4 h-4" />
+            <Icon className="h-4 w-4" />
             {label}
           </button>
         ))}

@@ -35,30 +35,30 @@ export function TypedConfirm({ password, privateKey, publicKey, onSuccess, onBac
   };
 
   return (
-    <div className="flex flex-col h-full p-6 bg-background">
-      <button onClick={onBack} className="flex items-center gap-1 text-sm text-muted-foreground mb-4">
-        <ArrowLeftIcon className="w-4 h-4" /> Back
+    <div className="bg-background flex h-full flex-col p-6">
+      <button onClick={onBack} className="text-muted-foreground mb-4 flex items-center gap-1 text-sm">
+        <ArrowLeftIcon className="h-4 w-4" /> Back
       </button>
 
-      <h1 className="text-xl font-bold text-foreground mb-2">Confirm</h1>
-      <p className="text-sm text-muted-foreground mb-4">
+      <h1 className="text-foreground mb-2 text-xl font-bold">Confirm</h1>
+      <p className="text-muted-foreground mb-4 text-sm">
         Type the following phrase exactly to confirm:
       </p>
 
-      <div className="rounded-xl bg-secondary p-4 mb-4">
-        <p className="text-sm font-medium text-foreground italic">"{TYPO_TEXT}"</p>
+      <div className="bg-secondary mb-4 rounded-xl p-4">
+        <p className="text-foreground text-sm font-medium italic">"{TYPO_TEXT}"</p>
       </div>
 
       <textarea
         value={typed}
         onChange={(e) => setTyped(e.target.value)}
-        className="w-full rounded-lg border border-primary/20 bg-primary/5 text-foreground p-4 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary resize-none h-24"
+        className="border-primary/20 bg-primary/5 text-foreground focus:border-primary focus:ring-primary h-24 w-full resize-none rounded-lg border p-4 text-sm outline-none focus:ring-1"
         placeholder="Type the phrase here..."
       />
 
       {error && (
-        <div className="flex gap-3 rounded-xl bg-red-500/10 border border-red-500/30 p-3 mt-2">
-          <AlertTriangleIcon className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+        <div className="mt-2 flex gap-3 rounded-xl border border-red-500/30 bg-red-500/10 p-3">
+          <AlertTriangleIcon className="mt-0.5 h-5 w-5 shrink-0 text-red-400" />
           <p className="text-sm text-red-400">{error}</p>
         </div>
       )}
@@ -68,10 +68,10 @@ export function TypedConfirm({ password, privateKey, publicKey, onSuccess, onBac
       <button
         onClick={handleSubmit}
         disabled={!matches || completeOnboarding.isPending}
-        className="w-full rounded-xl bg-primary text-primary-foreground py-3 font-medium disabled:opacity-40 transition-opacity"
+        className="bg-primary text-primary-foreground w-full rounded-xl py-3 font-medium transition-opacity disabled:opacity-40"
       >
         {completeOnboarding.isPending ? (
-          <Loader2Icon className="w-5 h-5 animate-spin mx-auto" />
+          <Loader2Icon className="mx-auto h-5 w-5 animate-spin" />
         ) : (
           'Complete Setup'
         )}

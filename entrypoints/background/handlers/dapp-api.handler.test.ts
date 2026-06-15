@@ -93,7 +93,7 @@ function setupUnlockedWallet(publicKey: string, privateKey: string) {
     if (key === 'authToken') return 'test-token';
     return null;
   });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   vi.mocked(localStore.get).mockImplementation((async (key: string) => {
     if (key === 'keystore') {
       return { walletKey: publicKey, cantonKey: '', hashedKey: '', backend: 'webcrypto', version: 1 };
@@ -101,7 +101,7 @@ function setupUnlockedWallet(publicKey: string, privateKey: string) {
     if (key === 'onboardingComplete') return true;
     if (key === 'currentNetwork') return 'localnet';
     return null;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
   }) as any);
 }
 
@@ -189,7 +189,7 @@ describe('handleStatus — CIP-0103 StatusEvent shape', () => {
     setupUnlockedWallet(publicKey, privateKey);
     // setupUnlockedWallet already provides authToken via sessionStore mock.
     // Add user.id via localStore mock so session emission has all required fields.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     vi.mocked(localStore.get).mockImplementation((async (key: string) => {
       if (key === 'keystore') {
         return { walletKey: publicKey, cantonKey: '', hashedKey: '', backend: 'webcrypto', version: 1 };
@@ -198,7 +198,7 @@ describe('handleStatus — CIP-0103 StatusEvent shape', () => {
       if (key === 'currentNetwork') return 'localnet';
       if (key === 'user') return { id: 'test-user-id', email: 'x@y', firstName: 'X', lastName: 'Y', isActive: true };
       return null;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
     }) as any);
   });
 

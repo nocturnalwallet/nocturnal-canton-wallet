@@ -94,10 +94,10 @@ export function Transfer() {
 
   if (step === 'success') {
     return (
-      <div className="flex flex-col items-center justify-center h-full p-6 gap-4">
-        <CheckCircleIcon className="w-16 h-16 text-positive" />
-        <h2 className="text-lg font-bold text-foreground">Transfer Sent</h2>
-        <p className="text-sm text-muted-foreground text-center">
+      <div className="flex h-full flex-col items-center justify-center gap-4 p-6">
+        <CheckCircleIcon className="text-positive h-16 w-16" />
+        <h2 className="text-foreground text-lg font-bold">Transfer Sent</h2>
+        <p className="text-muted-foreground text-center text-sm">
           {amount} {tokenId} sent to recipient
         </p>
         <button
@@ -108,7 +108,7 @@ export function Transfer() {
             setPassword('');
             setPreparedData(null);
           }}
-          className="rounded-xl bg-primary text-primary-foreground px-6 py-2 text-sm font-medium"
+          className="bg-primary text-primary-foreground rounded-xl px-6 py-2 text-sm font-medium"
         >
           New Transfer
         </button>
@@ -118,9 +118,9 @@ export function Transfer() {
 
   if (step === 'confirm') {
     return (
-      <div className="p-4 space-y-4">
-        <h2 className="text-lg font-bold text-foreground">Confirm Transfer</h2>
-        <div className="rounded-xl bg-secondary p-4 space-y-2 text-sm">
+      <div className="space-y-4 p-4">
+        <h2 className="text-foreground text-lg font-bold">Confirm Transfer</h2>
+        <div className="bg-secondary space-y-2 rounded-xl p-4 text-sm">
           <div className="flex justify-between">
             <span className="text-muted-foreground">Token</span>
             <span className="text-foreground">{tokenId}</span>
@@ -131,24 +131,25 @@ export function Transfer() {
           </div>
           <div className="flex flex-col gap-1 pt-1">
             <span className="text-muted-foreground">Recipient</span>
-            <span className="text-foreground text-xs font-mono break-all bg-background rounded-lg px-2 py-1.5">{recipient}</span>
+            <span className="text-foreground bg-background rounded-lg px-2 py-1.5 font-mono text-xs break-all">{recipient}</span>
           </div>
         </div>
 
         <div>
-          <label className="text-sm text-muted-foreground">Password to sign</label>
+          <label htmlFor="transfer-password" className="text-muted-foreground text-sm">Password to sign</label>
           <input
+            id="transfer-password"
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full mt-1 rounded-lg border border-primary/20 bg-primary/5 text-foreground px-4 py-3 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+            className="border-primary/20 bg-primary/5 text-foreground focus:border-primary focus:ring-primary mt-1 w-full rounded-lg border px-4 py-3 text-sm outline-none focus:ring-1"
             placeholder="Enter password"
           />
         </div>
 
         {error && (
-          <div className="flex gap-2 items-center rounded-lg bg-red-500/10 border border-red-500/30 px-3 py-2">
-            <AlertTriangleIcon className="w-4 h-4 text-red-400 shrink-0" />
+          <div className="flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2">
+            <AlertTriangleIcon className="h-4 w-4 shrink-0 text-red-400" />
             <p className="text-sm text-red-400">{error}</p>
           </div>
         )}
@@ -156,16 +157,16 @@ export function Transfer() {
         <div className="flex gap-2">
           <button
             onClick={() => setStep('form')}
-            className="flex-1 rounded-xl bg-secondary text-foreground py-3 text-sm font-medium"
+            className="bg-secondary text-foreground flex-1 rounded-xl py-3 text-sm font-medium"
           >
             Cancel
           </button>
           <button
             onClick={handleSubmit}
             disabled={!password || isSubmitting}
-            className="flex-1 rounded-xl bg-primary text-primary-foreground py-3 text-sm font-medium disabled:opacity-40"
+            className="bg-primary text-primary-foreground flex-1 rounded-xl py-3 text-sm font-medium disabled:opacity-40"
           >
-            {isSubmitting ? <Loader2Icon className="w-5 h-5 animate-spin mx-auto" /> : 'Sign & Send'}
+            {isSubmitting ? <Loader2Icon className="mx-auto h-5 w-5 animate-spin" /> : 'Sign & Send'}
           </button>
         </div>
       </div>
@@ -173,15 +174,16 @@ export function Transfer() {
   }
 
   return (
-    <div className="p-4 space-y-4">
-      <h2 className="text-lg font-bold text-foreground">Transfer</h2>
+    <div className="space-y-4 p-4">
+      <h2 className="text-foreground text-lg font-bold">Transfer</h2>
 
       <div>
-        <label className="text-sm text-muted-foreground">Token</label>
+        <label htmlFor="transfer-token" className="text-muted-foreground text-sm">Token</label>
         <select
+          id="transfer-token"
           value={tokenId}
           onChange={(e) => setTokenId(e.target.value)}
-          className="w-full mt-1 rounded-lg border border-primary/20 bg-primary/5 text-foreground px-4 py-3 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+          className="border-primary/20 bg-primary/5 text-foreground focus:border-primary focus:ring-primary mt-1 w-full rounded-lg border px-4 py-3 text-sm outline-none focus:ring-1"
         >
           {SUPPORTED_TOKENS.map((t) => (
             <option key={t.id} value={t.id}>
@@ -190,28 +192,29 @@ export function Transfer() {
           ))}
         </select>
         {selectedBalance && (
-          <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground">
+          <div className="text-muted-foreground mt-1.5 flex items-center gap-3 text-xs">
             <span>Available: <span className="text-foreground font-medium">{availableBalance.toFormat()}</span></span>
             {lockedBalance.gt(0) && (
-              <span>Locked: <span className="text-amber-400 font-medium">{lockedBalance.toFormat()}</span></span>
+              <span>Locked: <span className="font-medium text-amber-400">{lockedBalance.toFormat()}</span></span>
             )}
           </div>
         )}
       </div>
 
       <div>
-        <label className="text-sm text-muted-foreground">Recipient Party ID</label>
+        <label htmlFor="transfer-recipient" className="text-muted-foreground text-sm">Recipient Party ID</label>
         <input
+          id="transfer-recipient"
           type="text"
           value={recipient}
           onChange={(e) => setRecipient(e.target.value)}
-          className="w-full mt-1 rounded-lg border border-primary/20 bg-primary/5 text-foreground px-4 py-3 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+          className="border-primary/20 bg-primary/5 text-foreground focus:border-primary focus:ring-primary mt-1 w-full rounded-lg border px-4 py-3 text-sm outline-none focus:ring-1"
           placeholder="Enter party ID"
         />
       </div>
 
       <div>
-        <label className="text-sm text-muted-foreground">
+        <label className="text-muted-foreground text-sm">
           Amount {token && `(min: ${token.minAmount})`}
         </label>
         <div className="relative mt-1">
@@ -219,14 +222,14 @@ export function Transfer() {
             type="text"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
-            className="w-full rounded-lg border border-primary/20 bg-primary/5 text-foreground px-4 py-3 pr-16 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+            className="border-primary/20 bg-primary/5 text-foreground focus:border-primary focus:ring-primary w-full rounded-lg border px-4 py-3 pr-16 text-sm outline-none focus:ring-1"
             placeholder="0.00"
           />
           {availableBalance.gt(0) && (
             <button
               type="button"
               onClick={() => setAmount(availableBalance.toFixed())}
-              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md bg-primary/15 text-primary px-2 py-0.5 text-xs font-semibold hover:bg-primary/25 transition-colors"
+              className="bg-primary/15 text-primary hover:bg-primary/25 absolute top-1/2 right-2 -translate-y-1/2 rounded-md px-2 py-0.5 text-xs font-semibold transition-colors"
             >
               MAX
             </button>
@@ -235,8 +238,8 @@ export function Transfer() {
       </div>
 
       {error && (
-          <div className="flex gap-2 items-center rounded-lg bg-red-500/10 border border-red-500/30 px-3 py-2">
-            <AlertTriangleIcon className="w-4 h-4 text-red-400 shrink-0" />
+          <div className="flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2">
+            <AlertTriangleIcon className="h-4 w-4 shrink-0 text-red-400" />
             <p className="text-sm text-red-400">{error}</p>
           </div>
         )}
@@ -244,9 +247,9 @@ export function Transfer() {
       <button
         onClick={handlePrepare}
         disabled={!recipient || !amount || isPreparing}
-        className="w-full rounded-xl bg-primary text-primary-foreground py-3 font-medium disabled:opacity-40"
+        className="bg-primary text-primary-foreground w-full rounded-xl py-3 font-medium disabled:opacity-40"
       >
-        {isPreparing ? <Loader2Icon className="w-5 h-5 animate-spin mx-auto" /> : 'Continue'}
+        {isPreparing ? <Loader2Icon className="mx-auto h-5 w-5 animate-spin" /> : 'Continue'}
       </button>
     </div>
   );

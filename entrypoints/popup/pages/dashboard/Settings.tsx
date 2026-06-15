@@ -100,45 +100,45 @@ export function Settings({ onBack, onLock, onLogout }: Props) {
   };
 
   return (
-    <div className="flex flex-col h-full bg-background">
+    <div className="bg-background flex h-full flex-col">
       {/* Header */}
-      <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
-        <button onClick={onBack} className="rounded-lg p-1 hover:bg-secondary">
-          <ArrowLeftIcon className="w-4 h-4 text-muted-foreground" />
+      <div className="border-border flex items-center gap-2 border-b px-4 py-3">
+        <button onClick={onBack} className="hover:bg-secondary rounded-lg p-1">
+          <ArrowLeftIcon className="text-muted-foreground h-4 w-4" />
         </button>
-        <h1 className="text-sm font-bold text-foreground">Settings</h1>
+        <h1 className="text-foreground text-sm font-bold">Settings</h1>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
+      <div className="flex-1 space-y-3 overflow-y-auto p-4">
         {/* User info */}
         {authState?.user && (
-          <div className="rounded-xl bg-secondary p-3 space-y-2">
+          <div className="bg-secondary space-y-2 rounded-xl p-3">
             <div className="flex items-center gap-2">
-              <UserIcon className="w-4 h-4 text-muted-foreground" />
-              <p className="text-sm font-medium text-foreground">
+              <UserIcon className="text-muted-foreground h-4 w-4" />
+              <p className="text-foreground text-sm font-medium">
                 {authState.user.firstName} {authState.user.lastName}
               </p>
             </div>
-            <p className="text-xs text-muted-foreground">{authState.user.email}</p>
+            <p className="text-muted-foreground text-xs">{authState.user.email}</p>
           </div>
         )}
 
         {/* Party ID */}
         {partyId && (
-          <div className="rounded-xl bg-secondary p-3 space-y-2">
-            <p className="text-xs font-medium text-muted-foreground">Party ID</p>
+          <div className="bg-secondary space-y-2 rounded-xl p-3">
+            <p className="text-muted-foreground text-xs font-medium">Party ID</p>
             <div className="flex items-center gap-2">
-              <p className="text-xs font-mono text-foreground flex-1 break-all">
+              <p className="text-foreground flex-1 font-mono text-xs break-all">
                 {format.truncatePartyId(partyId, 8)}
               </p>
               <button
                 onClick={handleCopyPartyId}
-                className="shrink-0 rounded-lg p-1.5 hover:bg-accent"
+                className="hover:bg-accent shrink-0 rounded-lg p-1.5"
               >
                 {copiedParty ? (
-                  <CheckIcon className="w-3.5 h-3.5 text-green-500" />
+                  <CheckIcon className="h-3.5 w-3.5 text-green-500" />
                 ) : (
-                  <CopyIcon className="w-3.5 h-3.5 text-muted-foreground" />
+                  <CopyIcon className="text-muted-foreground h-3.5 w-3.5" />
                 )}
               </button>
             </div>
@@ -146,7 +146,7 @@ export function Settings({ onBack, onLock, onLogout }: Props) {
         )}
 
         {/* Show Private Key */}
-        <div className="rounded-xl bg-secondary p-3 space-y-2">
+        <div className="bg-secondary space-y-2 rounded-xl p-3">
           <button
             onClick={() => {
               setShowKeySection(!showKeySection);
@@ -154,17 +154,17 @@ export function Settings({ onBack, onLock, onLogout }: Props) {
               setPassword('');
               setError('');
             }}
-            className="w-full flex items-center justify-between"
+            className="flex w-full items-center justify-between"
           >
             <div className="flex items-center gap-2">
-              <KeyIcon className="w-4 h-4 text-muted-foreground" />
-              <p className="text-sm font-medium text-foreground">Show Private Key</p>
+              <KeyIcon className="text-muted-foreground h-4 w-4" />
+              <p className="text-foreground text-sm font-medium">Show Private Key</p>
             </div>
-            <span className="text-xs text-muted-foreground">{showKeySection ? 'Hide' : 'Show'}</span>
+            <span className="text-muted-foreground text-xs">{showKeySection ? 'Hide' : 'Show'}</span>
           </button>
 
           {showKeySection && (
-            <div className="space-y-2 pt-2 border-t border-border">
+            <div className="border-border space-y-2 border-t pt-2">
               {!privateKey ? (
                 <>
                   <input
@@ -172,22 +172,26 @@ export function Settings({ onBack, onLock, onLogout }: Props) {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleExportKey()}
-                    className="w-full rounded-lg bg-background text-foreground px-3 py-2 text-sm outline-none"
+                    className="bg-background text-foreground w-full rounded-lg px-3 py-2 text-sm outline-none"
                     placeholder="Enter password to decrypt"
+                    // Inline password prompt — autofocus is the expected UX so
+                    // users can type immediately. Modal-like flow inside a
+                    // settings panel; keyboard nav still works.
+                    // eslint-disable-next-line jsx-a11y/no-autofocus
                     autoFocus
                   />
                   {error && (
-                    <div className="flex gap-2 items-center rounded-lg bg-red-500/10 border border-red-500/30 px-3 py-2">
+                    <div className="flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2">
                       <p className="text-sm text-red-400">{error}</p>
                     </div>
                   )}
                   <button
                     onClick={handleExportKey}
                     disabled={!password || exportKey.isPending}
-                    className="w-full rounded-lg bg-primary text-primary-foreground py-2 text-xs font-medium disabled:opacity-40"
+                    className="bg-primary text-primary-foreground w-full rounded-lg py-2 text-xs font-medium disabled:opacity-40"
                   >
                     {exportKey.isPending ? (
-                      <Loader2Icon className="w-4 h-4 animate-spin mx-auto" />
+                      <Loader2Icon className="mx-auto h-4 w-4 animate-spin" />
                     ) : (
                       'Decrypt Key'
                     )}
@@ -196,7 +200,7 @@ export function Settings({ onBack, onLock, onLogout }: Props) {
               ) : (
                 <>
                   {/* Format toggle */}
-                  <div className="flex rounded-md bg-background p-0.5">
+                  <div className="bg-background flex rounded-md p-0.5">
                     <button
                       onClick={() => setKeyFormat('base64')}
                       className={`flex-1 rounded py-1 text-xs font-medium transition-colors ${
@@ -218,28 +222,28 @@ export function Settings({ onBack, onLock, onLogout }: Props) {
                       Hex
                     </button>
                   </div>
-                  <div className="rounded-lg bg-background p-2">
-                    <p className="text-xs font-mono break-all text-foreground">
+                  <div className="bg-background rounded-lg p-2">
+                    <p className="text-foreground font-mono text-xs break-all">
                       {revealed ? displayKey : '\u2022'.repeat(Math.min(displayKey.length, 40))}
                     </p>
                   </div>
                   <div className="flex gap-2">
                     <button
                       onClick={() => setRevealed(!revealed)}
-                      className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                      className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-xs"
                     >
-                      {revealed ? <EyeOffIcon className="w-3 h-3" /> : <EyeIcon className="w-3 h-3" />}
+                      {revealed ? <EyeOffIcon className="h-3 w-3" /> : <EyeIcon className="h-3 w-3" />}
                       {revealed ? 'Hide' : 'Reveal'}
                     </button>
                     <button
                       onClick={handleCopyKey}
-                      className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                      className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-xs"
                     >
-                      {copiedKey ? <CheckIcon className="w-3 h-3 text-green-500" /> : <CopyIcon className="w-3 h-3" />}
+                      {copiedKey ? <CheckIcon className="h-3 w-3 text-green-500" /> : <CopyIcon className="h-3 w-3" />}
                       {copiedKey ? 'Copied' : 'Copy'}
                     </button>
                   </div>
-                  <p className="text-xs text-destructive">
+                  <p className="text-destructive text-xs">
                     Never share your private key. Anyone with access can steal your funds.
                   </p>
                 </>
@@ -251,29 +255,29 @@ export function Settings({ onBack, onLock, onLogout }: Props) {
         {/* Advanced Settings */}
         <button
           onClick={handleOpenOptions}
-          className="w-full rounded-xl bg-secondary p-3 flex items-center justify-between"
+          className="bg-secondary flex w-full items-center justify-between rounded-xl p-3"
         >
           <div className="flex items-center gap-2">
-            <SettingsIcon className="w-4 h-4 text-muted-foreground" />
-            <p className="text-sm font-medium text-foreground">Advanced Settings</p>
+            <SettingsIcon className="text-muted-foreground h-4 w-4" />
+            <p className="text-foreground text-sm font-medium">Advanced Settings</p>
           </div>
-          <ExternalLinkIcon className="w-3.5 h-3.5 text-muted-foreground" />
+          <ExternalLinkIcon className="text-muted-foreground h-3.5 w-3.5" />
         </button>
 
         {/* Lock & Logout */}
         <div className="space-y-2 pt-2">
           <button
             onClick={onLock}
-            className="w-full rounded-xl bg-secondary p-3 flex items-center gap-2"
+            className="bg-secondary flex w-full items-center gap-2 rounded-xl p-3"
           >
-            <LockIcon className="w-4 h-4 text-muted-foreground" />
-            <p className="text-sm font-medium text-foreground">Lock Wallet</p>
+            <LockIcon className="text-muted-foreground h-4 w-4" />
+            <p className="text-foreground text-sm font-medium">Lock Wallet</p>
           </button>
           <button
             onClick={onLogout}
-            className="w-full rounded-xl bg-red-500/10 border border-red-500/20 p-3 flex items-center gap-2 hover:bg-red-500/15 transition-colors"
+            className="flex w-full items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/10 p-3 transition-colors hover:bg-red-500/15"
           >
-            <LogOutIcon className="w-4 h-4 text-red-400" />
+            <LogOutIcon className="h-4 w-4 text-red-400" />
             <p className="text-sm font-medium text-red-400">Sign Out</p>
           </button>
         </div>

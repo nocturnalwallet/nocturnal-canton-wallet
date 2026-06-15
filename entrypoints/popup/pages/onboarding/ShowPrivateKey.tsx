@@ -27,21 +27,21 @@ export function ShowPrivateKey({ privateKey, onNext, onBack }: Props) {
   };
 
   return (
-    <div className="flex flex-col h-full p-6 bg-background">
-      <button onClick={onBack} className="flex items-center gap-1 text-sm text-muted-foreground mb-4">
-        <ArrowLeftIcon className="w-4 h-4" /> Back
+    <div className="bg-background flex h-full flex-col p-6">
+      <button onClick={onBack} className="text-muted-foreground mb-4 flex items-center gap-1 text-sm">
+        <ArrowLeftIcon className="h-4 w-4" /> Back
       </button>
 
-      <h1 className="text-xl font-bold text-foreground mb-2">Your Private Key</h1>
-      <div className="flex items-start gap-3 rounded-xl border border-amber-400/30 bg-amber-400/10 p-3 mb-6">
-        <TriangleAlertIcon className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+      <h1 className="text-foreground mb-2 text-xl font-bold">Your Private Key</h1>
+      <div className="mb-6 flex items-start gap-3 rounded-xl border border-amber-400/30 bg-amber-400/10 p-3">
+        <TriangleAlertIcon className="mt-0.5 h-5 w-5 shrink-0 text-amber-400" />
         <p className="text-sm font-medium text-amber-400">
           Save this key securely. You will need it to recover your wallet. Never share it with anyone.
         </p>
       </div>
 
       {/* Format toggle */}
-      <div className="flex rounded-lg bg-secondary p-1 mb-4">
+      <div className="bg-secondary mb-4 flex rounded-lg p-1">
         <button
           onClick={() => setFormat('base64')}
           className={`flex-1 rounded-md py-1.5 text-xs font-medium transition-colors ${
@@ -64,23 +64,23 @@ export function ShowPrivateKey({ privateKey, onNext, onBack }: Props) {
         </button>
       </div>
 
-      <div className="relative rounded-xl bg-secondary p-4 mb-4">
-        <p className="text-sm font-mono break-all text-foreground">
+      <div className="bg-secondary relative mb-4 rounded-xl p-4">
+        <p className="text-foreground font-mono text-sm break-all">
           {revealed ? displayKey : '•'.repeat(Math.min(displayKey.length, 60))}
         </p>
-        <div className="flex gap-2 mt-3">
+        <div className="mt-3 flex gap-2">
           <button
             onClick={() => setRevealed(!revealed)}
-            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+            className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-xs"
           >
-            {revealed ? <EyeOffIcon className="w-3.5 h-3.5" /> : <EyeIcon className="w-3.5 h-3.5" />}
+            {revealed ? <EyeOffIcon className="h-3.5 w-3.5" /> : <EyeIcon className="h-3.5 w-3.5" />}
             {revealed ? 'Hide' : 'Reveal'}
           </button>
           <button
             onClick={handleCopy}
-            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+            className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-xs"
           >
-            {copied ? <CheckIcon className="w-3.5 h-3.5 text-positive" /> : <CopyIcon className="w-3.5 h-3.5" />}
+            {copied ? <CheckIcon className="text-positive h-3.5 w-3.5" /> : <CopyIcon className="h-3.5 w-3.5" />}
             {copied ? 'Copied' : 'Copy'}
           </button>
         </div>
@@ -90,7 +90,7 @@ export function ShowPrivateKey({ privateKey, onNext, onBack }: Props) {
 
       <button
         onClick={onNext}
-        className="w-full rounded-xl bg-primary text-primary-foreground py-3 font-medium"
+        className="bg-primary text-primary-foreground w-full rounded-xl py-3 font-medium"
       >
         I've Saved My Key
       </button>

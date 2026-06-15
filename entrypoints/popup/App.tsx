@@ -61,20 +61,28 @@ const APPROVAL_REQUEST_ID = searchParams.get('action') === 'dapp-approve' ? sear
 function TabLayout({ children }: { children: React.ReactNode }) {
   if (!IS_ONBOARDING_TAB) return <>{children}</>;
   return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-background p-6">
-      <div className="w-full max-w-[420px] h-[600px] rounded-2xl border border-border/40 shadow-2xl shadow-black/40 overflow-y-auto">
+    <div className="bg-background flex min-h-screen w-full items-center justify-center p-6">
+      <div className="border-border/40 h-[600px] w-full max-w-[420px] overflow-y-auto rounded-2xl border shadow-2xl shadow-black/40">
         {children}
       </div>
     </div>
   );
 }
 
+/**
+ * Root router. Conditionally short-circuits to <DappApproval /> when the popup
+ * was opened as a dApp approval window (URL has ?action=dapp-approve). All
+ * stateful logic lives in <MainApp /> below; doing this split keeps hooks out
+ * of the conditional branch and satisfies react-hooks/rules-of-hooks.
+ */
 function App() {
-  // If opened as a dApp approval popup, render only the approval UI
   if (APPROVAL_REQUEST_ID) {
     return <DappApproval requestId={APPROVAL_REQUEST_ID} />;
   }
+  return <MainApp />;
+}
 
+function MainApp() {
   const { data: authState, isLoading: authLoading } = useAuthState();
   const { data: lockState, isLoading: lockLoading } = useLockState();
   const { network } = useNetwork();
@@ -96,6 +104,12 @@ function App() {
     setPostWipeRecovery(false);
   }, []);
 
+  // The screen state is derived from auth/lock/keyMismatch/onboarding state.
+  // Computing it during render would be more idiomatic in modern React, but
+  // would require flattening setScreen's many call sites elsewhere (CreatePassword
+  // onNext, KeySetup, etc.). Tracked as a separate refactor in the
+  // keystore-mismatch-recovery follow-ups doc; suppress the rule here for now.
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (authLoading || lockLoading) {
       setScreen('loading');
@@ -136,12 +150,13 @@ function App() {
       setScreen('create-password');
     }
   }, [authState, lockState, authLoading, lockLoading, keyMismatch, postWipeRecovery]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const renderScreen = () => {
     if (screen === 'loading') {
       return (
-        <div className="flex items-center justify-center h-full bg-background">
-          <div className="animate-spin rounded-full h-8 w-8 border-2 border-primary border-t-transparent" />
+        <div className="bg-background flex h-full items-center justify-center">
+          <div className="border-primary h-8 w-8 animate-spin rounded-full border-2 border-t-transparent" />
         </div>
       );
     }
