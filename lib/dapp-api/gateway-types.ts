@@ -41,8 +41,16 @@ export interface LedgerApiParams {
   body?: Record<string, unknown>;
 }
 
-/** A transaction stored by the Gateway. */
+/**
+ * A transaction stored by the Gateway.
+ *
+ * Wallet-gateway-remote v1.1.0 returns both ids:
+ *   - `id` is the gateway store's primary key (also the lookup key for all
+ *     user-API methods: getTransaction/sign/execute/deleteTransaction).
+ *   - `commandId` is the application-level id echoed in events.
+ */
 export interface GatewayTransaction {
+  id: string;
   commandId: string;
   status: 'pending' | 'signed' | 'executed' | 'failed' | 'rejected';
   preparedTransaction: string;
@@ -51,9 +59,14 @@ export interface GatewayTransaction {
   origin?: string;
 }
 
-/** Parameters for the Gateway User API `execute` method. */
+/**
+ * Parameters for the Gateway User API `execute` method.
+ *
+ * Per wallet-gateway-remote v1.1.0, the lookup key is `transactionId`
+ * (gateway store PK), not `commandId`.
+ */
 export interface ExecuteParams {
-  commandId: string;
+  transactionId: string;
   signature: string;
   signedBy: string;
   partyId: string;
