@@ -243,19 +243,35 @@ describe('prepareExecute / prepareExecuteAndWait — CIP-0103 result shapes', ()
   crypto.getRandomValues(fakeHashBytes);
   const fakeHash = naclUtil.encodeBase64(fakeHashBytes);
   const fakeCommandId = 'transfer-offer-test-cmd-1234';
+  const fakeTransactionId = '11111111-2222-3333-4444-555555555555';
 
   beforeEach(() => {
     setupUnlockedWallet(publicKey, privateKey);
-    // 1. Gateway's dapp-side prepareExecute returns { userUrl: '?commandId=...' }
+    // 1. Gateway dapp-side prepareExecute returns userUrl carrying BOTH ids
+    //    per wallet-gateway-remote v1.1.0. transactionId is the lookup key
+    //    for user-API methods; commandId stays in TxChangedExecutedEvent.
     vi.mocked(gatewayFacadeDappRpc).mockResolvedValue({
-      userUrl: `https://gateway.example/user?commandId=${fakeCommandId}`,
+      userUrl: `https://gateway.example/user?transactionId=${fakeTransactionId}&commandId=${fakeCommandId}&closeafteraction`,
     });
-    // 2. Gateway's user-side getTransaction → transaction with preparedTransactionHash;
-    //    Gateway's user-side execute → { updateId, completionOffset }.
-    vi.mocked(gatewayFacadeUserRpc).mockImplementation(async (method: string) => {
-      if (method === 'getTransaction') return { preparedTransactionHash: fakeHash };
-      if (method === 'execute') return { updateId: 'tx-update-id', completionOffset: 42 };
-      if (method === 'deleteTransaction') return null;
+    // 2. Gateway user-side methods. We assert here that the wallet passes
+    //    `transactionId` (not `commandId`) as the lookup param — that's the
+    //    whole point of the v1.1.0 contract swap.
+    vi.mocked(gatewayFacadeUserRpc).mockImplementation(async (method: string, params: unknown) => {
+      const p = params as Record<string, unknown>;
+      if (method === 'getTransaction') {
+        expect(p.transactionId).toBe(fakeTransactionId);
+        expect(p.commandId).toBeUndefined();
+        return { preparedTransactionHash: fakeHash };
+      }
+      if (method === 'execute') {
+        expect(p.transactionId).toBe(fakeTransactionId);
+        expect(p.commandId).toBeUndefined();
+        return { updateId: 'tx-update-id', completionOffset: 42 };
+      }
+      if (method === 'deleteTransaction') {
+        expect(p.transactionId).toBe(fakeTransactionId);
+        return null;
+      }
       throw new Error(`Unexpected gateway method: ${method}`);
     });
   });

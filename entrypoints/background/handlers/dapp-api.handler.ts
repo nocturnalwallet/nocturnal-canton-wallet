@@ -3,10 +3,18 @@
  *
  * Implements the CIP-0103 dApp API methods:
  * - connect / disconnect / isConnected / status
- * - listAccounts / getPrimaryAccount
- * - signMessage / signTransaction
+ * - getActiveNetwork / listAccounts / getPrimaryAccount
+ * - signMessage
  * - prepareExecute / prepareExecuteAndWait (via Wallet Gateway)
  * - ledgerApi (proxy to Wallet Gateway)
+ *
+ * Plus one Ginkgo-only extension method:
+ * - signTransaction — NON-STANDARD. Signs a raw base64-encoded transaction
+ *   hash. Not in CIP-0103; not in the SWK extension reference
+ *   (wallet-gateway/extension/src/dapp-api/controller.ts:20-80). Kept as a
+ *   convenience for raw-hash signing flows. Prefer prepareExecute /
+ *   prepareExecuteAndWait when integrating new dApps — those cover
+ *   prepare+sign+execute atomically.
  */
 import { signMessage, signTransactionHash, getPublicKeyFromPrivate } from '@canton-network/core-signing-lib';
 import {
@@ -116,7 +124,21 @@ async function handleConnect(): Promise<unknown> {
 }
 
 async function handleDisconnect(): Promise<null> {
-  // No-op for prototype — wallet remains active, just acknowledges disconnect
+  // No-op by design. Matches the SWK extension reference at
+  // wallet-gateway/extension/src/dapp-api/controller.ts:30
+  // (`disconnect: async () => Promise.resolve(null)`).
+  //
+  // CIP-0103's disconnect text ("invalidates the user session on the server")
+  // describes the *remote* wallet variant, which has per-dApp server sessions
+  // created via a userUrl login flow. The extension variant has no equivalent:
+  // the user authenticates to the wallet itself once (one OAuth token for the
+  // whole user), not per-dApp. There is no per-dApp session token to invalidate
+  // here, and clearing the wallet-level OAuth would forcibly sign the user out
+  // across every tab — wrong semantics for an extension.
+  //
+  // A real per-origin disconnect would require adding a connected-sites
+  // allowlist + per-origin event routing. That is a separate, larger feature
+  // and is not implied by CIP-0103 or by the SWK extension reference.
   return null;
 }
 
@@ -239,6 +261,20 @@ const BASE64_PATTERN = /^[A-Za-z0-9+/_-]+={0,2}$/;
 // input — every char (0-9, a-f) is also a base64 char. Catch it explicitly.
 const HEX_64_PATTERN = /^[0-9a-f]{64}$/;
 
+/**
+ * signTransaction — Ginkgo extension method (NON-STANDARD).
+ *
+ * Not part of CIP-0103. Not in the SWK extension reference's method catalog
+ * (verified against wallet-gateway/extension/src/dapp-api/controller.ts:20-80
+ * and api-specs/openrpc-dapp-api.json — only signMessage is listed among
+ * signing methods). Kept as a convenience for raw base64-encoded hash signing
+ * flows that already have a prepared transaction hash and just need the wallet
+ * to sign it.
+ *
+ * For new dApp integrations, prefer the canonical CIP-0103 flow:
+ * prepareExecute / prepareExecuteAndWait — those cover prepare + sign +
+ * execute as a single atomic dApp call, with approval and tx lifecycle events.
+ */
 async function handleSignTransaction(params: unknown): Promise<{
   signature: string;
   publicKey: string;
@@ -303,13 +339,20 @@ async function handlePrepareExecute(params: unknown): Promise<null> {
   // 1. Forward to Gateway dApp API
   const { userUrl } = await gatewayFacadeDappRpc<PrepareExecuteResponse>('prepareExecute', typedParams);
 
-  // 2. Extract commandId from userUrl
+  // 2. Extract ids from userUrl. Gateway v1.1.0 carries both:
+  //   - transactionId: gateway store primary key, the lookup key for all
+  //     user-API methods (getTransaction/execute/deleteTransaction).
+  //   - commandId: application-level id, echoed in events; kept for UI/audit
+  //     and reused in the TxChangedExecutedEvent response shape.
   const url = new URL(userUrl);
+  const transactionId = url.searchParams.get('transactionId');
   const commandId = url.searchParams.get('commandId');
+  if (!transactionId) throw new RpcError(RpcErrorCodes.INTERNAL_ERROR, 'No transactionId in Gateway response');
   if (!commandId) throw new RpcError(RpcErrorCodes.INTERNAL_ERROR, 'No commandId in Gateway response');
 
   // 3. Show approval popup
   const approved = await requestApproval('prepareExecute', 'dApp', {
+    transactionId,
     commandId,
     commands: typedParams.commands,
   });
@@ -317,7 +360,7 @@ async function handlePrepareExecute(params: unknown): Promise<null> {
   if (!approved) {
     // Clean up the pending transaction from Gateway
     try {
-      await gatewayFacadeUserRpc('deleteTransaction', { commandId });
+      await gatewayFacadeUserRpc('deleteTransaction', { transactionId });
     } catch {
       // Best-effort cleanup
     }
@@ -325,7 +368,7 @@ async function handlePrepareExecute(params: unknown): Promise<null> {
   }
 
   // 4. Get prepared transaction details from Gateway
-  const tx = await gatewayFacadeUserRpc<GatewayTransaction>('getTransaction', { commandId });
+  const tx = await gatewayFacadeUserRpc<GatewayTransaction>('getTransaction', { transactionId });
 
   // 5. Sign locally
   const { signTransactionHash } = await import('@canton-network/core-signing-lib');
@@ -337,7 +380,7 @@ async function handlePrepareExecute(params: unknown): Promise<null> {
   // dApps that want the execute result should call prepareExecuteAndWait
   // instead, which returns { tx: TxChangedExecutedEvent }.
   await gatewayFacadeUserRpc('execute', {
-    commandId,
+    transactionId,
     signature,
     signedBy: fingerprint,
     partyId,
@@ -366,24 +409,27 @@ async function handlePrepareExecuteAndWait(params: unknown): Promise<PrepareExec
   const { userUrl } = await gatewayFacadeDappRpc<PrepareExecuteResponse>('prepareExecute', typedParams);
 
   const url = new URL(userUrl);
+  const transactionId = url.searchParams.get('transactionId');
   const commandId = url.searchParams.get('commandId');
+  if (!transactionId) throw new RpcError(RpcErrorCodes.INTERNAL_ERROR, 'No transactionId in Gateway response');
   if (!commandId) throw new RpcError(RpcErrorCodes.INTERNAL_ERROR, 'No commandId in Gateway response');
 
   const approved = await requestApproval('prepareExecuteAndWait', 'dApp', {
+    transactionId,
     commandId,
     commands: typedParams.commands,
   });
 
   if (!approved) {
     try {
-      await gatewayFacadeUserRpc('deleteTransaction', { commandId });
+      await gatewayFacadeUserRpc('deleteTransaction', { transactionId });
     } catch {
       // Best-effort cleanup
     }
     throw new RpcError(RpcErrorCodes.USER_REJECTED, 'User rejected the transaction');
   }
 
-  const tx = await gatewayFacadeUserRpc<GatewayTransaction>('getTransaction', { commandId });
+  const tx = await gatewayFacadeUserRpc<GatewayTransaction>('getTransaction', { transactionId });
 
   const { signTransactionHash } = await import('@canton-network/core-signing-lib');
   const signature = signTransactionHash(tx.preparedTransactionHash, privateKey);
@@ -393,7 +439,7 @@ async function handlePrepareExecuteAndWait(params: unknown): Promise<PrepareExec
     updateId: string;
     completionOffset: number;
   }>('execute', {
-    commandId,
+    transactionId,
     signature,
     signedBy: fingerprint,
     partyId,
@@ -461,6 +507,8 @@ const methods: Record<string, MethodHandler> = {
   listAccounts: handleListAccounts,
   getPrimaryAccount: handleGetPrimaryAccount,
   signMessage: handleSignMessage,
+  // Ginkgo extension, NOT in CIP-0103 — see JSDoc on handleSignTransaction.
+  // Prefer prepareExecute / prepareExecuteAndWait for new integrations.
   signTransaction: handleSignTransaction,
   prepareExecute: handlePrepareExecute,
   prepareExecuteAndWait: handlePrepareExecuteAndWait,
