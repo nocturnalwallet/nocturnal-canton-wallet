@@ -1,6 +1,6 @@
 # Ginkgo Wallet
 
-A universal browser extension wallet for the **Canton Network**. Supports CIP-0103 dApp connectivity, token management, transfers, offer approvals, and activity history — with a dual-backend architecture using **dapp-core** (REST middleware for wallet operations) and the **Wallet Gateway** (JSON-RPC for CIP-0103 dApp transactions and onboarding).
+A universal browser extension wallet for the **Canton Network**. Supports CIP-0103 dApp connectivity, token management, transfers, offer approvals, and activity history — backed by a single **dapp-core** backend that exposes both a **REST API** (wallet operations) and a **CIP-0103 JSON-RPC facade** (dApp transactions), all authenticated with one backend Bearer token.
 
 Built with [WXT](https://wxt.dev), React 19, TypeScript, and Tailwind CSS 4.
 
@@ -8,24 +8,21 @@ Built with [WXT](https://wxt.dev), React 19, TypeScript, and Tailwind CSS 4.
 
 ## Features
 
-- **Dual-backend architecture** — dapp-core REST API for wallet operations (balances, transfers, offers, faucet); Wallet Gateway JSON-RPC for CIP-0103 dApp transactions and onboarding
-- **CIP-0103 dApp API** — Full Canton wallet standard: `connect`, `status`, `signTransaction`, `prepareExecute`, `prepareExecuteAndWait`, `ledgerApi`
-- **Wallet Gateway integration** — dApp transactions prepared and executed via Gateway JSON-RPC, with local signing by extension-held keys
-- **Signing relay client** — Socket.io connection to a signing relay service, enabling the Wallet Gateway to request signatures from the extension for Gateway-initiated operations (e.g. `createWallet`)
+- **Single-backend architecture** — one dapp-core service per network serves both the REST API (balances, transfers, offers, faucet, onboarding) and the CIP-0103 JSON-RPC facade (`prepareExecute`, `ledgerApi`). Both surfaces use the same backend Bearer token; the extension mints no JWTs and runs no signing relay.
+- **CIP-0103 dApp API** — Full Canton wallet standard: `connect`, `status`, `signMessage`, `prepareExecute`, `prepareExecuteAndWait`, `ledgerApi`, plus a non-standard `signTransaction` convenience method
+- **Local signing** — All transaction hashes are signed in the background service worker by extension-held keys; private keys never leave it
 - **Google OAuth sign-in** via `chrome.identity.launchWebAuthFlow()` with PKCE
-- **Multi-network support** — Runtime switching between Localnet, Devnet, Testnet, and Mainnet with per-network API, Gateway, and relay URLs
+- **Multi-network support** — Runtime switching between Localnet, Devnet, Testnet, and Mainnet, each with its own backend and explorer URL
 - **Per-user, per-network storage isolation** — Each user's keystore and onboarding state is scoped by `{network}:{userId}`, so switching networks or accounts never leaks data
-- **Token balances** — Amulet/CC, CBTC, USDCx with locked/unlocked breakdown (via dapp-core)
+- **Token balances** — Amulet/CC, CBTC, USDCx with locked/unlocked breakdown
 - **Transfers** — Dual-path: Amulet (transfer-preapproval) and CBTC/USDCx (token-standard), with per-token balance display and MAX button
-- **Offers** — Incoming (approve/reject), Outgoing (withdraw), History — all via dapp-core prepare/sign/submit flow
-- **Activity** — Paginated transaction history with dynamic block explorer links (per-network)
-- **Smart onboarding** — Detects returning users (existing public key on backend) and routes to key import instead of generation. New users onboard via Gateway `createWallet` with relay-mediated signing
+- **Offers** — Incoming (approve/reject), Outgoing (withdraw), and History tabs — all via the `/transfer-offer/*` prepare/sign/submit flow, with per-network block-explorer links
+- **Smart onboarding** — Detects returning users (existing public key on backend) and routes to key import instead of generation. New users allocate a Canton party via the backend's `external-party/onboarding` prepare/submit flow with local signing
 - **Auto-lock** — Configurable timer (default 15 min) using `chrome.alarms`
-- **In-memory key caching** — Private key cached in background service worker during unlocked session for passwordless CIP-0103 signing and relay responses
+- **In-memory key caching** — Private key cached in the background service worker during an unlocked session for passwordless CIP-0103 signing
 - **Dual encryption** — Web Crypto API (PBKDF2 + AES-256-GCM) or CryptoJS AES, selectable at build time
-- **Key isolation** — Private keys never leave the background service worker
 - **Key export** — Base64 or Hex format toggle on options page
-- **MetaMask-style approval popups** — dApp requests and relay signing requests require explicit user approval
+- **MetaMask-style approval popups** — Sensitive dApp requests require explicit user approval
 - **Cross-browser** — Chrome (Manifest V3) and Firefox (Manifest V2, via WXT)
 
 ---
@@ -86,6 +83,16 @@ yarn build:firefox  # Firefox production build
 yarn build:all      # Both
 ```
 
+### Test
+
+```bash
+yarn test           # Run all tests once (vitest)
+yarn test:watch     # Watch mode
+yarn test:cov       # With coverage
+yarn typecheck      # tsc --noEmit
+yarn lint           # eslint .
+```
+
 ### Package for Distribution
 
 ```bash
@@ -104,115 +111,99 @@ yarn zip:firefox    # Firefox .zip
 
 ### System Overview
 
-Ginkgo interacts with **two backend services**, each serving a distinct role:
+Ginkgo talks to a **single dapp-core backend per network**, which exposes two surfaces over the same base URL and the same Bearer token:
 
-- **dapp-core** (REST API) — Authentication, token balances, offer management, transfers (prepare/sign/submit), faucet, and activity history. The extension's popup UI drives all wallet operations through dapp-core, with local signing in the background service worker.
-- **Wallet Gateway** (JSON-RPC 2.0) — CIP-0103 dApp API operations (`prepareExecute`, `ledgerApi`) and wallet onboarding (`createWallet`). External dApps interact with the Canton Ledger through the Gateway, mediated by the extension.
+- **REST API** — Authentication, token balances, offer management, transfers (prepare/sign/submit), faucet, party onboarding, and activity history. The popup UI drives all wallet operations through these endpoints, with local signing in the background service worker.
+- **CIP-0103 JSON-RPC facade** (`/api/v0/dapp` and `/api/v0/user`) — CIP-0103 dApp API operations (`prepareExecute`, `prepareExecuteAndWait`, `ledgerApi`). External dApps reach the Canton Ledger through this facade, mediated by the extension.
 
 ```text
                           +-----------------------+
                           |   Canton Ledger API   |
                           +----------+------------+
                                      |
-                     +---------------+---------------+
-                     |                               |
-              +------+------+               +--------+--------+
-              |   dapp-core |               | Wallet Gateway  |
-              |  (REST API) |               | (JSON-RPC 2.0)  |
-              +------+------+               +--------+--------+
-                     |                               |
-                     |   +---------------------------+
-                     |   |                           |
-                     |   |  dApp API    User API     |
-                     |   | /api/v0/    /api/v0/      |
-                     |   |  dapp        user         |
-                     |   |                           |
-     +---------------+---+---------------------------+-------+
-     |                  GINKGO EXTENSION                     |
-     |                                                       |
-     |  +-------------+    chrome.runtime     +-----------+  |
-     |  | Popup (UI)  | <----- messages ----> | Background|  |
-     |  +-------------+                       | Service   |  |
-     |                                        | Worker    |  |
-     |  +-------------+    window.postMessage +-----------+  |
-     |  |Content Script| <--- CIP-0103 --->  /  |    |      |
-     |  +------+------+                     /   |    |      |
-     +---------|-----------+---------------/----+----+------+
-               |           |              /     |    |
-               |           | Socket.io   /      |    |
-               |           v            /       |    v
-               |    +------+-------+   /   +----+--------+
-               |    |Signing Relay |  /    | Local       |
-               |    | (Socket.io)  | /     | Signing     |
-               |    +--------------+       | (in-memory) |
-               |                           +-------------+
-               v
-     +---------+----------+
-     | External dApp      |
+                          +----------+------------+
+                          |       dapp-core       |
+                          |   (single backend)    |
+                          |                       |
+                          |  REST       Facade    |
+                          |  /auth/*    /api/v0/  |
+                          |  /wallet/*   dapp     |
+                          |  /transfer-  user     |
+                          |   offer/*             |
+                          |  /external-party/*    |
+                          +-----------+-----------+
+                                      | Bearer token (one token for both surfaces)
+     +--------------------------------+----------------------+
+     |                  GINKGO EXTENSION                      |
+     |                                                        |
+     |  +-------------+    chrome.runtime     +------------+  |
+     |  | Popup (UI)  | <----- messages ----> | Background |  |
+     |  +-------------+                       | Service    |  |
+     |                                        | Worker     |  |
+     |  +--------------+   window.postMessage |  +------+  |  |
+     |  |Content Script| <--- CIP-0103 -----> |  |Local |  |  |
+     |  +------+-------+                       |  |Sign  |  |  |
+     +---------|------------------------------+--+------+--+  |
+               |                                              |
+               v                                              |
+     +---------+----------+                                   |
+     | External dApp      | <---------------------------------+
      | (canton-exchange)  |
      +--------------------+
 ```
 
-### Interaction Flow by Backend
+### Interaction Flow
 
-#### dapp-core Middleware (REST API)
+#### REST API
 
-The extension talks to dapp-core for **all popup-driven wallet operations**. Requests use the dapp-core auth token (JWT from Google OAuth) via Axios interceptors.
+The extension uses dapp-core's REST endpoints for **all popup-driven wallet operations**. Requests carry the backend auth token (JWT from Google OAuth) via Axios interceptors (`api-client.ts`).
 
 | Area | Endpoints | Description |
 | --- | --- | --- |
 | **Authentication** | `POST /auth/login-with-google` | Exchange Google ID token for session |
 | | `POST /auth/refresh-token` | Refresh expired JWT |
 | | `GET /auth/me` | Fetch user profile + party info |
-| | `POST /auth/register-party` | Link partyId to user after onboarding |
+| **Onboarding** | `POST /external-party/onboarding/prepare` | Backend prepares a party-allocation topology tx (`{partyId, multiHash, topologyTransactions}`) |
+| | `POST /external-party/onboarding/submit` | Submit locally-signed topology; backend flips party status to `SUCCESSFULLY` and persists the user↔party link |
 | **Token Balances** | `GET /wallet/token-balance` | Amulet, CBTC, USDCx balances with locked/unlocked breakdown |
-| **Transfers (Amulet)** | `POST /external-party/transfer-amulet/prepare` | Prepare Amulet transfer via pre-approval |
-| | `POST /external-party/transfer-amulet/submit` | Submit signed Amulet transfer |
-| **Offers (Token Standard)** | `POST /offers/prepare` | Prepare token-standard transfer (CBTC/USDCx) |
-| | `POST /offers/submit` | Submit signed transfer |
-| | `GET /offers/incoming-requests` | List incoming offers |
-| | `GET /offers/outgoing-requests` | List outgoing offers |
-| | `GET /offers/history` | Offer history |
-| | `POST /offers/approve/prepare` | Prepare offer approval |
-| | `POST /offers/approve/submit` | Submit signed approval |
-| | `POST /offers/reject/prepare` | Prepare offer rejection |
-| | `POST /offers/reject/submit` | Submit signed rejection |
-| | `POST /offers/withdraw/prepare` | Prepare outgoing offer withdrawal |
-| | `POST /offers/withdraw/submit` | Submit signed withdrawal |
-| **Faucet** | `POST /external-party/devnet-tap/prepare` | Prepare DevNet faucet tap |
-| | `POST /external-party/devnet-tap/submit` | Submit signed faucet transaction |
-| **Activity** | `GET /external-party/tx-history` | Paginated transaction history |
+| **Transfer Pre-Approval** | `POST /wallet/transfer-preapproval/prepare` | Prepare a pre-approval registration (required to receive Amulet) |
+| | `POST /wallet/transfer-preapproval/submit` | Submit signed pre-approval |
+| | `GET /wallet/transfer-preapproval/status` | Whether a pre-approval already exists |
+| **Transfers & Offers** | `POST /transfer-offer/prepare` | Prepare a transfer — Amulet (payload `assetId: 'Amulet'`) or Token Standard (CBTC/USDCx) |
+| | `POST /transfer-offer/submit` | Submit signed transfer |
+| | `GET /transfer-offer/incoming-requests` | List incoming offers |
+| | `GET /transfer-offer/outgoing-requests` | List outgoing offers |
+| | `GET /transfer-offer/history` | Offer history |
+| | `POST /transfer-offer/approve/{prepare,submit}` | Approve an incoming offer |
+| | `POST /transfer-offer/reject/{prepare,submit}` | Reject an incoming offer |
+| | `POST /transfer-offer/withdraw/{prepare,submit}` | Withdraw an outgoing offer |
+| **Faucet** | `POST /external-party/devnet-tap/{prepare,submit}` | DevNet faucet tap |
 
-**Signing pattern for dapp-core operations:**
+**Signing pattern for REST operations:**
 
 ```text
-1. Popup requests prepare via background -> dapp-core returns preparedTransaction + hash
-2. Popup sends password to background
-3. Background decrypts private key (or uses cached key)
+1. Popup requests prepare via background -> backend returns preparedTransaction + hash
+2. Popup sends password to background (or background uses the cached key)
+3. Background decrypts private key
 4. Background signs preparedTransactionHash locally
-5. Background submits {preparedTransaction, signature} to dapp-core -> Canton Ledger
+5. Background submits {preparedTransaction, signature} to backend -> Canton Ledger
 ```
 
-#### Wallet Gateway (JSON-RPC 2.0)
+#### CIP-0103 JSON-RPC Facade
 
-The extension talks to the Gateway for **CIP-0103 dApp API operations** and **wallet onboarding**. Requests use a self-signed HS256 JWT (not the dapp-core token) and require an active session via `addSession`.
+The extension uses the facade for **CIP-0103 dApp API operations**. The facade client (`gateway-facade-client.ts`) POSTs JSON-RPC 2.0 envelopes and authenticates with the **same backend Bearer token** as the REST client — there is no separate session handshake and no self-signed JWT.
 
-| API | Method | Description |
+| Surface | Path | Methods |
 | --- | --- | --- |
-| **User API** | `addSession` | Establish Gateway session (required before all other calls) |
-| | `createWallet` | Create new wallet + allocate partyId during onboarding |
-| | `getTransaction` | Get pending transaction details (hash, prepared tx) |
-| | `execute` | Submit signed transaction to Canton Ledger |
-| | `deleteTransaction` | Clean up rejected pending transaction |
-| **dApp API** | `prepareExecute` | Forward Daml commands to Canton, return pending tx |
-| | `ledgerApi` | Proxy GET/POST requests to Canton Ledger API |
+| **dApp API** | `/api/v0/dapp` | `prepareExecute`, `ledgerApi` |
+| **User API** | `/api/v0/user` | `getTransaction`, `execute`, `deleteTransaction` |
 
-**Gateway client** (`gateway-client.ts`):
+**Facade client** (`gateway-facade-client.ts`):
 
-- Separate Axios instance from the dapp-core client
-- Self-signed JWT: HS256, `sub: "ledger-api-user"`, no `typ` header, configurable per network
-- Session lifecycle: `ensureGatewaySession()` called automatically before every RPC call
-- Two RPC helpers: `gatewayDappRpc()` (dApp API at `/api/v0/dapp`) and `gatewayUserRpc()` (User API at `/api/v0/user`)
+- Plain `fetch`-based JSON-RPC 2.0; base URL set per network via `setGatewayFacadeBaseUrl()` (same `apiBaseUrl` as the REST client)
+- Auth: `Authorization: Bearer <sessionStore.authToken>`. On `401`, it calls `refreshAuthTokenOnce()` and retries once; a still-failing request throws `FacadeAuthRequiredError`
+- Two RPC helpers: `gatewayFacadeDappRpc()` (dApp API) and `gatewayFacadeUserRpc()` (User API)
+- Typed JSON-RPC error classes mapped from response codes: `FacadeNotOnboardedError` (-32001), `FacadeNotAuthorizedError` (-32002), `FacadeTemplateNotAllowedError` (-32003), `FacadeResourceNotAllowedError` (-32004), `FacadeMethodNotFoundError` (-32601), plus `FacadeNetworkError` for unreachable backends
 
 ### CIP-0103 dApp API
 
@@ -220,47 +211,34 @@ The extension implements the Canton CIP-0103 standard for dApp-wallet communicat
 
 | Method | Status | Description |
 | --- | --- | --- |
-| `connect` | Implemented | Check wallet readiness |
-| `disconnect` | Implemented | Acknowledge disconnect |
-| `isConnected` | Implemented | Alias for connect |
+| `connect` | Implemented | Check wallet readiness (unlocked + onboarded) |
+| `disconnect` | Implemented | No-op by design (extension has no per-dApp server session to invalidate) |
+| `isConnected` | Implemented | Alias for `connect` |
 | `status` | Implemented | Provider info, connection, network, session |
-| `getActiveNetwork` | Implemented | Current network config |
+| `getActiveNetwork` | Implemented | Current network config (CAIP-2 networkId + ledgerApi URL) |
 | `listAccounts` | Implemented | List wallet accounts |
 | `getPrimaryAccount` | Implemented | Primary account details |
-| `signMessage` | Implemented | Sign arbitrary message |
-| `signTransaction` | Implemented | Sign transaction hash |
-| `prepareExecute` | Implemented | Full tx lifecycle via Gateway |
-| `prepareExecuteAndWait` | Implemented | Same, returns execution result |
-| `ledgerApi` | Implemented | Proxy to Gateway Ledger API |
+| `signMessage` | Implemented | Sign arbitrary message (Ed25519 over UTF-8 bytes) |
+| `prepareExecute` | Implemented | Full tx lifecycle via facade (result is `Null` per spec) |
+| `prepareExecuteAndWait` | Implemented | Same, returns the execution result |
+| `ledgerApi` | Implemented | Proxy to the backend Ledger API |
+| `signTransaction` | Implemented | **Ginkgo extension, NOT in CIP-0103** — signs a raw base64 hash; prefer `prepareExecute` for new dApps |
 
 ### prepareExecute Flow
 
 ```text
-1. dApp calls prepareExecute(command) via CIP-0103
-2. Extension forwards to Wallet Gateway dApp API
-3. Gateway calls Canton Ledger API /v2/interactive-submission/prepare
-4. Gateway stores pending tx, returns userUrl with commandId
-5. Extension shows approval popup to user
-6. User approves -> extension signs preparedTransactionHash locally
-7. Extension calls Gateway User API execute(commandId, signature)
-8. Gateway submits to Canton with partySignatures
-9. Extension returns result to dApp
+1. dApp calls prepareExecute(commands) via CIP-0103
+2. Extension forwards to facade dApp API -> returns { userUrl }
+3. Extension parses transactionId + commandId from userUrl
+   (transactionId is the lookup key for all user-API calls; commandId is echoed in events)
+4. Extension shows approval popup to user
+5. IF rejected: facade User API deleteTransaction(transactionId) -> return USER_REJECTED
+6. IF approved:
+     facade User API getTransaction(transactionId) -> { preparedTransactionHash }
+     Sign hash locally with the cached private key
+     facade User API execute(transactionId, signature, signedBy, partyId)
+7. Extension returns result to dApp (Null for prepareExecute; { tx } for prepareExecuteAndWait)
 ```
-
-### Signing Relay
-
-The signing relay bridges Wallet Gateway signing requests to extension-held keys:
-
-```text
-1. Extension connects to relay via Socket.io on wallet unlock
-2. Extension registers public keys with relay
-3. Gateway calls relay HTTP API: POST /signTransaction
-4. Relay emits sign-request to connected extension
-5. Extension shows approval popup, signs, emits sign-response
-6. Relay returns signature to Gateway
-```
-
-The relay implements a Blockdaemon-compatible HTTP API so the Gateway treats it like any standard signing provider.
 
 ### Security Model
 
@@ -275,9 +253,9 @@ The relay implements a Blockdaemon-compatible HTTP API so the Gateway treats it 
 +--------------------------------------+
 |     BACKGROUND SERVICE WORKER        |  Holds encrypted key in chrome.storage.local.
 |  Decrypts key only when signing.     |  Signs transaction hashes.
-|  Makes all API calls.                |  Manages auth tokens.
+|  Makes all API calls (REST+facade).  |  Manages the auth token.
 |  Auto-locks after timeout.           |  Caches decrypted key in memory while unlocked.
-|  Connects to signing relay.          |  Handles CIP-0103 dApp API requests.
+|  Handles CIP-0103 dApp API requests. |
 +--------------------------------------+
 ```
 
@@ -307,18 +285,18 @@ Controlled by `VITE_ENCRYPTION_BACKEND`:
 
 ## Network Configuration
 
-The wallet supports four networks, selectable at runtime via a dropdown in the dashboard header:
+The wallet supports four networks, selectable at runtime via a dropdown in the dashboard header. Each network maps to one dapp-core backend (`apiBaseUrl`) that serves both the REST API and the CIP-0103 facade. Configuration lives in `lib/network.ts` (`NETWORKS`).
 
-| Network | dapp-core API | Gateway URL | Signing Relay | Explorer | Faucet |
-| --- | --- | --- | --- | --- | --- |
-| Localnet | `http://localhost:3003/` | `http://localhost:3030` | `http://localhost:4100` | -- | Yes |
-| Devnet | -- | -- | -- | -- | Yes |
-| Testnet | -- | -- | -- | -- | No |
-| Mainnet | -- | -- | -- | -- | No |
+| Network | Label | dapp-core backend (`apiBaseUrl`) | Explorer | Faucet |
+| --- | --- | --- | --- | --- |
+| Localnet | Local Devnet | `http://localhost:3003/` | lighthouse.devnet.cantonloop.com | Yes |
+| Devnet (default) | Devnet | `https://api-devnet.kairo.ag/` | lighthouse.devnet.cantonloop.com | Yes |
+| Testnet | Testnet | `https://api-testnet.kairo.ag/` | lighthouse.testnet.cantonloop.com | No |
+| Mainnet | Mainnet | `https://api.kairo.ag/` | lighthouse.cantonloop.com | No |
 
-Localnet includes a `gatewayAuth` config for self-signed JWT generation: `{networkId: "canton:localnet", idpIssuer: "unsafe-auth", clientId: "ledger-api-user", clientSecret: "unsafe"}`. Other networks do not yet have Gateway URLs configured.
+Internal code keeps the bare network ID (`'devnet'`, ...) because it's embedded in storage keys, React Query cache keys, and popup state. It is converted to a CAIP-2 chain ID (`canton:devnet`) only at the CIP-0103 dApp API boundary, via `toCaip2NetworkId()`.
 
-Network selection is persisted in a global (non-namespaced) `chrome.storage.local` key. Switching networks clears the session (auth tokens, party ID), disconnects the signing relay, resets the Gateway session, and returns the user to the Welcome/Unlock screen.
+Network selection is persisted in a global (non-namespaced) `chrome.storage.local` key. Switching networks clears the session (auth tokens, party ID), updates the REST and facade base URLs, clears the pre-approval cache, and returns the user to the Welcome/Unlock screen. The previous network's data is preserved in isolated storage.
 
 ---
 
@@ -328,12 +306,14 @@ Copy `.env.example` to `.env` and fill in values:
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `VITE_GOOGLE_CLIENT_ID` | -- | Google OAuth client ID |
+| `VITE_GOOGLE_CLIENT_ID` | -- | Google OAuth client ID (same as the web app) |
+| `VITE_GOOGLE_CLIENT_SECRET` | -- | Google OAuth client secret |
+| `VITE_PARTY_HINT` | `ginkgo-wallet` | Party hint prefix for Canton onboarding (alphanumeric, `-`, `_` only) |
 | `VITE_ENCRYPTION_BACKEND` | `webcrypto` | `webcrypto` or `cryptojs` |
 | `VITE_SALT_ROUNDS` | `10` | bcrypt salt rounds (cryptojs backend only) |
 | `VITE_AUTO_LOCK_MINUTES` | `15` | Auto-lock timeout in minutes |
 
-> **Note:** API, Gateway, and explorer URLs are determined at runtime by the selected network (see [Network Configuration](#network-configuration)).
+> **Note:** Backend and explorer URLs are determined at runtime by the selected network (see [Network Configuration](#network-configuration)), not by env vars.
 
 ---
 
@@ -343,6 +323,7 @@ Copy `.env.example` to `.env` and fill in values:
 ginkgo/
 |-- wxt.config.ts                 # WXT config: manifest, Vite aliases
 |-- tsconfig.json                 # TypeScript config with path aliases
+|-- vitest.config.ts              # Vitest config (node env) + path aliases
 |-- postcss.config.js             # Tailwind CSS 4 PostCSS plugin
 |-- package.json
 |-- .env.example
@@ -351,29 +332,27 @@ ginkgo/
 |-- assets/icons/                 # SVG icon components (Canton, CBTC, USDCx, etc.)
 |
 |-- entrypoints/
-|   |-- background.ts             # Service worker: message router, network init, migrations
-|   |-- content.ts                # CIP-0103 content script bridge (postMessage <-> chrome.runtime)
-|   |-- provider.content.ts       # MAIN world script: injects window.canton marker for SDK detection
+|   |-- background.ts                  # Service worker: message router, network init, migrations
+|   |-- content.ts                     # CIP-0103 content script bridge (postMessage <-> chrome.runtime)
+|   |-- provider.content.ts            # MAIN world: replies to SPLICE_WALLET_EXT_READY with EXT_ACK (detection handshake); does NOT set window.canton
 |   |-- background/
-|   |   |-- api-client.ts         # Axios instance for dapp-core (setApiBaseUrl)
-|   |   |-- gateway-client.ts     # Axios instance for Wallet Gateway (JSON-RPC 2.0)
+|   |   |-- api-client.ts              # Axios instance for dapp-core REST (setApiBaseUrl)
+|   |   |-- gateway-facade-client.ts   # fetch-based CIP-0103 JSON-RPC facade client (Bearer auth)
 |   |   |-- handlers/
-|   |   |   |-- dapp-api.handler.ts    # CIP-0103 method dispatch (all 11 methods)
+|   |   |   |-- dapp-api.handler.ts    # CIP-0103 method dispatch (+ signTransaction extension)
 |   |   |   |-- auth.handler.ts        # Google OAuth, token refresh, logout
 |   |   |   |-- signing.handler.ts     # Key decrypt + transaction signing
 |   |   |   |-- keystore.handler.ts    # Key gen, import, encrypt, store, onboarding, pre-approval
-|   |   |   |-- network.handler.ts     # Get/switch network, update clients + relay
-|   |   |   |-- api.handler.ts         # Proxied API calls (balances, offers, etc.)
-|   |   |   |-- session.handler.ts     # Lock/unlock, auto-lock, key cache, relay connect
+|   |   |   |-- network.handler.ts     # Get/switch network, update REST + facade clients
+|   |   |   |-- api.handler.ts         # Proxied REST calls (balances, offers, etc.)
+|   |   |   |-- session.handler.ts     # Lock/unlock, auto-lock, in-memory key cache
 |   |   |   |-- approval.handler.ts    # MetaMask-style approval popups
 |   |   |   '-- event-broadcaster.ts   # Push statusChanged/accountsChanged to dApps
-|   |   |-- signing-relay/
-|   |   |   '-- relay-client.ts        # Socket.io client for signing relay
 |   |   '-- encryption/
-|   |       |-- types.ts              # EncryptionProvider interface
-|   |       |-- webcrypto.ts          # PBKDF2 + AES-256-GCM
-|   |       |-- cryptojs.ts           # CryptoJS AES (web app compatible)
-|   |       '-- index.ts             # Facade: selects backend via env var
+|   |       |-- types.ts               # EncryptionProvider interface
+|   |       |-- webcrypto.ts           # PBKDF2 + AES-256-GCM
+|   |       |-- cryptojs.ts            # CryptoJS AES (web app compatible)
+|   |       '-- index.ts               # Facade: selects backend via env var
 |   |
 |   |-- popup/                    # Main wallet UI (400 x 600px)
 |   |   |-- main.tsx              # React root with QueryClient + ErrorBoundary
@@ -389,7 +368,6 @@ ginkgo/
 |   |           |-- Balances.tsx  # Token balances + pre-approval banner
 |   |           |-- Transfer.tsx  # 3-step: form -> confirm -> success
 |   |           |-- Settings.tsx  # PartyId, export key, lock, logout
-|   |           |-- Activity.tsx  # Paginated tx history
 |   |           '-- offers/       # Incoming/Outgoing/History tabs
 |   |
 |   '-- options/                  # Full-tab settings page
@@ -397,10 +375,11 @@ ginkgo/
 |       '-- App.tsx               # Key export (Base64/Hex), encryption info
 |
 |-- lib/                          # Shared code (popup + background)
-|   |-- network.ts                # NetworkId type, NetworkConfig (with gateway/relay URLs)
+|   |-- network.ts                # NetworkId type, NetworkConfig, NETWORKS, toCaip2NetworkId
+|   |-- auth-refresh.ts           # refreshAuthTokenOnce() shared by REST + facade clients
 |   |-- dapp-api/
 |   |   |-- types.ts              # CIP-0103 SpliceMessage types, JSON-RPC helpers
-|   |   '-- gateway-types.ts      # Wallet Gateway request/response types
+|   |   '-- gateway-types.ts      # Facade request/response types (prepareExecute, transactions)
 |   |-- messaging/
 |   |   |-- constants.ts          # MSG action string constants
 |   |   |-- types.ts              # Discriminated union request/response types
@@ -418,21 +397,11 @@ ginkgo/
 |   '-- utils.ts                  # cn(), sleep(), onCopyText(), base64/hex conversion
 |
 |-- tools/
-|   '-- signing-relay/            # Signing relay service (standalone)
-|       |-- package.json
-|       |-- tsconfig.json
-|       |-- Dockerfile
-|       '-- src/
-|           |-- index.ts          # Express + Socket.io server (port 4100)
-|           |-- http-api.ts       # Blockdaemon-compatible HTTP endpoints
-|           |-- socket-handler.ts # Socket.io connection/event handling
-|           '-- types.ts          # Shared signing types
+|   '-- signing-relay/            # LEGACY standalone signing relay service — no longer used
+|                                 #   by the facade build; retained for reference only.
 |
-|-- docs/
-|   |-- pattern-a-implementation-checklist.md  # Implementation progress tracker
-|   |-- dapp-connectivity-plan.md              # CIP-0103 design doc
-|   |-- hybrid-signing-plan.md                 # Signing approach analysis
-|   '-- ...
+|-- docs/                         # Design docs, plans, and specs
+|   '-- superpowers/specs/        # incl. the CIP-0103 facade migration design
 |
 |-- components/
 |   '-- common/
@@ -443,80 +412,26 @@ ginkgo/
     '-- options.css               # Options page: Tailwind + dark theme (no fixed size)
 ```
 
----
-
-## Signing Relay Service
-
-Located at `tools/signing-relay/`. A standalone Node.js service that bridges the Wallet Gateway's Blockdaemon signing driver to the Ginkgo extension.
-
-### Setup
-
-```bash
-cd tools/signing-relay
-npm install
-npm run dev     # Development with hot reload
-npm start       # Production
-```
-
-### HTTP API (Blockdaemon-compatible)
-
-| Endpoint | Description |
-| --- | --- |
-| `POST /signTransaction` | Forward signing request to connected extension |
-| `POST /getTransaction` | Get transaction signing status |
-| `POST /getTransactions` | Get multiple transaction statuses |
-| `POST /getKeys` | List registered public keys |
-| `POST /createKey` | Register a new key |
-| `GET /health` | Health check |
-
-### Socket.io Protocol
-
-| Event | Direction | Payload |
-| --- | --- | --- |
-| `register-keys` | extension -> relay | `{ keys: [{ id, name, publicKey }] }` |
-| `sign-request` | relay -> extension | `{ txId, tx, txHash, keyIdentifier, internalTxId? }` |
-| `sign-response` | extension -> relay | `{ txId, signature, publicKey, status }` |
-
-### Docker
-
-```bash
-docker build -t signing-relay .
-docker run -p 4100:4100 signing-relay
-```
-
----
-
-## Backend API (dapp-core)
-
-The extension talks to **dapp-core** for authentication, token data, offer management, transfers, faucet, and activity history. See [Interaction Flow by Backend](#interaction-flow-by-backend) for the complete endpoint list.
-
-| Area | Endpoints |
-| --- | --- |
-| Auth | `POST /auth/login-with-google`, `POST /auth/refresh-token`, `GET /auth/me` |
-| Party registration | `POST /auth/register-party` (links partyId to user after Gateway onboarding) |
-| Token balances | `GET /wallet/token-balance` |
-| Transfers (Amulet) | `POST /external-party/transfer-amulet/{prepare,submit}` |
-| Offers (Token Standard) | `POST /offers/{prepare,submit}`, `GET /offers/{incoming,outgoing,history}-requests` |
-| Offer actions | `POST /offers/{approve,reject,withdraw}/{prepare,submit}` |
-| Faucet | `POST /external-party/devnet-tap/{prepare,submit}` |
-| Activity | `GET /external-party/tx-history` |
+> **Legacy note:** `tools/signing-relay/` and `lib/dapp-api/gateway-types.ts` contain types/services from the earlier dual-backend design (a separate Wallet Gateway plus a Socket.io signing relay). The extension no longer mints JWTs or connects to a relay — all dApp RPC now flows through the dapp-core facade with the backend Bearer token. The relay service is kept in-tree for reference but is not part of the extension build.
 
 ---
 
 ## Message Protocol
 
-All privileged operations go through typed messages (`lib/messaging/`). The popup never directly accesses storage or makes API calls.
+All privileged operations go through typed messages (`lib/messaging/`). The popup never directly accesses storage or makes API calls. The router lives in `entrypoints/background.ts` (`routeMessage`). To add a feature: add a `MSG.*` constant + request/response union member in `lib/messaging/`, write a handler, and wire a `case` in `routeMessage`.
 
 | Category | Actions | Handler |
 | --- | --- | --- |
 | Auth | `GOOGLE_AUTH`, `REFRESH_TOKEN`, `LOGOUT`, `GET_AUTH_STATE` | `auth.handler.ts` |
 | Session | `UNLOCK`, `LOCK`, `GET_LOCK_STATE` | `session.handler.ts` |
-| Keystore | `CREATE_KEYPAIR`, `VALIDATE_IMPORT_KEY`, `PREPARE_ONBOARDING`, `COMPLETE_ONBOARDING`, `EXPORT_PRIVATE_KEY`, `DELETE_KEYSTORE` | `keystore.handler.ts` |
+| Keystore | `CREATE_KEYPAIR`, `VALIDATE_IMPORT_KEY`, `PREPARE_ONBOARDING`, `COMPLETE_ONBOARDING`, `EXPORT_PRIVATE_KEY`, `DELETE_KEYSTORE`, `RESET_KEYSTORE_FOR_RECOVERY` | `keystore.handler.ts` |
 | Signing | `SIGN_AND_SUBMIT_TRANSFER_PREAPPROVAL`, `SIGN_AND_SUBMIT_TRANSFER_TOKEN_STANDARD`, `SIGN_AND_SUBMIT_APPROVE`, `SIGN_AND_SUBMIT_REJECT`, `SIGN_AND_SUBMIT_WITHDRAW` | `signing.handler.ts` |
 | Network | `GET_NETWORK`, `SWITCH_NETWORK` | `network.handler.ts` |
 | Transfer pre-approval | `REGISTER_TRANSFER_PREAPPROVAL`, `GET_PREAPPROVAL_STATUS` | `keystore.handler.ts` |
-| API proxy | `FETCH_BALANCES`, `PREPARE_TRANSFER_*`, `FETCH_INCOMING_OFFERS`, `FETCH_OUTGOING_OFFERS`, `FETCH_HISTORY_OFFERS`, `PREPARE_APPROVE`, `PREPARE_REJECT`, `PREPARE_WITHDRAW`, `FETCH_ACTIVITY`, `FETCH_ABOUT_ME`, `REQUEST_FAUCET` | `api.handler.ts` |
+| API proxy | `FETCH_BALANCES`, `PREPARE_TRANSFER_PREAPPROVAL`, `PREPARE_TRANSFER_TOKEN_STANDARD`, `FETCH_INCOMING_OFFERS`, `FETCH_OUTGOING_OFFERS`, `FETCH_HISTORY_OFFERS`, `PREPARE_APPROVE`, `PREPARE_REJECT`, `PREPARE_WITHDRAW`, `FETCH_ABOUT_ME`, `REQUEST_FAUCET` | `api.handler.ts` |
 | dApp approval | `GET_DAPP_APPROVAL`, `DAPP_APPROVAL_RESULT` | `approval.handler.ts` |
+
+CIP-0103 dApp requests do **not** use the `MSG` protocol — they arrive as `SpliceMessage` objects from the content script and are dispatched separately by `dapp-api.handler.ts` (registered before the `MSG` router so it intercepts dApp messages first).
 
 ---
 
@@ -526,35 +441,32 @@ All privileged operations go through typed messages (`lib/messaging/`). The popu
 
 ```text
 Welcome -> Google sign-in
-  |  (1) POST /auth/login-with-google -> dapp-core
+  |  (1) POST /auth/login-with-google -> backend
   |  (2) GET /auth/me -> get party status
   -> CreatePassword (8+ chars, upper, lower, digit, special)
   -> KeySetup (auto-generate key pair)
   -> ShowPrivateKey (reveal, copy, backup)
   -> Acknowledgment (3 checkbox confirmations)
   -> TypedConfirm:
-       (3) Connect to Signing Relay (Socket.io, before partyId exists)
-       (4) Enable auto-approve for relay sign requests
-       (5) Gateway User API: createWallet({partyHint, signingProviderId})
-           -> Gateway initiates Canton topology tx
-           -> Gateway calls Signing Relay: POST /signTransaction
-           -> Relay emits sign-request to extension
-           -> Extension auto-signs, emits sign-response
-           -> Gateway completes onboarding, returns partyId
-       (6) POST /auth/register-party -> dapp-core (links partyId to user)
-       (7) Disable auto-approve
-       (8) Reconnect relay with real partyId
+       (3) Encrypt + store keystore; cache private key in memory
+       (4) IF not already onboarded:
+             POST /external-party/onboarding/prepare {publicKey, hint}
+               -> { partyId, multiHash, topologyTransactions }
+             Sign multiHash locally with the Ed25519 private key
+             POST /external-party/onboarding/submit {signedHash, preparedParty}
+               -> backend submits topology to Canton, sets status SUCCESSFULLY,
+                  persists user<->party link (no separate register-party call)
+             Persist partyId + status
+       (5) Mark onboardingComplete; set unlocked
   -> Dashboard
 ```
 
 ### Returning User
 
 ```text
-Welcome -> Google sign-in (dapp-core)
+Welcome -> Google sign-in (backend)
   -> Unlock (enter password)
        (1) Decrypt + cache private key in memory
-       (2) Connect to Signing Relay with partyId
-       (3) Register public key with relay
   -> Dashboard
 ```
 
@@ -564,68 +476,55 @@ Welcome -> Google sign-in (dapp-core)
 dApp calls prepareExecute(commands) via window.postMessage
   -> Content script relays to background via chrome.runtime
   -> Background:
-       (1) Gateway dApp API: prepareExecute(commands) -> {userUrl, commandId}
-       (2) Show approval popup to user
-       (3) IF rejected: Gateway User API deleteTransaction(commandId) -> return error
-       (4) IF approved:
-           Gateway User API: getTransaction(commandId) -> {preparedTransactionHash}
+       (1) facade dApp API: prepareExecute(commands) -> { userUrl }
+       (2) Parse transactionId + commandId from userUrl
+       (3) Show approval popup to user
+       (4) IF rejected: facade User API deleteTransaction(transactionId) -> error
+       (5) IF approved:
+           facade User API getTransaction(transactionId) -> { preparedTransactionHash }
            Sign hash locally with cached private key
-           Gateway User API: execute(commandId, signature, signedBy)
+           facade User API execute(transactionId, signature, signedBy, partyId)
   -> Result returned to dApp via postMessage
 ```
 
-### Transfer (Popup-Driven via dapp-core)
+### Transfer (Popup-Driven)
 
 ```text
 Dashboard -> Send tab -> Select token + recipient + amount
-  -> IF Amulet:
-       (1) dapp-core: POST /external-party/transfer-amulet/prepare
-       (2) Enter password -> decrypt key -> sign hash locally
-       (3) dapp-core: POST /external-party/transfer-amulet/submit
-  -> IF CBTC/USDCx (Token Standard):
-       (1) dapp-core: POST /offers/prepare
-       (2) Enter password -> decrypt key -> sign hash locally
-       (3) dapp-core: POST /offers/submit
+  (both paths use the same endpoints; the asset is selected in the request payload)
+  -> IF Amulet (pre-approval path):  POST /transfer-offer/prepare { assetId: 'Amulet', ... }
+  -> IF CBTC/USDCx (Token Standard): POST /transfer-offer/prepare { assetId, ... }
+  -> Enter password -> decrypt key -> sign prepared hash locally
+  -> POST /transfer-offer/submit { preparedData, signature }
 ```
 
 ### Transfer Pre-Approval
 
-Transfer pre-approval is required to receive Amulet transfers. It is registered via dapp-core using the prepare/sign/submit flow. If missing, a warning banner appears on the Balances tab with a manual registration button.
+Transfer pre-approval is required to receive Amulet transfers. It is registered via `POST /wallet/transfer-preapproval/prepare` → sign locally → `POST /wallet/transfer-preapproval/submit`, and its presence is checked via `GET /wallet/transfer-preapproval/status`. If missing, a warning banner appears on the Balances tab with a manual registration button.
 
-**Preapproval cache TTL:** After a successful registration (or dapp-core confirming the preapproval exists), the status is cached in-memory for **30 minutes** (`PREAPPROVAL_CACHE_TTL_MS`). During this window, `GET_PREAPPROVAL_STATUS` returns `true` without hitting dapp-core. After expiry, the next status check re-queries dapp-core, allowing the banner to reappear if the on-chain preapproval has expired. The cache is also cleared on **logout** and **network switch**.
+**Preapproval cache TTL:** After a successful registration (or the backend confirming the preapproval exists), the status is cached in-memory for **30 minutes** (`PREAPPROVAL_CACHE_TTL_MS`). During this window, `GET_PREAPPROVAL_STATUS` returns `true` without hitting the backend. After expiry, the next status check re-queries the backend, allowing the banner to reappear if the on-chain preapproval has expired. The cache is also cleared on **logout** and **network switch**.
 
-### Offer Actions (Popup-Driven via dapp-core)
+### Offer Actions (Popup-Driven)
 
 ```text
 Incoming offer -> Approve/Reject:
-  (1) dapp-core: POST /offers/{approve,reject}/prepare
+  (1) POST /transfer-offer/{approve,reject}/prepare
   (2) Enter password -> sign locally
-  (3) dapp-core: POST /offers/{approve,reject}/submit
+  (3) POST /transfer-offer/{approve,reject}/submit
 
 Outgoing offer -> Withdraw:
-  (1) dapp-core: POST /offers/withdraw/prepare
+  (1) POST /transfer-offer/withdraw/prepare
   (2) Enter password -> sign locally
-  (3) dapp-core: POST /offers/withdraw/submit
+  (3) POST /transfer-offer/withdraw/submit
 ```
 
-### Faucet (DevNet only, via dapp-core)
+### Faucet (DevNet only)
 
 ```text
 Token detail -> Tap Faucet:
-  (1) dapp-core: POST /external-party/devnet-tap/prepare -> {hash, preparedTx}
+  (1) POST /external-party/devnet-tap/prepare -> { hash, preparedTx }
   (2) Sign hash locally (use cached key or decrypt with password)
-  (3) dapp-core: POST /external-party/devnet-tap/submit -> Canton Ledger
-```
-
-### Gateway-Initiated Signing (via Signing Relay)
-
-```text
-Wallet Gateway needs a signature (e.g. during createWallet):
-  (1) Gateway calls relay HTTP API: POST /signTransaction({txHash, keyIdentifier})
-  (2) Relay emits 'sign-request' to connected extension via Socket.io
-  (3) Extension shows approval popup (or auto-approves during onboarding)
-  (4) Extension signs txHash locally, emits 'sign-response' back to relay
-  (5) Relay returns signature to Gateway via HTTP response
+  (3) POST /external-party/devnet-tap/submit -> Canton Ledger
 ```
 
 ### Network Switching
@@ -634,10 +533,8 @@ Wallet Gateway needs a signature (e.g. during createWallet):
 Dashboard -> Header network dropdown
   -> Select different network
   -> Session cleared (auth tokens, partyId)
-  -> Signing relay disconnected
-  -> Gateway session reset
-  -> dapp-core API base URL updated
-  -> Gateway URL + auth config updated
+  -> Pre-approval cache cleared
+  -> REST + facade base URLs updated
   -> App returns to Welcome/Unlock
   -> Previous network's data preserved in isolated storage
 ```
@@ -646,38 +543,43 @@ Dashboard -> Header network dropdown
 
 ## Token Configuration
 
+Defined in `lib/constants.ts` (`SUPPORTED_TOKENS`). All three use Daml's `Numeric 10` type, so decimals are 10 across the board.
+
 | Token | Symbol | Decimals | Min Amount |
 | --- | --- | --- | --- |
-| Amulet | CC | 5 | 10 |
-| Canton Bitcoin | CBTC | 8 | 0.00001 |
-| Canton USD Coin | USDCx | 5 | 1 |
+| Amulet | CC | 10 | 10 |
+| Canton Bitcoin | CBTC | 10 | 0.00001 |
+| Canton USD Coin | USDCx | 10 | 1 |
 
 ---
 
 ## Security Notes
 
 - **Key isolation**: Private keys exist only in the background service worker. The popup never has access.
-- **In-memory key caching**: During an unlocked session, the decrypted private key is cached in the service worker's memory for passwordless signing (CIP-0103, relay). The cache is cleared on lock/logout.
-- **Dual auth tokens**: dapp-core uses Google OAuth JWT (session storage). Gateway uses a self-signed HS256 JWT generated locally — never sent to dapp-core.
-- **Signing relay security**: The relay authenticates connections via partyId. Signing requests always show an approval popup before the extension signs. Auto-approve is only enabled temporarily during onboarding.
+- **In-memory key caching**: During an unlocked session, the decrypted private key is cached in the service worker's memory for passwordless signing (CIP-0103 and REST flows). The cache is cleared on lock/logout.
+- **Single auth token**: Both the REST API and the CIP-0103 facade authenticate with the same backend Bearer token (Google OAuth JWT in `chrome.storage.session`). The extension mints no JWTs of its own. On a `401`, the facade refreshes the token once and retries.
 - **Key fingerprint verification**: Before signing, the handler verifies that the private key's Canton fingerprint (`0x1220 || SHA256(int32_be(12) || pubkey)`) matches the partyId's namespace to prevent signing with a mismatched key.
 - **Auto-clear**: Exported private keys are automatically cleared from UI state after 30 seconds.
-- **Auto-lock**: Wallet locks after configurable timeout (default 15 min). All session data, cached keys, relay connections, and Gateway sessions are wiped.
+- **Auto-lock**: Wallet locks after a configurable timeout (default 15 min). Session data and cached keys are wiped.
 - **No localStorage**: Auth tokens use `chrome.storage.session` (memory-only, cleared on browser close).
 - **Per-user isolation**: Keystores are scoped by `{network}:{userId}:keystore`, preventing data leaks between accounts or networks.
-- **dApp approval**: All sensitive CIP-0103 methods (`connect`, `signMessage`, `signTransaction`, `prepareExecute`, `prepareExecuteAndWait`) require explicit user approval via a popup window.
-- **Transaction cleanup**: Rejected `prepareExecute` transactions are cleaned up via Gateway `deleteTransaction` to avoid orphaned pending state.
+- **dApp approval**: Sensitive CIP-0103 methods require explicit user approval via a popup window. Rejected `prepareExecute` transactions are cleaned up via the facade's `deleteTransaction` to avoid orphaned pending state.
 - **No XSS vectors**: No use of `dangerouslySetInnerHTML`, `eval`, or dynamic script injection.
 
 ---
 
 ## Manifest Permissions
 
-```json
+```jsonc
 {
   "permissions": ["storage", "identity", "alarms"],
   "host_permissions": [
-    "https://accounts.google.com/*"
+    "https://accounts.google.com/*",
+    "https://*.kairo.ag/*",
+    "http://localhost/*"
+  ],
+  "web_accessible_resources": [
+    { "resources": ["icon/*.png"], "matches": ["<all_urls>"] }
   ]
 }
 ```
@@ -686,13 +588,17 @@ Dashboard -> Header network dropdown
 | --- | --- |
 | `storage` | Encrypted keystore (`chrome.storage.local`) and session tokens (`chrome.storage.session`) |
 | `identity` | Google OAuth via `chrome.identity.launchWebAuthFlow()` |
-| `alarms` | Auto-lock timer and signing relay keepalive |
+| `alarms` | Auto-lock timer |
+| `host_permissions` | Google OAuth endpoint, dapp-core backends (`*.kairo.ag`), and local dev backend (`localhost`) |
+| `web_accessible_resources` | Lets dApp multi-wallet pickers fetch Ginkgo's icon from the `announceProvider` event |
+
+The manifest is defined in `wxt.config.ts` (not a static `manifest.json`). Its `key` field pins the extension ID so the OAuth redirect URI stays stable — **do not change `key`** without re-registering the redirect URI.
 
 ---
 
 ## Path Aliases
 
-Configured in both `wxt.config.ts` (Vite) and `tsconfig.json`:
+Configured in `wxt.config.ts` (Vite) and `vitest.config.ts`:
 
 | Alias | Path |
 | --- | --- |
@@ -712,12 +618,12 @@ Configured in both `wxt.config.ts` (Vite) and `tsconfig.json`:
 | Styling | Tailwind CSS 4 + Radix UI |
 | Server State | TanStack React Query |
 | Forms | React Hook Form + Zod |
-| HTTP | Axios |
-| WebSocket | socket.io-client |
+| HTTP | Axios (REST) + `fetch` (JSON-RPC facade) |
 | Crypto | `@canton-network/core-signing-lib` |
 | Encryption | Web Crypto API / CryptoJS |
 | Icons | lucide-react |
 | Math | BigNumber.js |
+| Testing | Vitest |
 
 ---
 
@@ -732,6 +638,9 @@ Configured in both `wxt.config.ts` (Vite) and `tsconfig.json`:
 | `yarn build:all` | Build both Chrome and Firefox |
 | `yarn zip` | Package Chrome extension as .zip |
 | `yarn zip:firefox` | Package Firefox extension as .zip |
+| `yarn test` | Run all tests once (Vitest) |
+| `yarn test:watch` | Run tests in watch mode |
+| `yarn test:cov` | Run tests with coverage |
 | `yarn typecheck` | Run TypeScript type checking |
 | `yarn lint` | Run ESLint |
 | `yarn format` | Run Prettier |

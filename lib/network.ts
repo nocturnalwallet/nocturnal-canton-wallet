@@ -48,8 +48,9 @@ export const NETWORK_IDS = Object.keys(NETWORKS) as NetworkId[];
 /**
  * Convert an internal NetworkId to a CAIP-2-compliant identifier for the
  * CIP-0103 dApp API surface. The canonical Network schema mandates a CAIP-2
- * chain ID like `canton:da-mainnet` (openrpc-dapp-api.json:791-816). Internal
- * wallet code keeps the bare ID (`'localnet'`, `'devnet'`, ...) because it's
+ * chain ID (the spec's own example is `canton:da-mainnet`, openrpc-dapp-api.json:791-816);
+ * this function emits `canton:<id>` from our internal ids, e.g. `canton:mainnet` /
+ * `canton:devnet`. Internal wallet code keeps the bare ID (`'localnet'`, `'devnet'`, ...) because it's
  * embedded in chrome.storage.local keys, React Query cache keys, popup state,
  * and the user-facing network picker — changing the internal form would force
  * a storage migration for every installed user. We convert only at the dApp

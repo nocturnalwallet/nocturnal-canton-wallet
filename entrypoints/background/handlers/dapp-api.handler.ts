@@ -5,8 +5,8 @@
  * - connect / disconnect / isConnected / status
  * - getActiveNetwork / listAccounts / getPrimaryAccount
  * - signMessage
- * - prepareExecute / prepareExecuteAndWait (via Wallet Gateway)
- * - ledgerApi (proxy to Wallet Gateway)
+ * - prepareExecute / prepareExecuteAndWait (via the CIP-0103 facade)
+ * - ledgerApi (proxy to the backend Ledger API via the facade)
  *
  * Plus one Ginkgo-only extension method:
  * - signTransaction — NON-STANDARD. Signs a raw base64-encoded transaction
@@ -309,19 +309,19 @@ async function handleSignTransaction(params: unknown): Promise<{
   return { signature, publicKey, fingerprint };
 }
 
-// -- Gateway-mediated CIP-0103 handlers --
+// -- Facade-mediated CIP-0103 handlers --
 
 /**
- * prepareExecute: Full transaction lifecycle via Wallet Gateway.
+ * prepareExecute: Full transaction lifecycle via the CIP-0103 facade.
  *
  * Flow:
- * 1. Forward command to Gateway dApp API → receive { userUrl } with commandId
+ * 1. Forward command to the facade dApp API → receive { userUrl } with transactionId + commandId
  * 2. Show approval popup to user
- * 3. If approved: sign preparedTransactionHash locally, call Gateway execute
+ * 3. If approved: sign preparedTransactionHash locally, call the facade execute
  * 4. Return result to dApp
  *
- * The extension signs locally (not via relay) since the private key is in memory.
- * The signing relay handles Gateway-initiated signing independently.
+ * The extension always signs locally with the in-memory private key. There is no
+ * signing relay — all dApp RPC flows through the facade using the backend Bearer token.
  */
 async function handlePrepareExecute(params: unknown): Promise<null> {
   if (!getGatewayFacadeBaseUrl()) {
@@ -336,7 +336,7 @@ async function handlePrepareExecute(params: unknown): Promise<null> {
 
   const typedParams = params as PrepareExecuteParams;
 
-  // 1. Forward to Gateway dApp API
+  // 1. Forward to the facade dApp API
   const { userUrl } = await gatewayFacadeDappRpc<PrepareExecuteResponse>('prepareExecute', typedParams);
 
   // 2. Extract ids from userUrl. Gateway v1.1.0 carries both:
@@ -358,7 +358,7 @@ async function handlePrepareExecute(params: unknown): Promise<null> {
   });
 
   if (!approved) {
-    // Clean up the pending transaction from Gateway
+    // Clean up the pending transaction from the facade
     try {
       await gatewayFacadeUserRpc('deleteTransaction', { transactionId });
     } catch {
@@ -367,7 +367,7 @@ async function handlePrepareExecute(params: unknown): Promise<null> {
     throw new RpcError(RpcErrorCodes.USER_REJECTED, 'User rejected the transaction');
   }
 
-  // 4. Get prepared transaction details from Gateway
+  // 4. Get prepared transaction details from the facade
   const tx = await gatewayFacadeUserRpc<GatewayTransaction>('getTransaction', { transactionId });
 
   // 5. Sign locally
@@ -375,7 +375,7 @@ async function handlePrepareExecute(params: unknown): Promise<null> {
   const signature = signTransactionHash(tx.preparedTransactionHash, privateKey);
   const fingerprint = partyId.split('::')[1];
 
-  // 6. Execute via Gateway. Result is discarded — the spec defines
+  // 6. Execute via the facade. Result is discarded — the spec defines
   // prepareExecute's result schema as `Null` (openrpc-dapp-api.json:80-82).
   // dApps that want the execute result should call prepareExecuteAndWait
   // instead, which returns { tx: TxChangedExecutedEvent }.
@@ -464,7 +464,7 @@ async function handlePrepareExecuteAndWait(params: unknown): Promise<PrepareExec
 }
 
 /**
- * ledgerApi: Proxy to the Wallet Gateway's Ledger API.
+ * ledgerApi: Proxy to the backend's Ledger API via the CIP-0103 facade.
  *
  * Normalizes legacy uppercase `requestMethod` and stringified `body` from older
  * dApp callers — wallet-gateway-remote ≥ 1.1.0 requires lowercase method names

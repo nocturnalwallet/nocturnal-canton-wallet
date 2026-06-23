@@ -1,8 +1,10 @@
 /**
- * TypeScript types for Wallet Gateway JSON-RPC interactions.
+ * TypeScript types for the CIP-0103 facade JSON-RPC interactions.
  *
- * These match the Gateway's dApp API and User API request/response shapes
- * as defined in splice-wallet-kernel.
+ * These match the facade's dApp API and User API request/response shapes.
+ * The shapes originate from the wallet-gateway-remote contract (the backend
+ * behind the facade), but the extension reaches them only through the facade
+ * at `/api/v0/{dapp,user}` — it does not talk to a separate gateway service.
  */
 
 /** Parameters for the `prepareExecute` dApp API method. */
@@ -45,8 +47,8 @@ export interface LedgerApiParams {
  * A transaction stored by the Gateway.
  *
  * Wallet-gateway-remote v1.1.0 returns both ids:
- *   - `id` is the gateway store's primary key (also the lookup key for all
- *     user-API methods: getTransaction/sign/execute/deleteTransaction).
+ *   - `id` is the backend store's primary key (the lookup key for the
+ *     user-API methods the extension calls: getTransaction/execute/deleteTransaction).
  *   - `commandId` is the application-level id echoed in events.
  */
 export interface GatewayTransaction {
