@@ -5,8 +5,8 @@ export default defineConfig({
   modules: ['@wxt-dev/module-react'],
   outDir: 'build',
   manifest: {
-    name: 'Ginkgo',
-    description: 'Ginkgo — Canton Network wallet browser extension with CIP-0103 dApp API support',
+    name: 'Nocturnal',
+    description: 'Nocturnal — Canton Network wallet browser extension with CIP-0103 dApp API support',
     version: '0.2.0',
     // Stable key pins the extension ID so the OAuth redirect URI stays consistent.
     // The redirect URI will be: https://<extension-id>.chromiumapp.org/
@@ -19,7 +19,7 @@ export default defineConfig({
       'http://localhost/*',
     ],
     // Make the extension icon fetchable by dApp pages so multi-wallet pickers
-    // can render Ginkgo's icon from the canton:announceProvider event's
+    // can render Nocturnal's icon from the canton:announceProvider event's
     // `detail.icon` URL. Without this, Chrome rewrites the URL to
     // chrome-extension://invalid/ and the picker shows a broken image.
     web_accessible_resources: [

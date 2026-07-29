@@ -104,7 +104,7 @@ export function Dashboard({ onLock, onLogout }: Props) {
       <div className="border-primary/15 bg-primary/5 flex items-center justify-between border-b px-4 py-3">
         <div className="flex items-center gap-1.5">
           <IconLogo className="h-5 w-5" />
-          <h1 className="text-primary text-sm font-bold">Ginkgo</h1>
+          <h1 className="text-primary text-sm font-bold">Nocturnal</h1>
         </div>
 
         <div className="flex items-center gap-1.5">

@@ -97,7 +97,7 @@ export function Welcome({ onSuccess }: Props) {
     <div className="bg-background flex h-full flex-col items-center justify-between p-6">
       <div className="flex flex-1 flex-col items-center justify-center gap-6">
         <IconLogo className="h-20 w-20" />
-        <h1 className="text-foreground text-2xl font-bold">Ginkgo</h1>
+        <h1 className="text-foreground text-2xl font-bold">Nocturnal</h1>
         <p className="text-muted-foreground text-center text-sm">
           Securely manage your Canton Network tokens
         </p>

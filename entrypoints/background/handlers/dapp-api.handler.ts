@@ -1,5 +1,5 @@
 /**
- * CIP-0103 dApp API handler for Ginkgo wallet extension.
+ * CIP-0103 dApp API handler for Nocturnal wallet extension.
  *
  * Implements the CIP-0103 dApp API methods:
  * - connect / disconnect / isConnected / status
@@ -8,7 +8,7 @@
  * - prepareExecute / prepareExecuteAndWait (via the CIP-0103 facade)
  * - ledgerApi (proxy to the backend Ledger API via the facade)
  *
- * Plus one Ginkgo-only extension method:
+ * Plus one Nocturnal-only extension method:
  * - signTransaction — NON-STANDARD. Signs a raw base64-encoded transaction
  *   hash. Not in CIP-0103; not in the SWK extension reference
  *   (wallet-gateway/extension/src/dapp-api/controller.ts:20-80). Kept as a
@@ -50,7 +50,7 @@ import {
 interface DappAccount {
   primary: boolean;
   partyId: string;
-  // CIP-0103 Wallet.status union — Ginkgo currently only writes 'allocated'
+  // CIP-0103 Wallet.status union — Nocturnal currently only writes 'allocated'
   // but advertises 'removed' for type parity with @canton-network/dapp-sdk's
   // Wallet type. Schema-validating SDKs reject status values outside the
   // spec union; widening the declared type here keeps future emissions
@@ -106,7 +106,7 @@ export async function buildDappAccount(): Promise<DappAccount | null> {
     // schema at openrpc-dapp-api.json:874-877; we emit the converted form
     // (e.g. `canton:devnet`), keeping the internal short ID for storage keys.
     networkId: toCaip2NetworkId(networkId),
-    signingProviderId: 'ginkgo',
+    signingProviderId: 'nocturnal',
   };
 }
 
@@ -192,7 +192,7 @@ export async function buildStatusEvent(): Promise<unknown> {
 
   return {
     provider: {
-      id: 'ginkgo',
+      id: 'nocturnal',
       version: '0.2.0',
       providerType: 'browser',
     },
@@ -262,7 +262,7 @@ const BASE64_PATTERN = /^[A-Za-z0-9+/_-]+={0,2}$/;
 const HEX_64_PATTERN = /^[0-9a-f]{64}$/;
 
 /**
- * signTransaction — Ginkgo extension method (NON-STANDARD).
+ * signTransaction — Nocturnal extension method (NON-STANDARD).
  *
  * Not part of CIP-0103. Not in the SWK extension reference's method catalog
  * (verified against wallet-gateway/extension/src/dapp-api/controller.ts:20-80
@@ -507,7 +507,7 @@ const methods: Record<string, MethodHandler> = {
   listAccounts: handleListAccounts,
   getPrimaryAccount: handleGetPrimaryAccount,
   signMessage: handleSignMessage,
-  // Ginkgo extension, NOT in CIP-0103 — see JSDoc on handleSignTransaction.
+  // Nocturnal extension, NOT in CIP-0103 — see JSDoc on handleSignTransaction.
   // Prefer prepareExecute / prepareExecuteAndWait for new integrations.
   signTransaction: handleSignTransaction,
   prepareExecute: handlePrepareExecute,

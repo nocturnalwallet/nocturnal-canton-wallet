@@ -38,7 +38,7 @@ export async function handleGoogleAuth(): Promise<MessageResponse<GoogleAuthData
     if (!GOOGLE_CLIENT_SECRET) return err('VITE_GOOGLE_CLIENT_SECRET is not configured');
 
     const redirectUri = chrome.identity.getRedirectURL();
-    console.log('[Ginkgo] OAuth redirect URI:', redirectUri);
+    console.log('[Nocturnal] OAuth redirect URI:', redirectUri);
 
     // PKCE: generate verifier + challenge
     const codeVerifier = generateCodeVerifier();
@@ -89,7 +89,7 @@ export async function handleGoogleAuth(): Promise<MessageResponse<GoogleAuthData
 
     if (!tokenRes.ok) {
       const errBody = await tokenRes.text();
-      console.error('[Ginkgo] Token exchange failed:', errBody);
+      console.error('[Nocturnal] Token exchange failed:', errBody);
       return err('Token exchange failed');
     }
 
@@ -144,14 +144,14 @@ export async function handleGoogleAuth(): Promise<MessageResponse<GoogleAuthData
         existingKeystore.walletKey !== publicKey
       ) {
         keyMismatch = true;
-        console.warn('[Ginkgo] Keystore mismatch detected', {
+        console.warn('[Nocturnal] Keystore mismatch detected', {
           expected: publicKey.slice(0, 12) + '…',
           actual: existingKeystore.walletKey.slice(0, 12) + '…',
         });
       }
     } catch (e) {
       // Storage read failed — treat as no-mismatch (no regression vs. today's behavior)
-      console.warn('[Ginkgo] Could not read keystore for mismatch check:', e);
+      console.warn('[Nocturnal] Could not read keystore for mismatch check:', e);
     }
 
     return ok({

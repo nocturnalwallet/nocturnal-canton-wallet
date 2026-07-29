@@ -1,5 +1,5 @@
 /**
- * CIP-0103 dApp API types for Ginkgo wallet extension.
+ * CIP-0103 dApp API types for Nocturnal wallet extension.
  *
  * Minimal inline definitions matching @canton-network/core-types SpliceMessage format.
  * This avoids pulling in the full @canton-network/core-types package and its transitive
@@ -14,13 +14,13 @@ export enum WalletEvent {
   SPLICE_WALLET_EXT_READY = 'SPLICE_WALLET_EXT_READY',
   SPLICE_WALLET_EXT_ACK = 'SPLICE_WALLET_EXT_ACK',
   SPLICE_WALLET_EXT_OPEN = 'SPLICE_WALLET_EXT_OPEN',
-  // Auth flow envelopes — accepted/parsed but unused (Ginkgo holds keys
+  // Auth flow envelopes — accepted/parsed but unused (Nocturnal holds keys
   // locally, no IdP login flow). Listed in upstream core-types/index.ts:70-81.
   SPLICE_WALLET_IDP_AUTH_SUCCESS = 'SPLICE_WALLET_IDP_AUTH_SUCCESS',
   SPLICE_WALLET_LOGOUT = 'SPLICE_WALLET_LOGOUT',
-  // Ginkgo extension — wallet→dApp event channel (not in upstream spec).
+  // Nocturnal extension — wallet→dApp event channel (not in upstream spec).
   // Used by entrypoints/background/handlers/event-broadcaster.ts to push
-  // statusChanged/accountsChanged. Documented as a Ginkgo deviation.
+  // statusChanged/accountsChanged. Documented as a Nocturnal deviation.
   SPLICE_WALLET_EVENT = 'SPLICE_WALLET_EVENT',
 }
 
@@ -40,7 +40,7 @@ export const CANTON_ANNOUNCE_PROVIDER_EVENT = 'canton:announceProvider';
  * `name` field (wxt.config.ts). Single source of truth for the announce
  * detail's name; if the manifest name ever changes, update here too.
  */
-export const PROVIDER_NAME = 'Ginkgo';
+export const PROVIDER_NAME = 'Nocturnal';
 
 // -- JSON-RPC 2.0 types --
 

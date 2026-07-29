@@ -1,4 +1,4 @@
-# Ginkgo Wallet
+# Nocturnal Wallet
 
 A universal browser extension wallet for the **Canton Network**. Supports CIP-0103 dApp connectivity, token management, transfers, offer approvals, and activity history — backed by a single **dapp-core** backend that exposes both a **REST API** (wallet operations) and a **CIP-0103 JSON-RPC facade** (dApp transactions), all authenticated with one backend Bearer token.
 
@@ -111,7 +111,7 @@ yarn zip:firefox    # Firefox .zip
 
 ### System Overview
 
-Ginkgo talks to a **single dapp-core backend per network**, which exposes two surfaces over the same base URL and the same Bearer token:
+Nocturnal talks to a **single dapp-core backend per network**, which exposes two surfaces over the same base URL and the same Bearer token:
 
 - **REST API** — Authentication, token balances, offer management, transfers (prepare/sign/submit), faucet, party onboarding, and activity history. The popup UI drives all wallet operations through these endpoints, with local signing in the background service worker.
 - **CIP-0103 JSON-RPC facade** (`/api/v0/dapp` and `/api/v0/user`) — CIP-0103 dApp API operations (`prepareExecute`, `prepareExecuteAndWait`, `ledgerApi`). External dApps reach the Canton Ledger through this facade, mediated by the extension.
@@ -134,7 +134,7 @@ Ginkgo talks to a **single dapp-core backend per network**, which exposes two su
                           +-----------+-----------+
                                       | Bearer token (one token for both surfaces)
      +--------------------------------+----------------------+
-     |                  GINKGO EXTENSION                      |
+     |                 NOCTURNAL EXTENSION                    |
      |                                                        |
      |  +-------------+    chrome.runtime     +------------+  |
      |  | Popup (UI)  | <----- messages ----> | Background |  |
@@ -222,7 +222,7 @@ The extension implements the Canton CIP-0103 standard for dApp-wallet communicat
 | `prepareExecute` | Implemented | Full tx lifecycle via facade (result is `Null` per spec) |
 | `prepareExecuteAndWait` | Implemented | Same, returns the execution result |
 | `ledgerApi` | Implemented | Proxy to the backend Ledger API |
-| `signTransaction` | Implemented | **Ginkgo extension, NOT in CIP-0103** — signs a raw base64 hash; prefer `prepareExecute` for new dApps |
+| `signTransaction` | Implemented | **Nocturnal extension, NOT in CIP-0103** — signs a raw base64 hash; prefer `prepareExecute` for new dApps |
 
 ### prepareExecute Flow
 
@@ -308,7 +308,7 @@ Copy `.env.example` to `.env` and fill in values:
 | --- | --- | --- |
 | `VITE_GOOGLE_CLIENT_ID` | -- | Google OAuth client ID (same as the web app) |
 | `VITE_GOOGLE_CLIENT_SECRET` | -- | Google OAuth client secret |
-| `VITE_PARTY_HINT` | `ginkgo-wallet` | Party hint prefix for Canton onboarding (alphanumeric, `-`, `_` only) |
+| `VITE_PARTY_HINT` | `nocturnal-wallet` | Party hint prefix for Canton onboarding (alphanumeric, `-`, `_` only) |
 | `VITE_ENCRYPTION_BACKEND` | `webcrypto` | `webcrypto` or `cryptojs` |
 | `VITE_SALT_ROUNDS` | `10` | bcrypt salt rounds (cryptojs backend only) |
 | `VITE_AUTO_LOCK_MINUTES` | `15` | Auto-lock timeout in minutes |
@@ -320,7 +320,7 @@ Copy `.env.example` to `.env` and fill in values:
 ## Project Structure
 
 ```text
-ginkgo/
+nocturnal/
 |-- wxt.config.ts                 # WXT config: manifest, Vite aliases
 |-- tsconfig.json                 # TypeScript config with path aliases
 |-- vitest.config.ts              # Vitest config (node env) + path aliases
@@ -590,7 +590,7 @@ Defined in `lib/constants.ts` (`SUPPORTED_TOKENS`). All three use Daml's `Numeri
 | `identity` | Google OAuth via `chrome.identity.launchWebAuthFlow()` |
 | `alarms` | Auto-lock timer |
 | `host_permissions` | Google OAuth endpoint, dapp-core backends (`*.kairo.ag`), and local dev backend (`localhost`) |
-| `web_accessible_resources` | Lets dApp multi-wallet pickers fetch Ginkgo's icon from the `announceProvider` event |
+| `web_accessible_resources` | Lets dApp multi-wallet pickers fetch Nocturnal's icon from the `announceProvider` event |
 
 The manifest is defined in `wxt.config.ts` (not a static `manifest.json`). Its `key` field pins the extension ID so the OAuth redirect URI stays stable — **do not change `key`** without re-registering the redirect URI.
 

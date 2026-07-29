@@ -1,5 +1,5 @@
 /**
- * CIP-0103 facade client for Ginkgo.
+ * CIP-0103 facade client for Nocturnal.
  *
  * Replaces the legacy direct-to-wallet-gateway path. POSTs JSON-RPC 2.0 to
  * `${apiBaseUrl}/api/v0/dapp` and `${apiBaseUrl}/api/v0/user`. Authentication

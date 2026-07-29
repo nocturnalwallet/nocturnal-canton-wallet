@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-Ginkgo is a **Canton Network wallet browser extension** (Chrome MV3 / Firefox MV2) built with [WXT](https://wxt.dev), React 19, TypeScript, and Tailwind CSS 4. It implements the CIP-0103 dApp API and manages keys, balances, transfers, and offers.
+Nocturnal is a **Canton Network wallet browser extension** (a rebranded fork of Ginkgo) (Chrome MV3 / Firefox MV2) built with [WXT](https://wxt.dev), React 19, TypeScript, and Tailwind CSS 4. It implements the CIP-0103 dApp API and manages keys, balances, transfers, and offers.
 
 ## Commands
 

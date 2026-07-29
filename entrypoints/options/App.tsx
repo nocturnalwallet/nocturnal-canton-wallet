@@ -20,7 +20,7 @@ function App() {
   return (
     <div className="bg-background min-h-screen">
       <div className="mx-auto max-w-3xl px-6 py-8">
-        <h1 className="text-foreground mb-8 text-2xl font-bold">Ginkgo Settings</h1>
+        <h1 className="text-foreground mb-8 text-2xl font-bold">Nocturnal Settings</h1>
 
         <div className="flex gap-6">
           {/* Sidebar */}
@@ -316,7 +316,7 @@ function AboutSection() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-foreground mb-1 text-lg font-semibold">About Ginkgo</h2>
+        <h2 className="text-foreground mb-1 text-lg font-semibold">About Nocturnal</h2>
         <p className="text-muted-foreground text-sm">
           A secure browser extension wallet for the Canton Network.
         </p>
