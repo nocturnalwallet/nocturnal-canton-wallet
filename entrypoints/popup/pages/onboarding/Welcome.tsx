@@ -94,7 +94,10 @@ export function Welcome({ onSuccess }: Props) {
   };
 
   return (
-    <div className="bg-background flex h-full flex-col items-center justify-between p-6">
+    <div
+      className="bg-background relative flex h-full flex-col items-center justify-between bg-cover bg-center p-6"
+      style={{ backgroundImage: "linear-gradient(to bottom, rgba(20,16,14,0.72), rgba(20,16,14,0.92)), url('/bg/skyline.png')" }}
+    >
       <div className="flex flex-1 flex-col items-center justify-center gap-6">
         <IconLogo className="h-20 w-20" />
         <h1 className="text-foreground text-2xl font-bold">Nocturnal</h1>
