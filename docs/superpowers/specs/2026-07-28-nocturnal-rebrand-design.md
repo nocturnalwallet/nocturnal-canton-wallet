@@ -36,7 +36,9 @@ Source assets: `~/Working/FETCH/Angelhack/Canton/_MISC/Nocturnal Branding/Noctur
    coexist with Ginkgo). Requires OAuth redirect re-registration (see below).
 4. **Logo integration:** use the provided PNGs directly (generate required icon sizes).
 5. **Provider IDs:** rename dApp-API `signingProviderId`/`id` from `ginkgo` → `nocturnal`,
-   and the onboarding party hint default `ginkgo-wallet` → `nocturnal-wallet`.
+   and the onboarding party hint default `ginkgo-wallet` → `nocturnal-wallet`. **Verified
+   safe** against the backend — see Risks (these are dApp-facing self-descriptors, never
+   sent to or validated by the gateway).
 6. **OAuth:** register the new redirect URI; the implementation will output the exact
    extension ID + redirect URI and a step-by-step Google Cloud Console walkthrough.
 
@@ -136,10 +138,14 @@ Swap "Ginkgo" → "Nocturnal" across user-facing and log strings:
 ## Risks
 - **OAuth downtime** under the new key until the redirect URI is registered — mitigated by
   the walkthrough deliverable.
-- **Provider-ID rename** (`ginkgo`→`nocturnal`) could break gateway calls if the backend
-  validates the value. Mitigation: exercise a connect/sign flow against the backend during
-  verification; if it rejects `nocturnal`, revert those two identifiers to `ginkgo`
-  (visual rebrand still stands).
+- **Provider-ID rename** (`ginkgo`→`nocturnal`) — **verified safe** against the
+  `kairo-wallet-provider-backend` codebase (2026-07-29). `signingProviderId` and
+  `provider.id` are only returned to the dApp page in CIP-0103 responses; the extension
+  never sends them to the backend, and the facade never parses them inbound. The backend's
+  own `signing_provider_id` DB column is seeded independently (`participant` /
+  `wallet-kernel`) and never equals the extension's value. The only backend "Ginkgo"
+  mention is a comment. The party `hint` is a stored free-form label, not validated. No
+  gateway impact from the rename.
 - **Futura `.ttc`** may not load via `@font-face` — fallback geometric-sans stack, must not
   block build.
 - **16px icon legibility** for the detailed comet mark — use a simplified source at small
