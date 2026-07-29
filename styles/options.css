@@ -1,5 +1,21 @@
 @import 'tailwindcss';
 
+@font-face {
+  font-family: 'Post Grotesk';
+  src: url('/fonts/PostGrotesk-Book.otf') format('opentype');
+  font-weight: 400; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'Post Grotesk';
+  src: url('/fonts/PostGrotesk-Medium.otf') format('opentype');
+  font-weight: 500; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'Post Grotesk';
+  src: url('/fonts/PostGrotesk-Bold.otf') format('opentype');
+  font-weight: 700; font-style: normal; font-display: swap;
+}
+
 /* Nocturnal Night — Full-tab options page — no fixed dimensions */
 :root {
   --background: oklch(0.15 0.01 35);            /* #14100E warm near-black */
@@ -24,6 +40,7 @@
   --positive: oklch(0.76 0.17 155);             /* #2ECC71 mint — unchanged */
   --positive-foreground: oklch(0.15 0.01 35);
   --radius: 0.625rem;
+  --font-display: 'Futura', 'Century Gothic', 'Post Grotesk', system-ui, sans-serif;
 }
 
 @theme inline {
@@ -60,9 +77,9 @@
   }
   body {
     @apply bg-background text-foreground;
-    font-family:
-      system-ui,
-      -apple-system,
-      sans-serif;
+    font-family: 'Post Grotesk', system-ui, -apple-system, sans-serif;
+  }
+  h1, h2, h3 {
+    font-family: var(--font-display);
   }
 }
