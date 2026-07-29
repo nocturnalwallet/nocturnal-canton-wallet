@@ -59,7 +59,7 @@ The extension uses `chrome.identity.launchWebAuthFlow()` to sign in with Google.
 3. Under **Authorized redirect URIs**, add:
 
    ```text
-   https://nedmfnmjfdneopknpheohpcngdaeipec.chromiumapp.org/
+   https://iijglelilemfjgadbekgleiclimbaopf.chromiumapp.org/
    ```
 
    > This URI is derived from the `key` field in the manifest. If you change the key, the extension ID and redirect URI will change. Run the extension and check the service worker console for the logged redirect URI.
