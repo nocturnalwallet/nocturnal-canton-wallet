@@ -8,10 +8,10 @@ export default defineConfig({
     name: 'Nocturnal',
     description: 'Nocturnal — Canton Network wallet browser extension with CIP-0103 dApp API support',
     version: '0.2.0',
-    // Stable key pins the extension ID so the OAuth redirect URI stays consistent.
+    // Stable key pins the Nocturnal extension ID so the OAuth redirect URI stays consistent.
     // The redirect URI will be: https://<extension-id>.chromiumapp.org/
     // Register this URI in Google Cloud Console → OAuth 2.0 Client → Authorized redirect URIs.
-    key: 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA1wm7Jt0cFnGf9ecUzFcSNx2NjY6ayMNQw8d4xgjW41L5ue7FRcODaFWngjxsdgiomU01LMgGHRD5eLbM7mi/iqKs0jYKooKRQk5TaDnZyAHtluDTzeCLBa+QXBJbx3qC88vWRSoDkmEIq6EQ0KlAk3o120IXRY6UYdn6TXXvqLo4vhWya8WfBTLorQtJJo7ByghgIFXDkSYiAvaSeiPAf2bxGU8l+HXJHIYouKECJHPoBW3CB626HXUWVeFeysEl4i/JNgdL5TAmb8KmaSly2T0q2KG7vXn+Dax2yUwGv2Y9X30Nw+8BZAAXd8N2goETWtXeZtgLZ5lxHCS6kkgksQIDAQAB',
+    key: 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAm+5/uaDpKxZpz4vZ+EwkLhbehAa+8OSwC28pacF6YoEveydmZo0g6GmRUIGZFf3BT1LcJlRhMu/EUsTZYWWy485HdxWI9MXJYWD4F+95wQCbze/qqvIWXSyNBAAfydB/4XllAiGttoEmefInRinjjRPrvADtAEEraUANS8M4C3xwYPMIG9OQWIn/BY/m4r5pcgzBEZ+vHXaFbcapFO36j7cLO/fXyST8pkyyUtorjAnDgkiyamo5Y3LpZcVvpA2xCZuOo9zfKLpT5UMQnYjuNhBYW+7oVBRwmvPiG1SVNRk+JQaQPsUeQplr+52s0NVl/5CQFeqgT41T+6iD2/4rwwIDAQAB',
     permissions: ['storage', 'identity', 'alarms'],
     host_permissions: [
       'https://accounts.google.com/*',
