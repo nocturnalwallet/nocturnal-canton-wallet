@@ -7,7 +7,7 @@ export default defineConfig({
   manifest: {
     name: 'Nocturnal',
     description: 'Nocturnal — Canton Network wallet browser extension with CIP-0103 dApp API support',
-    version: '0.2.0',
+    version: '0.1.0',
     // Stable key pins the Nocturnal extension ID so the OAuth redirect URI stays consistent.
     // The redirect URI will be: https://<extension-id>.chromiumapp.org/
     // Register this URI in Google Cloud Console → OAuth 2.0 Client → Authorized redirect URIs.

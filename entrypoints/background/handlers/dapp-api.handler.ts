@@ -193,7 +193,7 @@ export async function buildStatusEvent(): Promise<unknown> {
   return {
     provider: {
       id: 'nocturnal',
-      version: '0.2.0',
+      version: '0.1.0',
       providerType: 'browser',
     },
     connection,
