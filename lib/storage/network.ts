@@ -1,4 +1,4 @@
-import { DEFAULT_NETWORK, type NetworkId } from '../network';
+import { DEFAULT_NETWORK, NETWORK_IDS, type NetworkId } from '../network';
 
 const NETWORK_KEY = 'selectedNetwork';
 
@@ -6,7 +6,11 @@ const NETWORK_KEY = 'selectedNetwork';
 export const networkStore = {
   async get(): Promise<NetworkId> {
     const result = await chrome.storage.local.get(NETWORK_KEY);
-    return (result[NETWORK_KEY] as NetworkId) ?? DEFAULT_NETWORK;
+    const stored = result[NETWORK_KEY] as NetworkId | undefined;
+    // Fall back to DEFAULT_NETWORK when unset, or when a previously-stored
+    // network isn't available in this build (e.g. a stale 'devnet' selection
+    // in a Mainnet-only production build).
+    return stored && NETWORK_IDS.includes(stored) ? stored : DEFAULT_NETWORK;
   },
 
   async set(network: NetworkId): Promise<void> {
