@@ -16,6 +16,9 @@ export default defineConfig({
     host_permissions: [
       'https://accounts.google.com/*',
       'https://*.kairo.ag/*',
+      // Mainnet gateway (see NETWORKS.mainnet in lib/network.ts). Declared so
+      // the manifest matches actual egress and MV3 doesn't CORS-block it.
+      'https://*.thanhle.space/*',
       'http://localhost/*',
     ],
     // Make the extension icon fetchable by dApp pages so multi-wallet pickers
