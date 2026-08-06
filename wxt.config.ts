@@ -4,6 +4,10 @@ import path from 'node:path';
 export default defineConfig({
   modules: ['@wxt-dev/module-react'],
   outDir: 'build',
+  // Prefix build artifacts with the wallet name and keep WXT's mode suffix,
+  // e.g. build/ginkgo-chrome-mv3 (prod), build/ginkgo-chrome-mv3-mainnet
+  // (--mode mainnet), build/ginkgo-chrome-mv3-dev (dev).
+  outDirTemplate: 'ginkgo-{{browser}}-mv{{manifestVersion}}{{modeSuffix}}',
   manifest: {
     name: 'Ginkgo',
     description: 'Ginkgo — Canton Network wallet browser extension with CIP-0103 dApp API support',
