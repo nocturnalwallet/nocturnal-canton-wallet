@@ -41,9 +41,38 @@ export const NETWORKS: Record<NetworkId, NetworkConfig> = {
   },
 };
 
-export const DEFAULT_NETWORK: NetworkId = 'devnet';
+/**
+ * Production (Mainnet-only) build flag. `yarn build:prod` runs
+ * `wxt build --mode mainnet`, which loads `.env.mainnet` and sets
+ * `VITE_MAINNET_ONLY=true`. In this mode the wallet restricts itself to
+ * Mainnet only; every other build (dev, plain `yarn build`) never loads that
+ * env file, so the flag is absent and all networks stay available for testing.
+ *
+ * (WXT's `--mode` selects which `.env.<mode>` file loads but does NOT change
+ * `import.meta.env.MODE`, so gating goes through a dedicated VITE_ var.)
+ *
+ * Note the safe default: the restriction activates ONLY when the flag is
+ * explicitly `'true'`, so a missing flag degrades to all-networks — a dev
+ * build can never accidentally lock itself to Mainnet.
+ */
+export const IS_MAINNET_ONLY_BUILD =
+  import.meta.env.VITE_MAINNET_ONLY === 'true';
 
-export const NETWORK_IDS = Object.keys(NETWORKS) as NetworkId[];
+const ALL_NETWORK_IDS = Object.keys(NETWORKS) as NetworkId[];
+
+export const DEFAULT_NETWORK: NetworkId = IS_MAINNET_ONLY_BUILD
+  ? 'mainnet'
+  : 'devnet';
+
+/**
+ * Networks exposed to the UI picker and accepted by the network-switch handler.
+ * In a Mainnet-only production build this is `['mainnet']`; otherwise all
+ * networks. `NETWORKS` itself always keeps every entry so lookups by id
+ * (`NETWORKS[id]`) stay total.
+ */
+export const NETWORK_IDS: NetworkId[] = IS_MAINNET_ONLY_BUILD
+  ? ['mainnet']
+  : ALL_NETWORK_IDS;
 
 /**
  * Convert an internal NetworkId to a CAIP-2-compliant identifier for the

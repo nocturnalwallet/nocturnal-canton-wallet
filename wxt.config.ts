@@ -7,7 +7,7 @@ export default defineConfig({
   manifest: {
     name: 'Ginkgo',
     description: 'Ginkgo — Canton Network wallet browser extension with CIP-0103 dApp API support',
-    version: '0.2.0',
+    version: '0.5.1',
     // Stable key pins the extension ID so the OAuth redirect URI stays consistent.
     // The redirect URI will be: https://<extension-id>.chromiumapp.org/
     // Register this URI in Google Cloud Console → OAuth 2.0 Client → Authorized redirect URIs.

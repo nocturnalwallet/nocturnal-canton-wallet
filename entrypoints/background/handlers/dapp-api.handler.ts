@@ -193,7 +193,7 @@ export async function buildStatusEvent(): Promise<unknown> {
   return {
     provider: {
       id: 'ginkgo',
-      version: '0.2.0',
+      version: '0.5.1',
       providerType: 'browser',
     },
     connection,
