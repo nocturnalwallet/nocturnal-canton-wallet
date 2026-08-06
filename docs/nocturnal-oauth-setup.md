@@ -74,7 +74,7 @@ The client ID and secret are read from `VITE_GOOGLE_CLIENT_ID` and
 
 ## Step 5 — Verify
 
-1. Load `build/chrome-mv3` unpacked at `chrome://extensions` (Developer mode on).
+1. Load `build/nocturnal-chrome-mv3` unpacked at `chrome://extensions` (Developer mode on).
    Confirm the extension ID shown is `iijglelilemfjgadbekgleiclimbaopf` — if it is
    different, the redirect URI won't match and sign-in will fail. (The ID is pinned
    by the manifest `key`; do not change `key`.)
