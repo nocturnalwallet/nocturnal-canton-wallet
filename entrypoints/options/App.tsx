@@ -3,6 +3,7 @@ import { KeyIcon, ShieldIcon, InfoIcon, EyeIcon, EyeOffIcon, CopyIcon, CheckIcon
 import { sendMessage, MSG } from '@lib/messaging';
 import type { NetworkData } from '@lib/messaging';
 import { onCopyText, convertBase64ToHex } from '@lib/utils';
+import brand from '@brand/brand';
 
 const KEY_DISPLAY_TIMEOUT_MS = 30_000; // Auto-clear after 30s
 
@@ -20,7 +21,7 @@ function App() {
   return (
     <div className="bg-background min-h-screen">
       <div className="mx-auto max-w-3xl px-6 py-8">
-        <h1 className="text-foreground mb-8 text-2xl font-bold">Ginkgo Settings</h1>
+        <h1 className="text-foreground mb-8 text-2xl font-bold">{brand.displayName} Settings</h1>
 
         <div className="flex gap-6">
           {/* Sidebar */}
@@ -316,7 +317,7 @@ function AboutSection() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-foreground mb-1 text-lg font-semibold">About Ginkgo</h2>
+        <h2 className="text-foreground mb-1 text-lg font-semibold">About {brand.displayName}</h2>
         <p className="text-muted-foreground text-sm">
           A secure browser extension wallet for the Canton Network.
         </p>

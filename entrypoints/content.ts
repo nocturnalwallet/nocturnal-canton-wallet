@@ -2,7 +2,7 @@
  * CIP-0103 Content Script — Bridge between web page dApps and the extension background.
  *
  * This content script enables dApps using @canton-network/dapp-sdk to communicate
- * with the Ginkgo wallet extension. It relays messages between the page's
+ * with the wallet extension. It relays messages between the page's
  * window.postMessage channel and chrome.runtime.sendMessage.
  *
  * Message flow:
@@ -10,6 +10,7 @@
  *   background (sendResponse) → content script → window.postMessage → dApp
  */
 import { defineContentScript } from 'wxt/utils/define-content-script';
+import brand from '@brand/brand';
 import {
   isSpliceMessage,
   WalletEvent,
@@ -85,7 +86,7 @@ export default defineContentScript({
           }
         } catch (e) {
           // Extension context invalidated or background not available
-          console.warn('[Ginkgo] Failed to relay message to background:', e);
+          console.warn(`${brand.logTag} Failed to relay message to background:`, e);
         }
       }
 

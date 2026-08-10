@@ -1,3 +1,5 @@
+import brand from '@brand/brand';
+
 export type NetworkId = 'localnet' | 'devnet' | 'testnet' | 'mainnet';
 
 export interface NetworkConfig {
@@ -9,37 +11,54 @@ export interface NetworkConfig {
   faucetEnabled: boolean;
 }
 
-export const NETWORKS: Record<NetworkId, NetworkConfig> = {
+/** Shared network metadata; apiBaseUrl comes from the active brand pack. */
+const NETWORK_BASE: Record<
+  NetworkId,
+  Omit<NetworkConfig, 'apiBaseUrl'> & { apiBaseUrl?: string }
+> = {
   localnet: {
     id: 'localnet',
     label: 'Local Devnet',
-    apiBaseUrl: 'http://localhost:3003/',
-    // apiBaseUrl: 'http://192.168.0.108:3003/',
     explorerUrl: 'https://lighthouse.devnet.cantonloop.com',
     faucetEnabled: true,
   },
   devnet: {
     id: 'devnet',
     label: 'Devnet',
-    apiBaseUrl: 'https://api-devnet.kairo.ag/',
     explorerUrl: 'https://lighthouse.devnet.cantonloop.com',
     faucetEnabled: true,
   },
   testnet: {
     id: 'testnet',
     label: 'Testnet',
-    apiBaseUrl: 'https://api-testnet.kairo.ag/',
     explorerUrl: 'https://lighthouse.testnet.cantonloop.com',
     faucetEnabled: false,
   },
   mainnet: {
     id: 'mainnet',
     label: 'Mainnet',
-    apiBaseUrl: 'https://api.kairo.ag/',
     explorerUrl: 'https://lighthouse.cantonloop.com',
     faucetEnabled: false,
   },
 };
+
+function buildNetworks(): Record<NetworkId, NetworkConfig> {
+  const urls = brand.networkApiBaseUrls;
+  const ids = Object.keys(NETWORK_BASE) as NetworkId[];
+  const result = {} as Record<NetworkId, NetworkConfig>;
+  for (const id of ids) {
+    const apiBaseUrl = urls[id];
+    if (!apiBaseUrl) {
+      throw new Error(
+        `Brand "${brand.id}" is missing networkApiBaseUrls.${id}`,
+      );
+    }
+    result[id] = { ...NETWORK_BASE[id], apiBaseUrl };
+  }
+  return result;
+}
+
+export const NETWORKS: Record<NetworkId, NetworkConfig> = buildNetworks();
 
 /**
  * Production (Mainnet-only) build flag. `yarn build:prod` runs
