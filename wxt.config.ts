@@ -2,11 +2,13 @@ import { defineConfig } from 'wxt';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolveBrand, resolveBrandId } from './branding/resolve';
+import { loadBrandOauthEnv } from './branding/load-env';
 
 const rootDir = path.dirname(fileURLToPath(import.meta.url));
 const brandId = resolveBrandId();
 const brand = resolveBrand(brandId);
 const brandRoot = path.resolve(rootDir, 'branding', brandId);
+const brandOauth = loadBrandOauthEnv(brandRoot);
 
 const sharedHostPermissions = [
   'https://accounts.google.com/*',
@@ -45,6 +47,13 @@ export default defineConfig({
     define: {
       // Expose brand id for any runtime checks; primary selection is the @brand alias.
       'import.meta.env.VITE_BRAND': JSON.stringify(brandId),
+      // Brand-pack OAuth always wins over root `.env` (empty if unset — no cross-brand leak).
+      'import.meta.env.VITE_GOOGLE_CLIENT_ID': JSON.stringify(
+        brandOauth.VITE_GOOGLE_CLIENT_ID,
+      ),
+      'import.meta.env.VITE_GOOGLE_CLIENT_SECRET': JSON.stringify(
+        brandOauth.VITE_GOOGLE_CLIENT_SECRET,
+      ),
     },
     resolve: {
       alias: {

@@ -46,9 +46,12 @@ yarn install --ignore-engines
 
 ```bash
 cp .env.example .env
+cp branding/ginkgo/.env.example branding/ginkgo/.env
+# optional second brand:
+cp branding/nocturnal/.env.example branding/nocturnal/.env
 ```
 
-Fill in `VITE_GOOGLE_CLIENT_ID` (same client ID as the web app).
+Fill Google OAuth into **each brand's** `.env` (not the root `.env`). Root `.env` holds shared non-secret build defaults (encryption, auto-lock). See [branding/README.md](branding/README.md).
 
 ### Google OAuth Setup
 
@@ -312,13 +315,18 @@ Copy `.env.example` to `.env` and fill in values:
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `VITE_GOOGLE_CLIENT_ID` | -- | Google OAuth client ID (shared or per-brand; register each brand's redirect URI) |
-| `VITE_GOOGLE_CLIENT_SECRET` | -- | Google OAuth client secret |
 | `VITE_ENCRYPTION_BACKEND` | `webcrypto` | `webcrypto` or `cryptojs` |
 | `VITE_SALT_ROUNDS` | `10` | bcrypt salt rounds (cryptojs backend only) |
 | `VITE_AUTO_LOCK_MINUTES` | `15` | Auto-lock timeout in minutes |
 
-> **Note:** Backend URLs are determined by the selected network **and** the active brand pack (`networkApiBaseUrls`). Party hint comes from `branding/<id>/brand.ts` (`partyHintDefault`), not from env. Brand selection is via `VITE_BRAND` in yarn scripts (see [branding/README.md](branding/README.md)).
+Per-brand (gitignored `branding/<id>/.env`):
+
+| Variable | Description |
+| --- | --- |
+| `VITE_GOOGLE_CLIENT_ID` | Google OAuth client ID for that brand's extension ID / redirect URI |
+| `VITE_GOOGLE_CLIENT_SECRET` | Google OAuth client secret (Web application client) |
+
+> **Note:** Backend URLs come from the selected network **and** the active brand pack (`networkApiBaseUrls`). Party hint comes from `branding/<id>/brand.ts`. Brand selection is via `VITE_BRAND` in yarn scripts (see [branding/README.md](branding/README.md)).
 
 ---
 

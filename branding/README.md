@@ -28,9 +28,23 @@ branding/<id>/
   icon-logo.tsx     # in-app logo component
   public/           # toolbar icons, optional fonts/, bg/
   assets/           # PNGs imported by icon-logo (optional)
+  .env.example      # tracked OAuth template
+  .env              # gitignored — VITE_GOOGLE_CLIENT_ID / SECRET for this brand only
 ```
 
-`partyHintDefault` is the only onboarding party-hint source (do **not** set `VITE_PARTY_HINT` in `.env` — it would contaminate every brand build).
+`partyHintDefault` is the only onboarding party-hint source (do **not** set `VITE_PARTY_HINT` in root `.env`).
+
+### Google OAuth (per brand)
+
+OAuth credentials must **not** live in the root `.env` — that would bake one client into every `VITE_BRAND` build. Instead:
+
+```bash
+cp branding/ginkgo/.env.example branding/ginkgo/.env
+cp branding/nocturnal/.env.example branding/nocturnal/.env
+# edit each .env with that brand's Google Web-application client
+```
+
+`wxt.config.ts` loads `branding/<active>/.env` and injects those values (empty if missing), so root `.env` cannot leak OAuth into the wrong brand.
 
 Shared contract: [`types.ts`](types.ts). Resolver used by `wxt.config.ts` / vitest:
 [`resolve.ts`](resolve.ts).
@@ -42,7 +56,7 @@ Shared contract: [`types.ts`](types.ts). Resolver used by `wxt.config.ts` / vite
 3. Drop icons/fonts/theme; implement `icon-logo.tsx`.
 4. Add `'fox'` to `BrandId` in `types.ts` and to `BRANDS` / `BRAND_IDS` in `resolve.ts`.
 5. Add scripts: `dev:fox`, `build:fox`, `build:prod:fox`.
-6. Register the OAuth redirect URI for the new extension ID.
+6. Register the OAuth redirect URI for the new extension ID; add `branding/fox/.env.example` and a local gitignored `.env` with that client's ID/secret.
 
 ## Future core-package split
 
