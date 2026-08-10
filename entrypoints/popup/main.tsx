@@ -2,8 +2,12 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ErrorBoundary } from '@components/common/ErrorBoundary';
+import brand from '@brand/brand';
 import App from './App.tsx';
+import '@brand/theme.css';
 import '../../styles/globals.css';
+
+document.title = brand.displayName;
 
 const queryClient = new QueryClient({
   defaultOptions: {

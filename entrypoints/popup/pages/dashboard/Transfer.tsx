@@ -8,6 +8,7 @@ import {
   useSignAndSubmitTransferTokenStandard,
 } from '../../hooks/useTransfer';
 import { useBalances } from '../../hooks/useBalances';
+import brand from '@brand/brand';
 import type {
   PrepareTransferResponse,
   PrepareTransferTokenStandardResponse,
@@ -51,14 +52,14 @@ export function Transfer() {
         result = await prepareAmulet.mutateAsync({
           receiverPartyId: recipient,
           amount,
-          reason: 'Transfer from Ginkgo',
+          reason: `Transfer from ${brand.displayName}`,
         });
       } else {
         result = await prepareStandard.mutateAsync({
           assetId: tokenId,
           assetAmount: amount,
           receiverPartyId: recipient,
-          reason: 'Transfer from Ginkgo',
+          reason: `Transfer from ${brand.displayName}`,
           // milliseconds — backend computes executeBefore = now + maxTimeToExecute
           maxTimeToExecute: 24 * 60 * 60 * 1000,
         });

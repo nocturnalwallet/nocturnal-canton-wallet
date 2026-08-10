@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
+import { resolveBrand } from '../branding/resolve';
 
-// These gates are evaluated at module-eval time from `import.meta.env.MODE`,
+// These gates are evaluated at module-eval time from `import.meta.env`,
 // so each case stubs the env and re-imports a fresh module instance.
 describe('network build gating', () => {
   afterEach(() => {
@@ -25,9 +26,13 @@ describe('network build gating', () => {
     expect(net.NETWORK_IDS).toEqual(['mainnet']);
   });
 
-  it('mainnet points at the production gateway URL', async () => {
+  it('apiBaseUrls come from the active brand pack', async () => {
+    const brand = resolveBrand();
     vi.resetModules();
     const net = await import('./network');
-    expect(net.NETWORKS.mainnet.apiBaseUrl).toBe('https://api.kairo.ag/');
+    expect(net.NETWORKS.mainnet.apiBaseUrl).toBe(brand.networkApiBaseUrls.mainnet);
+    expect(net.NETWORKS.devnet.apiBaseUrl).toBe(brand.networkApiBaseUrls.devnet);
+    expect(net.NETWORKS.testnet.apiBaseUrl).toBe(brand.networkApiBaseUrls.testnet);
+    expect(net.NETWORKS.localnet.apiBaseUrl).toBe(brand.networkApiBaseUrls.localnet);
   });
 });

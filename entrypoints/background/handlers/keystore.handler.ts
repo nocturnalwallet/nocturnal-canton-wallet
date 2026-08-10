@@ -1,4 +1,5 @@
 import { createKeyPair, getPublicKeyFromPrivate, signTransactionHash } from '@canton-network/core-signing-lib';
+import brand from '@brand/brand';
 import { ok, err } from '@lib/messaging';
 import type { MessageResponse, KeyPairData, OnboardingPrepareData, PreapprovalStatusData } from '@lib/messaging';
 import { localStore, sessionStore } from '@lib/storage';
@@ -130,11 +131,13 @@ export async function handleCompleteOnboarding(payload: {
     // Only run onboarding if the user is new (not already registered on the backend)
     const partyStatus = await sessionStore.get('partyStatus');
     if (partyStatus !== 'SUCCESSFULLY') {
-      const partyHint = import.meta.env.VITE_PARTY_HINT || 'ginkgo-wallet';
+      // Party hint is brand-owned (branding/<id>/brand.ts). Do not read
+      // VITE_PARTY_HINT — a shared .env would contaminate every VITE_BRAND build.
+      const partyHint = brand.partyHintDefault;
 
       // 3. Backend prepares a party-allocation topology transaction.
       //    Returns { partyId, namespace, multiHash, topologyTransactions }.
-      console.log(`[Ginkgo] POST /external-party/onboarding/prepare hint=${partyHint}`);
+      console.log(`${brand.logTag} POST /external-party/onboarding/prepare hint=${partyHint}`);
       const prepareResponse = await apiClient.post(
         '/external-party/onboarding/prepare',
         { publicKey, hint: partyHint },
@@ -150,7 +153,7 @@ export async function handleCompleteOnboarding(payload: {
       // 5. Backend submits the signed topology to Canton and flips the party's
       //    onboardingStatus to SUCCESSFULLY (which also persists the user↔party
       //    link — no separate /auth/register-party call needed).
-      console.log(`[Ginkgo] POST /external-party/onboarding/submit partyId=${prepared.partyId}`);
+      console.log(`${brand.logTag} POST /external-party/onboarding/submit partyId=${prepared.partyId}`);
       const submitResponse = await apiClient.post(
         '/external-party/onboarding/submit',
         { signedHash, preparedParty: prepared },
@@ -163,7 +166,7 @@ export async function handleCompleteOnboarding(payload: {
       // 6. Persist partyId + onboarding status for the rest of the runtime.
       await sessionStore.set('partyId', submitted.partyId);
       await sessionStore.set('partyStatus', 'SUCCESSFULLY');
-      console.log(`[Ginkgo] Onboarding complete: ${submitted.partyId}`);
+      console.log(`${brand.logTag} Onboarding complete: ${submitted.partyId}`);
     }
 
     // 7. Mark onboarding complete

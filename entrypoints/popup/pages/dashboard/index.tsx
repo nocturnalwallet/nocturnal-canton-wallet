@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { WalletIcon, SendIcon, InboxIcon, HistoryIcon, SettingsIcon, Maximize2Icon, ChevronDownIcon, CopyIcon, CheckIcon } from 'lucide-react';
 import { IconLogo } from '@assets/icons/icon-logo';
+import brand from '@brand/brand';
 import { Balances } from './Balances';
 import { Transfer } from './Transfer';
 import { Offers } from './offers';
@@ -104,7 +105,7 @@ export function Dashboard({ onLock, onLogout }: Props) {
       <div className="border-primary/15 bg-primary/5 flex items-center justify-between border-b px-4 py-3">
         <div className="flex items-center gap-1.5">
           <IconLogo className="h-5 w-5" />
-          <h1 className="text-primary text-sm font-bold">Ginkgo</h1>
+          <h1 className="text-primary text-sm font-bold">{brand.displayName}</h1>
         </div>
 
         <div className="flex items-center gap-1.5">

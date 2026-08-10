@@ -1,29 +1,41 @@
 import { defineConfig } from 'wxt';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { resolveBrand, resolveBrandId } from './branding/resolve';
+import { loadBrandOauthEnv } from './branding/load-env';
+
+const rootDir = path.dirname(fileURLToPath(import.meta.url));
+const brandId = resolveBrandId();
+const brand = resolveBrand(brandId);
+const brandRoot = path.resolve(rootDir, 'branding', brandId);
+const brandOauth = loadBrandOauthEnv(brandRoot);
+
+const sharedHostPermissions = [
+  'https://accounts.google.com/*',
+  'https://*.kairo.ag/*',
+  'http://localhost/*',
+];
 
 export default defineConfig({
   modules: ['@wxt-dev/module-react'],
   outDir: 'build',
-  // Prefix build artifacts with the wallet name and keep WXT's mode suffix,
-  // e.g. build/ginkgo-chrome-mv3 (prod), build/ginkgo-chrome-mv3-mainnet
-  // (--mode mainnet), build/ginkgo-chrome-mv3-dev (dev).
-  outDirTemplate: 'ginkgo-{{browser}}-mv{{manifestVersion}}{{modeSuffix}}',
+  // Brand-prefixed artifacts + WXT mode suffix, e.g. build/ginkgo-chrome-mv3,
+  // build/nocturnal-chrome-mv3-mainnet (--mode mainnet), …-dev (dev).
+  outDirTemplate: `${brand.id}-{{browser}}-mv{{manifestVersion}}{{modeSuffix}}`,
+  // Brand-owned toolbar icons / fonts / backgrounds (no shared public/icon leakage).
+  publicDir: path.join('branding', brandId, 'public'),
   manifest: {
-    name: 'Ginkgo',
-    description: 'Ginkgo — Canton Network wallet browser extension with CIP-0103 dApp API support',
-    version: '0.5.1',
+    name: brand.displayName,
+    description: brand.description,
+    version: brand.version,
     // Stable key pins the extension ID so the OAuth redirect URI stays consistent.
     // The redirect URI will be: https://<extension-id>.chromiumapp.org/
     // Register this URI in Google Cloud Console → OAuth 2.0 Client → Authorized redirect URIs.
-    key: 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA1wm7Jt0cFnGf9ecUzFcSNx2NjY6ayMNQw8d4xgjW41L5ue7FRcODaFWngjxsdgiomU01LMgGHRD5eLbM7mi/iqKs0jYKooKRQk5TaDnZyAHtluDTzeCLBa+QXBJbx3qC88vWRSoDkmEIq6EQ0KlAk3o120IXRY6UYdn6TXXvqLo4vhWya8WfBTLorQtJJo7ByghgIFXDkSYiAvaSeiPAf2bxGU8l+HXJHIYouKECJHPoBW3CB626HXUWVeFeysEl4i/JNgdL5TAmb8KmaSly2T0q2KG7vXn+Dax2yUwGv2Y9X30Nw+8BZAAXd8N2goETWtXeZtgLZ5lxHCS6kkgksQIDAQAB',
+    key: brand.manifestKey,
     permissions: ['storage', 'identity', 'alarms'],
-    host_permissions: [
-      'https://accounts.google.com/*',
-      'https://*.kairo.ag/*',
-      'http://localhost/*',
-    ],
+    host_permissions: [...sharedHostPermissions, ...brand.hostPermissions],
     // Make the extension icon fetchable by dApp pages so multi-wallet pickers
-    // can render Ginkgo's icon from the canton:announceProvider event's
+    // can render the brand icon from the canton:announceProvider event's
     // `detail.icon` URL. Without this, Chrome rewrites the URL to
     // chrome-extension://invalid/ and the picker shows a broken image.
     web_accessible_resources: [
@@ -32,12 +44,24 @@ export default defineConfig({
   },
   imports: false,
   vite: () => ({
+    define: {
+      // Expose brand id for any runtime checks; primary selection is the @brand alias.
+      'import.meta.env.VITE_BRAND': JSON.stringify(brandId),
+      // Brand-pack OAuth always wins over root `.env` (empty if unset — no cross-brand leak).
+      'import.meta.env.VITE_GOOGLE_CLIENT_ID': JSON.stringify(
+        brandOauth.VITE_GOOGLE_CLIENT_ID,
+      ),
+      'import.meta.env.VITE_GOOGLE_CLIENT_SECRET': JSON.stringify(
+        brandOauth.VITE_GOOGLE_CLIENT_SECRET,
+      ),
+    },
     resolve: {
       alias: {
-        '@': path.resolve(__dirname),
-        '@lib': path.resolve(__dirname, 'lib'),
-        '@components': path.resolve(__dirname, 'components'),
-        '@assets': path.resolve(__dirname, 'assets'),
+        '@': rootDir,
+        '@lib': path.resolve(rootDir, 'lib'),
+        '@components': path.resolve(rootDir, 'components'),
+        '@assets': path.resolve(rootDir, 'assets'),
+        '@brand': brandRoot,
       },
     },
   }),

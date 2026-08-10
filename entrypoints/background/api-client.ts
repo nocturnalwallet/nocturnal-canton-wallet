@@ -2,7 +2,7 @@ import axios from 'axios';
 import { sessionStore } from '@lib/storage';
 import { refreshAuthTokenOnce } from '@lib/auth-refresh';
 
-let currentBaseUrl = import.meta.env.VITE_API_BASE_URL ?? '';
+let currentBaseUrl = '';
 
 export function setApiBaseUrl(url: string): void {
   currentBaseUrl = url;

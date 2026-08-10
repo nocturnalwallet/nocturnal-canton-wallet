@@ -4,16 +4,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-Ginkgo is a **Canton Network wallet browser extension** (Chrome MV3 / Firefox MV2) built with [WXT](https://wxt.dev), React 19, TypeScript, and Tailwind CSS 4. It implements the CIP-0103 dApp API and manages keys, balances, transfers, and offers.
+This repo is a **multi-brand Canton Network wallet browser extension** (Chrome MV3 / Firefox MV2) built with [WXT](https://wxt.dev), React 19, TypeScript, and Tailwind CSS 4. It implements the CIP-0103 dApp API and manages keys, balances, transfers, and offers.
+
+Brands (`ginkgo`, `nocturnal`, …) live under [`branding/`](branding/README.md) and are selected at build time with `VITE_BRAND`. Core code imports the active pack via the `@brand` alias.
 
 ## Commands
 
 ```bash
 yarn install --ignore-engines   # --ignore-engines needed: a transitive dep declares node>=22
-yarn dev                        # Chrome with hot reload (opens browser, popup is 400x600)
-yarn dev:firefox                # Firefox with hot reload
-yarn build                      # Chrome production build -> build/
-yarn build:all                  # Chrome + Firefox
+yarn dev                        # Ginkgo Chrome hot reload (opens browser, popup is 400x600)
+yarn dev:nocturnal              # Nocturnal Chrome hot reload
+yarn dev:firefox                # Firefox with hot reload (Ginkgo)
+yarn build                      # Ginkgo Chrome → build/ginkgo-chrome-mv3
+yarn build:nocturnal            # Nocturnal Chrome → build/nocturnal-chrome-mv3
+yarn build:prod                 # Ginkgo Mainnet-only
+yarn build:prod:nocturnal       # Nocturnal Mainnet-only
+yarn build:all-brands           # All four Chrome brand × mainnet variants
+yarn build:all                  # Ginkgo Chrome + Firefox
 yarn lint                       # eslint .
 yarn typecheck                  # tsc --noEmit
 yarn test                       # vitest run (all tests)
@@ -22,7 +29,7 @@ yarn test path/to/file.test.ts  # run a single test file
 yarn test -t "name substring"   # run tests matching a name
 ```
 
-Tests run in a `node` environment (`globals: false`, so import `describe/it/expect/vi` from `vitest` explicitly). Tests live next to the code they cover (`*.test.ts`). After dependency changes, `postinstall` runs `wxt prepare` to regenerate `.wxt/` types.
+Tests run in a `node` environment (`globals: false`, so import `describe/it/expect/vi` from `vitest` explicitly). Tests live next to the code they cover (`*.test.ts`). After dependency changes, `postinstall` runs `wxt prepare` to regenerate `.wxt/` types. Default vitest brand is `ginkgo` (`@brand` → `branding/ginkgo`).
 
 ## Architecture
 

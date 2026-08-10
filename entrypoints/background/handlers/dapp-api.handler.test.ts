@@ -208,7 +208,7 @@ describe('handleStatus — CIP-0103 StatusEvent shape', () => {
     // Spec required: isConnected, isNetworkConnected. Both must be booleans.
     expect(typeof status.connection.isConnected).toBe('boolean');
     expect(typeof status.connection.isNetworkConnected).toBe('boolean');
-    // Spec optional but Ginkgo always emits: reason, networkReason.
+    // Spec optional but we always emit: reason, networkReason.
     expect(typeof status.connection.reason).toBe('string');
     expect(typeof status.connection.networkReason).toBe('string');
   });

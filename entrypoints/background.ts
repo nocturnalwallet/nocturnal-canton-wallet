@@ -1,4 +1,5 @@
 import { defineBackground } from 'wxt/utils/define-background';
+import brand from '@brand/brand';
 import { MSG } from '@lib/messaging';
 import { ok, err } from '@lib/messaging/protocol';
 import type { MessageRequest } from '@lib/messaging/types';
@@ -67,7 +68,7 @@ import {
 } from './background/handlers/approval.handler';
 
 export default defineBackground(() => {
-  console.log('[Ginkgo] Background service worker started');
+  console.log(`${brand.logTag} Background service worker started`);
 
   // Initialize network: migrate legacy data, set prefix & API URL, set user scope
   (async () => {
