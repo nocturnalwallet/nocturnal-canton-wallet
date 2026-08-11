@@ -29,20 +29,50 @@ describe('PreparedFeeSection', () => {
       createElement(PreparedFeeSection, { fee: sampleFee }),
     );
     expect(html).toContain('Estimated fee');
+    expect(html).toContain('Estimate — may not be charged depending on network conditions.');
     expect(html).toContain('Wallet fee');
     expect(html).toContain('0.5 Amulet');
     expect(html).toContain('Network fee');
     expect(html).toContain('5.6291148501 Amulet');
-    expect(html).toContain('Total');
+    expect(html).toContain('Total estimated fee');
     expect(html).toContain('6.1291148501 Amulet');
     expect(html).not.toContain('party::abc');
-    expect(html).not.toContain('costEstimation');
+  });
+
+  it('does not render internal fee metadata as visible text', () => {
+    const feeWithCostEstimation: FeeBlock = {
+      ...sampleFee,
+      costEstimation: {
+        confirmationRequestBytes: 1024,
+        confirmationResponseBytes: 512,
+        rateUsdPerMb: '1.0',
+        amuletPriceUsd: '0.5',
+        trafficBufferBps: '100',
+        networkFeeAmulet: '5.6291148501',
+      },
+    };
+    const html = renderToStaticMarkup(
+      createElement(PreparedFeeSection, { fee: feeWithCostEstimation }),
+    );
+    expect(html).toContain('Wallet fee');
+    expect(html).toContain('0.5 Amulet');
+    expect(html).not.toContain('confirmationRequestBytes');
+    expect(html).not.toContain('rateUsdPerMb');
   });
 
   it('returns null when fees are empty and totalFee is blank', () => {
     const html = renderToStaticMarkup(
       createElement(PreparedFeeSection, {
         fee: { currency: 'Amulet', fees: [], totalFee: '' },
+      }),
+    );
+    expect(html).toBe('');
+  });
+
+  it('returns null when fees are absent and totalFee is blank', () => {
+    const html = renderToStaticMarkup(
+      createElement(PreparedFeeSection, {
+        fee: { currency: 'Amulet', fees: undefined as unknown as FeeBlock['fees'], totalFee: '' },
       }),
     );
     expect(html).toBe('');
