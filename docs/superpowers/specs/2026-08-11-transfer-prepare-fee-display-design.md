@@ -2,7 +2,7 @@
 
 **Status:** Draft for review  
 **Date:** 2026-08-11  
-**Companion plan:** to be written via superpowers:writing-plans after spec approval  
+**Companion plan:** `docs/superpowers/plans/2026-08-11-transfer-prepare-fee-display.md`  
 **Backend counterpart:** `kairo-wallet-provider-backend` `FeeLine` / `FeeBlock` in `src/modules/transfer/traffic-fee.types.ts`
 
 ---
