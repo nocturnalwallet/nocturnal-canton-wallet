@@ -8,6 +8,7 @@ import {
   useSignAndSubmitTransferTokenStandard,
 } from '../../hooks/useTransfer';
 import { useBalances } from '../../hooks/useBalances';
+import { PreparedFeeSection } from '@components/common/PreparedFeeSection';
 import brand from '@brand/brand';
 import type {
   PrepareTransferResponse,
@@ -135,6 +136,8 @@ export function Transfer() {
             <span className="text-foreground bg-background rounded-lg px-2 py-1.5 font-mono text-xs break-all">{recipient}</span>
           </div>
         </div>
+
+        {preparedData?.fee && <PreparedFeeSection fee={preparedData.fee} />}
 
         <div>
           <label htmlFor="transfer-password" className="text-muted-foreground text-sm">Password to sign</label>
