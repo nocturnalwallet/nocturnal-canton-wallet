@@ -44,6 +44,12 @@ export default defineConfig({
   },
   imports: false,
   vite: () => ({
+    build: {
+      // Drop <link rel="modulepreload"> tags: in an MV3 popup Chrome discards the
+      // preloaded chunk as a "cross-world extension resource mismatch" and refetches
+      // it anyway. Disabling preload removes the warning at negligible cost.
+      modulePreload: false,
+    },
     define: {
       // Expose brand id for any runtime checks; primary selection is the @brand alias.
       'import.meta.env.VITE_BRAND': JSON.stringify(brandId),
