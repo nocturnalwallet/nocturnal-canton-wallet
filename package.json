@@ -2,7 +2,7 @@
   "name": "ginkgo-wallet",
   "description": "Ginkgo — Canton Network wallet browser extension with CIP-0103 dApp API support",
   "private": true,
-  "version": "0.5.2",
+  "version": "0.6.0",
   "type": "module",
   "scripts": {
     "dev": "VITE_BRAND=ginkgo wxt",
