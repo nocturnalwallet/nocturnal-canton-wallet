@@ -13,7 +13,18 @@ vi.mock('@lib/storage', () => ({
   },
 }));
 
+vi.mock('../api-client', () => ({ default: { get: vi.fn(), post: vi.fn() } }));
+vi.mock('./session.handler', () => ({ getCachedPrivateKey: vi.fn(), setCachedPrivateKey: vi.fn() }));
+vi.mock('@canton-network/core-signing-lib', () => ({
+  signTransactionHash: vi.fn(() => 'SIG'),
+  getPublicKeyFromPrivate: vi.fn(() => 'PUB'),
+  createKeyPair: vi.fn(),
+}));
+
 import { localStore, sessionStore } from '@lib/storage';
+import { handleMaybeAutoRegisterPreapproval, clearPreapprovalCache } from './keystore.handler';
+import apiClient from '../api-client';
+import { getCachedPrivateKey } from './session.handler';
 
 describe('handleResetKeystoreForRecovery', () => {
   beforeEach(() => {
@@ -40,5 +51,69 @@ describe('handleResetKeystoreForRecovery', () => {
     if (!result.success) {
       expect(result.error).toMatch(/storage write failed/);
     }
+  });
+});
+
+describe('handleMaybeAutoRegisterPreapproval', () => {
+  beforeEach(() => {
+    vi.mocked(sessionStore.get).mockReset();
+    vi.mocked(apiClient.get).mockReset();
+    vi.mocked(apiClient.post).mockReset();
+    vi.mocked(getCachedPrivateKey).mockReset();
+    clearPreapprovalCache(); // reset the 30-min in-memory status cache between tests
+  });
+
+  it('does nothing when the rollout flag is off', async () => {
+    vi.mocked(sessionStore.get).mockImplementation(async (k: any) =>
+      k === 'shouldAutoRegisterPreapproval' ? false : k === 'partyId' ? 'p::1' : null);
+    vi.mocked(getCachedPrivateKey).mockReturnValue('PRIV');
+
+    const res = await handleMaybeAutoRegisterPreapproval();
+
+    expect(res).toEqual({ success: true, data: { attempted: false, registered: false, reason: 'disabled' } });
+    expect(apiClient.post).not.toHaveBeenCalled();
+  });
+
+  it('skips (locked) when the private key is not cached', async () => {
+    vi.mocked(sessionStore.get).mockImplementation(async (k: any) =>
+      k === 'shouldAutoRegisterPreapproval' ? true : k === 'partyId' ? 'p::1' : null);
+    vi.mocked(getCachedPrivateKey).mockReturnValue(null);
+
+    const res = await handleMaybeAutoRegisterPreapproval();
+
+    expect(res.success && res.data.reason).toBe('locked');
+    expect(res.success && res.data.attempted).toBe(false);
+    expect(apiClient.post).not.toHaveBeenCalled();
+  });
+
+  it('skips when a preapproval already exists (idempotent)', async () => {
+    vi.mocked(sessionStore.get).mockImplementation(async (k: any) =>
+      k === 'shouldAutoRegisterPreapproval' ? true : k === 'partyId' ? 'p::1' : null);
+    vi.mocked(getCachedPrivateKey).mockReturnValue('PRIV');
+    vi.mocked(apiClient.get).mockResolvedValue({ data: { data: { exists: true } } } as any); // status
+
+    const res = await handleMaybeAutoRegisterPreapproval();
+
+    expect(res.success && res.data).toEqual({ attempted: false, registered: false, reason: 'already-registered' });
+    expect(apiClient.post).not.toHaveBeenCalled(); // never prepared/submitted
+  });
+
+  it('registers when enabled, unlocked, and no preapproval yet', async () => {
+    vi.mocked(sessionStore.get).mockImplementation(async (k: any) =>
+      k === 'shouldAutoRegisterPreapproval' ? true : k === 'partyId' ? 'p::1' : null);
+    vi.mocked(getCachedPrivateKey).mockReturnValue('PRIV');
+    vi.mocked(apiClient.get).mockResolvedValue({ data: { data: { exists: false } } } as any); // status
+    vi.mocked(apiClient.post)
+      .mockResolvedValueOnce({ data: { data: { preparedTransaction: 'TX', preparedTransactionHash: 'H', commandId: 'C' } } } as any) // prepare
+      .mockResolvedValueOnce({ data: {} } as any); // submit
+
+    const res = await handleMaybeAutoRegisterPreapproval();
+
+    expect(res.success && res.data).toEqual({ attempted: true, registered: true });
+    expect(apiClient.post).toHaveBeenCalledWith('/wallet/transfer-preapproval/prepare', { partyId: 'p::1' });
+    expect(apiClient.post).toHaveBeenCalledWith(
+      '/wallet/transfer-preapproval/submit',
+      expect.objectContaining({ partyId: 'p::1', signature: 'SIG', commandId: 'C' }),
+    );
   });
 });

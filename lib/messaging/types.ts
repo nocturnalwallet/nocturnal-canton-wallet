@@ -56,6 +56,7 @@ export type MessageRequest =
   // Transfer pre-approval
   | { action: typeof MSG.REGISTER_TRANSFER_PREAPPROVAL }
   | { action: typeof MSG.GET_PREAPPROVAL_STATUS }
+  | { action: typeof MSG.MAYBE_AUTO_REGISTER_PREAPPROVAL }
   // Signing
   | {
       action: typeof MSG.SIGN_AND_SUBMIT_TRANSFER_PREAPPROVAL;
@@ -196,6 +197,12 @@ export interface PrepareData {
 
 export interface PreapprovalStatusData {
   hasPreapproval: boolean;
+}
+
+export interface AutoRegisterPreapprovalData {
+  attempted: boolean;
+  registered: boolean;
+  reason?: string;
 }
 
 export interface OnboardingPrepareData {

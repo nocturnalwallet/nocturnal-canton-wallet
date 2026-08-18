@@ -1,7 +1,13 @@
 import { createKeyPair, getPublicKeyFromPrivate, signTransactionHash } from '@canton-network/core-signing-lib';
 import brand from '@brand/brand';
 import { ok, err } from '@lib/messaging';
-import type { MessageResponse, KeyPairData, OnboardingPrepareData, PreapprovalStatusData } from '@lib/messaging';
+import type {
+  MessageResponse,
+  KeyPairData,
+  OnboardingPrepareData,
+  PreapprovalStatusData,
+  AutoRegisterPreapprovalData,
+} from '@lib/messaging';
 import { localStore, sessionStore } from '@lib/storage';
 import { getEncryptionProvider } from '../encryption';
 import apiClient from '../api-client';
@@ -282,6 +288,39 @@ export async function handleGetPreapprovalStatus(): Promise<
   } catch {
     // Non-critical — return false on any error
     return ok({ hasPreapproval: false });
+  }
+}
+
+export async function handleMaybeAutoRegisterPreapproval(): Promise<
+  MessageResponse<AutoRegisterPreapprovalData>
+> {
+  try {
+    const shouldAuto = await sessionStore.get('shouldAutoRegisterPreapproval');
+    if (!shouldAuto) {
+      return ok({ attempted: false, registered: false, reason: 'disabled' });
+    }
+
+    // Silent path only: requires the in-memory key cached at unlock/onboarding.
+    if (!getCachedPrivateKey()) {
+      return ok({ attempted: false, registered: false, reason: 'locked' });
+    }
+
+    // Idempotent: never register if the party already has an active preapproval.
+    const status = await handleGetPreapprovalStatus();
+    if (status.success && status.data.hasPreapproval) {
+      return ok({ attempted: false, registered: false, reason: 'already-registered' });
+    }
+
+    const res = await handleRegisterTransferPreapproval();
+    if (res.success) return ok({ attempted: true, registered: true });
+    return ok({ attempted: true, registered: false, reason: res.error });
+  } catch (e: unknown) {
+    // Best-effort: never throw out of the auto path.
+    return ok({
+      attempted: true,
+      registered: false,
+      reason: e instanceof Error ? e.message : 'auto-register failed',
+    });
   }
 }
 
