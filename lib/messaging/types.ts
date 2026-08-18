@@ -160,6 +160,7 @@ export interface GoogleAuthData {
   publicKey: string;
   onboardingComplete: boolean;
   keyMismatch: boolean;
+  shouldAutoRegisterPreapproval: boolean;
 }
 
 export interface LockStateData {

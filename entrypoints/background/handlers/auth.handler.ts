@@ -123,11 +123,13 @@ export async function handleGoogleAuth(): Promise<MessageResponse<GoogleAuthData
     const partyId = party?.partyId ?? null;
     const partyStatus = party?.onboardingStatus ?? 'PENDING';
     const publicKey = party?.publicKey ?? '';
+    const shouldAutoRegisterPreapproval = party?.shouldAutoRegisterPreapproval === true;
 
     if (partyId) {
       await sessionStore.set('partyId', partyId);
     }
     await sessionStore.set('partyStatus', partyStatus);
+    await sessionStore.set('shouldAutoRegisterPreapproval', shouldAutoRegisterPreapproval);
 
     // Check if this user has already completed onboarding on this network
     const onboardingComplete = !!(await localStore.get('onboardingComplete'));
@@ -163,6 +165,7 @@ export async function handleGoogleAuth(): Promise<MessageResponse<GoogleAuthData
       publicKey,
       onboardingComplete,
       keyMismatch,
+      shouldAutoRegisterPreapproval,
     });
   } catch (e: unknown) {
     return err(e instanceof Error ? e.message : 'Google auth failed');

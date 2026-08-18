@@ -32,7 +32,7 @@ const fetchMock = vi.fn();
 
 import { handleGoogleAuth } from './auth.handler';
 import apiClient from '../api-client';
-import { localStore } from '@lib/storage';
+import { localStore, sessionStore } from '@lib/storage';
 
 // ── Constants ──
 const PK_BACKEND = 'E8EiDJyl6LIO4OHpGwBd4s3e8hfcqCjQ++4h2lwWsDo=';
@@ -59,7 +59,11 @@ const legacyKeystore = {
 };
 
 // ── Helpers ──
-function mockAuthMe(party: { partyId: string; publicKey: string; onboardingStatus: string } | null) {
+function mockAuthMe(
+  party:
+    | { partyId: string; publicKey: string; onboardingStatus: string; shouldAutoRegisterPreapproval?: boolean }
+    | null,
+) {
   vi.mocked(apiClient.get).mockResolvedValue({
     data: { data: { party } },
   } as any);
@@ -236,5 +240,22 @@ describe('handleGoogleAuth — keystore mismatch detection', () => {
     if (result.success) {
       expect(result.data.keyMismatch).toBe(false);
     }
+  });
+});
+
+describe('handleGoogleAuth — shouldAutoRegisterPreapproval', () => {
+  it('persists and returns shouldAutoRegisterPreapproval from /auth/me', async () => {
+    mockAuthMe({ partyId: 'p::1', publicKey: PK_BACKEND, onboardingStatus: 'SUCCESSFULLY', shouldAutoRegisterPreapproval: true });
+    vi.mocked(localStore.get).mockImplementation(async (key) => {
+      if (key === 'keystore') return null;
+      if (key === 'onboardingComplete') return true;
+      return null;
+    });
+
+    const result = await handleGoogleAuth();
+
+    expect(sessionStore.set).toHaveBeenCalledWith('shouldAutoRegisterPreapproval', true);
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.shouldAutoRegisterPreapproval).toBe(true);
   });
 });
