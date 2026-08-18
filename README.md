@@ -18,6 +18,7 @@ Built with [WXT](https://wxt.dev), React 19, TypeScript, and Tailwind CSS 4. See
 - **Transfers** — Dual-path: Amulet (transfer-preapproval) and CBTC/USDCx (token-standard), with per-token balance display and MAX button
 - **Offers** — Incoming (approve/reject), Outgoing (withdraw), and History tabs — all via the `/transfer-offer/*` prepare/sign/submit flow, with per-network block-explorer links
 - **Smart onboarding** — Detects returning users (existing public key on backend) and routes to key import instead of generation. New users allocate a Canton party via the backend's `external-party/onboarding` prepare/submit flow with local signing
+- **Auto-register pre-approval** — When the backend advertises `shouldAutoRegisterPreapproval` on `/auth/me` (a server-side rollout switch), the extension silently registers the user's Amulet transfer pre-approval on dashboard mount using the in-memory cached key — no password prompt. Default-off, idempotent (skipped if one already exists), and best-effort (never blocks onboarding or the dashboard)
 - **Auto-lock** — Configurable timer (default 15 min) using `chrome.alarms`
 - **In-memory key caching** — Private key cached in the background service worker during an unlocked session for passwordless CIP-0103 signing
 - **Dual encryption** — Web Crypto API (PBKDF2 + AES-256-GCM) or CryptoJS AES, selectable at build time
@@ -445,7 +446,7 @@ All privileged operations go through typed messages (`lib/messaging/`). The popu
 | Keystore | `CREATE_KEYPAIR`, `VALIDATE_IMPORT_KEY`, `PREPARE_ONBOARDING`, `COMPLETE_ONBOARDING`, `EXPORT_PRIVATE_KEY`, `DELETE_KEYSTORE`, `RESET_KEYSTORE_FOR_RECOVERY` | `keystore.handler.ts` |
 | Signing | `SIGN_AND_SUBMIT_TRANSFER_PREAPPROVAL`, `SIGN_AND_SUBMIT_TRANSFER_TOKEN_STANDARD`, `SIGN_AND_SUBMIT_APPROVE`, `SIGN_AND_SUBMIT_REJECT`, `SIGN_AND_SUBMIT_WITHDRAW` | `signing.handler.ts` |
 | Network | `GET_NETWORK`, `SWITCH_NETWORK` | `network.handler.ts` |
-| Transfer pre-approval | `REGISTER_TRANSFER_PREAPPROVAL`, `GET_PREAPPROVAL_STATUS` | `keystore.handler.ts` |
+| Transfer pre-approval | `REGISTER_TRANSFER_PREAPPROVAL`, `GET_PREAPPROVAL_STATUS`, `MAYBE_AUTO_REGISTER_PREAPPROVAL` | `keystore.handler.ts` |
 | API proxy | `FETCH_BALANCES`, `PREPARE_TRANSFER_PREAPPROVAL`, `PREPARE_TRANSFER_TOKEN_STANDARD`, `FETCH_INCOMING_OFFERS`, `FETCH_OUTGOING_OFFERS`, `FETCH_HISTORY_OFFERS`, `PREPARE_APPROVE`, `PREPARE_REJECT`, `PREPARE_WITHDRAW`, `FETCH_ABOUT_ME`, `REQUEST_FAUCET` | `api.handler.ts` |
 | dApp approval | `GET_DAPP_APPROVAL`, `DAPP_APPROVAL_RESULT` | `approval.handler.ts` |
 
@@ -521,6 +522,15 @@ Dashboard -> Send tab -> Select token + recipient + amount
 Transfer pre-approval is required to receive Amulet transfers. It is registered via `POST /wallet/transfer-preapproval/prepare` → sign locally → `POST /wallet/transfer-preapproval/submit`, and its presence is checked via `GET /wallet/transfer-preapproval/status`. If missing, a warning banner appears on the Balances tab with a manual registration button.
 
 **Preapproval cache TTL:** After a successful registration (or the backend confirming the preapproval exists), the status is cached in-memory for **30 minutes** (`PREAPPROVAL_CACHE_TTL_MS`). During this window, `GET_PREAPPROVAL_STATUS` returns `true` without hitting the backend. After expiry, the next status check re-queries the backend, allowing the banner to reappear if the on-chain preapproval has expired. The cache is also cleared on **logout** and **network switch**.
+
+**Silent auto-registration (rollout-flag gated):** Registration can also happen automatically, without the user clicking the banner button. `GET /auth/me` carries a boolean `party.shouldAutoRegisterPreapproval` — a **server-side rollout switch** (sourced from the backend's `AUTO_REGISTER_PREAPPROVAL_ON_ONBOARD` env). `handleGoogleAuth` persists it into `sessionStore` (default `false` when the field is absent, so older backends and disabled rollouts change nothing). On dashboard mount, `Balances.tsx` fires `MAYBE_AUTO_REGISTER_PREAPPROVAL` once. The background handler `handleMaybeAutoRegisterPreapproval` then:
+
+1. **Default-off** — returns `disabled` immediately if the flag is `false` (no network calls).
+2. **Silent only** — requires the in-memory cached key (`getCachedPrivateKey()`, populated at unlock/onboarding); if the wallet is locked it returns `locked` and skips — it **never** prompts for a password.
+3. **Idempotent** — calls `GET_PREAPPROVAL_STATUS` first; if a pre-approval already exists it returns `already-registered` and does nothing.
+4. **Registers** — otherwise it reuses the same `REGISTER_TRANSFER_PREAPPROVAL` prepare → sign → submit flow described above.
+
+The handler is **best-effort**: it always resolves with `{ attempted, registered, reason? }` and never throws, so a failure never blocks the dashboard. The banner is suppressed while auto-registration is in flight to avoid a flash. This reuses the existing manual registration handler and is unrelated to the Amulet token-transfer `PREPARE`/`SIGN_AND_SUBMIT_TRANSFER_PREAPPROVAL` flow (which does prompt for a password).
 
 ### Offer Actions (Popup-Driven)
 
