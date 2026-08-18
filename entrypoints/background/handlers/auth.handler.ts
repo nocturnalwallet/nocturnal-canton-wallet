@@ -123,7 +123,7 @@ export async function handleGoogleAuth(): Promise<MessageResponse<GoogleAuthData
     const partyId = party?.partyId ?? null;
     const partyStatus = party?.onboardingStatus ?? 'PENDING';
     const publicKey = party?.publicKey ?? '';
-    const shouldAutoRegisterPreapproval = party?.shouldAutoRegisterPreapproval === true;
+    const shouldAutoRegisterPreapproval = meData.data?.shouldAutoRegisterPreapproval === true;
 
     if (partyId) {
       await sessionStore.set('partyId', partyId);
