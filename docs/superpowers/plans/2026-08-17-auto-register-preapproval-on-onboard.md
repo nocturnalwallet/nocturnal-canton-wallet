@@ -19,11 +19,13 @@
 
 ## Prerequisite (companion backend change — NOT in this repo)
 
-`GET /auth/me` in `kairo-wallet-provider-backend` must include `shouldAutoRegisterPreapproval: boolean` on its `party` payload (sourced from `AUTO_REGISTER_PREAPPROVAL_ON_ONBOARD`). This ginkgo plan is written to be **forward-compatible**: it reads `party?.shouldAutoRegisterPreapproval === true`, so if the field is absent the flag is `false` and nothing changes. The extension can therefore be merged before the backend serves the field; the feature stays inert until (a) the backend serves the field AND (b) ops sets the env flag to `true`.
+**DONE** in `kairo-wallet-provider-backend` (commits `ba4883c`, `51f4bf9`): `GET /auth/me` returns `shouldAutoRegisterPreapproval: boolean` at the **top level** of the response `data` (NOT nested under `party`), sourced from `AUTO_REGISTER_PREAPPROVAL_ON_ONBOARD`. It is **party-independent**: it is present even on a brand-new user's first login when `party` is `null` (that pre-onboarding response is exactly `{ …user, partyId: null, party: null, shouldAutoRegisterPreapproval: true }`). This is what lets the extension capture the flag at login and fire auto-register later, after onboarding creates the party.
+
+This ginkgo plan is **forward-compatible**: it reads `meData.data?.shouldAutoRegisterPreapproval === true`, so if the field is absent (older backend) the flag is `false` and nothing changes. The feature stays inert until ops sets the env flag to `true`.
 
 ## Global Constraints
 
-- **Default-off / forward-compatible:** read `party?.shouldAutoRegisterPreapproval === true`; absent ⇒ `false` ⇒ no behavior change.
+- **Default-off / forward-compatible:** read the flag at the **top level** of `/auth/me` — `meData.data?.shouldAutoRegisterPreapproval === true` (it is party-independent and present even when `party` is `null`); absent ⇒ `false` ⇒ no behavior change. Do NOT read it from under `party` (it is not there, and `party` is `null` on first login).
 - **Silent only:** the auto path uses the in-memory cached key (`getCachedPrivateKey()`); it must **never** prompt for a password. If the key is not cached (locked), skip silently.
 - **Idempotent:** before registering, call `handleGetPreapprovalStatus()`; if `hasPreapproval` is true, skip.
 - **Best-effort:** the handler must **never throw** — it always resolves with `ok(...)`; any error becomes `{ attempted, registered: false, reason }`. Auto-register must never block onboarding, unlock, or dashboard render.
@@ -57,7 +59,7 @@ MODIFY entrypoints/popup/pages/dashboard/Balances.tsx         # fire on mount, s
 - Test: `entrypoints/background/handlers/auth.handler.test.ts`
 
 **Interfaces:**
-- Consumes: `GET /auth/me` response `data.data.party.shouldAutoRegisterPreapproval?: boolean`.
+- Consumes: `GET /auth/me` response **top-level** `data.data.shouldAutoRegisterPreapproval?: boolean` (party-independent; present when `party` is `null`).
 - Produces: `sessionStore` key `shouldAutoRegisterPreapproval: boolean` (default `false`); `GoogleAuthData.shouldAutoRegisterPreapproval: boolean`.
 
 - [ ] **Step 1: Add the session field.** In `lib/storage/session.ts`, add to `SessionStorageSchema` (after `partyStatus`) and to `DEFAULTS`:
@@ -79,20 +81,22 @@ MODIFY entrypoints/popup/pages/dashboard/Balances.tsx         # fire on mount, s
 
 - [ ] **Step 3: Write the failing test.** In `auth.handler.test.ts`, extend the `mockAuthMe` helper to carry the optional flag, then add a test. (Follow the existing successful-auth test in this file for the OAuth/`fetch`/`launchWebAuthFlow` setup — mirror whatever a passing `handleGoogleAuth` test already does; only the `mockAuthMe` shape and the two assertions below are new.)
 
+The flag is **top-level** on the `/auth/me` payload, alongside (not inside) `party`. Widen the existing `mockAuthMe` helper to set it at the top level of `data.data`:
+
 ```ts
-// widen the existing helper's param type:
 function mockAuthMe(
-  party:
-    | { partyId: string; publicKey: string; onboardingStatus: string; shouldAutoRegisterPreapproval?: boolean }
-    | null,
+  party: { partyId: string; publicKey: string; onboardingStatus: string } | null,
+  shouldAutoRegisterPreapproval?: boolean,
 ) {
-  vi.mocked(apiClient.get).mockResolvedValue({ data: { data: { party } } } as any);
+  vi.mocked(apiClient.get).mockResolvedValue({
+    data: { data: { party, shouldAutoRegisterPreapproval } },
+  } as any);
 }
 ```
 ```ts
-it('persists and returns shouldAutoRegisterPreapproval from /auth/me', async () => {
+it('persists and returns shouldAutoRegisterPreapproval from /auth/me (party present)', async () => {
   // ...mirror the existing successful-auth arrangement (OAuth + login-with-google mocks)...
-  mockAuthMe({ partyId: 'p::1', publicKey: PK_BACKEND, onboardingStatus: 'SUCCESSFULLY', shouldAutoRegisterPreapproval: true });
+  mockAuthMe({ partyId: 'p::1', publicKey: PK_BACKEND, onboardingStatus: 'SUCCESSFULLY' }, true);
 
   const result = await handleGoogleAuth();
 
@@ -100,15 +104,27 @@ it('persists and returns shouldAutoRegisterPreapproval from /auth/me', async () 
   expect(result.success).toBe(true);
   if (result.success) expect(result.data.shouldAutoRegisterPreapproval).toBe(true);
 });
+
+// REGRESSION for the first-login timing hole: brand-new user, party is null,
+// but the flag is party-independent and must still be captured at login.
+it('captures the flag on first login even when party is null', async () => {
+  // ...mirror the existing successful-auth arrangement (OAuth + login-with-google mocks)...
+  mockAuthMe(null, true);
+
+  const result = await handleGoogleAuth();
+
+  expect(sessionStore.set).toHaveBeenCalledWith('shouldAutoRegisterPreapproval', true);
+  if (result.success) expect(result.data.shouldAutoRegisterPreapproval).toBe(true);
+});
 ```
 Import `sessionStore` from `@lib/storage` at the top of the test if not already imported.
 
-- [ ] **Step 4: Run — expect FAIL.** `yarn test entrypoints/background/handlers/auth.handler.test.ts`. Expected: the new test fails (`sessionStore.set` not called with the key / `data.shouldAutoRegisterPreapproval` undefined).
+- [ ] **Step 4: Run — expect FAIL.** `yarn test entrypoints/background/handlers/auth.handler.test.ts`. Expected: the new tests fail (`sessionStore.set` not called with the key / `data.shouldAutoRegisterPreapproval` undefined).
 
-- [ ] **Step 5: Implement.** In `auth.handler.ts` `handleGoogleAuth`, right after the existing `const publicKey = party?.publicKey ?? '';` line:
+- [ ] **Step 5: Implement.** In `auth.handler.ts` `handleGoogleAuth`, read the flag from the **top level** of the `/auth/me` payload (the code already has `const { party } = meData.data;` — do NOT read it from `party`). Add right after the existing `const publicKey = party?.publicKey ?? '';` line:
 
 ```ts
-    const shouldAutoRegisterPreapproval = party?.shouldAutoRegisterPreapproval === true;
+    const shouldAutoRegisterPreapproval = meData.data?.shouldAutoRegisterPreapproval === true;
 ```
 Then after the existing `await sessionStore.set('partyStatus', partyStatus);`:
 
