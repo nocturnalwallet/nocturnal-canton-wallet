@@ -107,3 +107,12 @@ export const NETWORK_IDS: NetworkId[] = IS_MAINNET_ONLY_BUILD
 export function toCaip2NetworkId(id: NetworkId): string {
   return `canton:${id}`;
 }
+
+/** Lighthouse explorer deep-link for a ledger update. */
+export function transactionExplorerUrl(
+  explorerBaseUrl: string,
+  updateId: string,
+): string {
+  const base = explorerBaseUrl.replace(/\/$/, '');
+  return `${base}/transactions/${updateId}`;
+}

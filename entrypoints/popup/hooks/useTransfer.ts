@@ -5,6 +5,7 @@ import type {
   PrepareTransferTokenStandardProps,
   PrepareTransferResponse,
   PrepareTransferTokenStandardResponse,
+  TransferSubmitResult,
 } from '@lib/types';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKey } from '@lib/constants';
@@ -27,7 +28,7 @@ export function useSignAndSubmitTransferPreapproval() {
       password: string;
       preparedData: PrepareTransferResponse;
     }) =>
-      sendMessage<{ success: boolean }>({
+      sendMessage<TransferSubmitResult>({
         action: MSG.SIGN_AND_SUBMIT_TRANSFER_PREAPPROVAL,
         payload,
       }),
@@ -56,7 +57,7 @@ export function useSignAndSubmitTransferTokenStandard() {
       password: string;
       preparedData: PrepareTransferTokenStandardResponse;
     }) =>
-      sendMessage<{ success: boolean }>({
+      sendMessage<TransferSubmitResult>({
         action: MSG.SIGN_AND_SUBMIT_TRANSFER_TOKEN_STANDARD,
         payload,
       }),
