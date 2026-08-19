@@ -1,10 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { handleResetKeystoreForRecovery } from './keystore.handler';
+import {
+  handleDeleteKeystore,
+  handleGetPreapprovalStatus,
+  handleResetKeystoreForRecovery,
+  markPreapprovalRegistered,
+} from './keystore.handler';
 
 vi.mock('@lib/storage', () => ({
   localStore: {
     set: vi.fn(),
     get: vi.fn(),
+    remove: vi.fn(),
   },
   sessionStore: {
     clear: vi.fn(),
@@ -33,7 +39,11 @@ import { getCachedPrivateKey } from './session.handler';
 describe('handleResetKeystoreForRecovery', () => {
   beforeEach(() => {
     vi.mocked(localStore.set).mockReset();
+    vi.mocked(localStore.remove).mockReset();
     vi.mocked(sessionStore.clear).mockReset();
+    vi.mocked(sessionStore.get).mockReset();
+    vi.mocked(apiClient.get).mockReset();
+    clearPreapprovalCache();
   });
 
   it('sets keystore to null and onboardingComplete to false', async () => {
@@ -55,6 +65,39 @@ describe('handleResetKeystoreForRecovery', () => {
     if (!result.success) {
       expect(result.error).toMatch(/storage write failed/);
     }
+  });
+
+  it('clears the in-memory preapproval cache', async () => {
+    markPreapprovalRegistered();
+    vi.mocked(sessionStore.get).mockResolvedValue(null);
+
+    await handleResetKeystoreForRecovery();
+    const status = await handleGetPreapprovalStatus();
+
+    expect(status).toEqual({ success: true, data: { hasPreapproval: false } });
+    expect(apiClient.get).not.toHaveBeenCalled();
+  });
+});
+
+describe('handleDeleteKeystore', () => {
+  beforeEach(() => {
+    vi.mocked(localStore.set).mockReset();
+    vi.mocked(localStore.remove).mockReset();
+    vi.mocked(sessionStore.clear).mockReset();
+    vi.mocked(sessionStore.get).mockReset();
+    vi.mocked(apiClient.get).mockReset();
+    clearPreapprovalCache();
+  });
+
+  it('clears the in-memory preapproval cache', async () => {
+    markPreapprovalRegistered();
+    vi.mocked(sessionStore.get).mockResolvedValue(null);
+
+    await handleDeleteKeystore();
+    const status = await handleGetPreapprovalStatus();
+
+    expect(status).toEqual({ success: true, data: { hasPreapproval: false } });
+    expect(apiClient.get).not.toHaveBeenCalled();
   });
 });
 
@@ -157,5 +200,21 @@ describe('handleRegisterTransferPreapproval', () => {
 
     expect(res.success).toBe(true);
     expect(localStore.set).toHaveBeenCalledWith('preapprovalRegistered', true);
+  });
+
+  it('returns success and caches registration when durable marker persistence fails after submit', async () => {
+    vi.mocked(sessionStore.get).mockImplementation(async (k: any) => (k === 'partyId' ? 'p::1' : null));
+    vi.mocked(getCachedPrivateKey).mockReturnValue('PRIV');
+    vi.mocked(apiClient.post)
+      .mockResolvedValueOnce({ data: { data: { preparedTransaction: 'TX', preparedTransactionHash: 'H', commandId: 'C' } } } as any)
+      .mockResolvedValueOnce({ data: {} } as any);
+    vi.mocked(localStore.set).mockRejectedValueOnce(new Error('storage write failed'));
+
+    const res = await handleRegisterTransferPreapproval();
+    const status = await handleGetPreapprovalStatus();
+
+    expect(res).toEqual({ success: true, data: { success: true } });
+    expect(status).toEqual({ success: true, data: { hasPreapproval: true } });
+    expect(apiClient.post).toHaveBeenCalledTimes(2);
   });
 });

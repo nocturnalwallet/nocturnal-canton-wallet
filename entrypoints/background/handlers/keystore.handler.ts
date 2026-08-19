@@ -238,10 +238,16 @@ export async function handleRegisterTransferPreapproval(): Promise<
       commandId: prepared.commandId,
     });
 
-    markPreapprovalRegistered();
     // Durable, network+user-scoped marker: survives service-worker restarts so a
     // transient status-check failure can never re-trigger a duplicate registration.
-    await localStore.set('preapprovalRegistered', true);
+    // Submission has already succeeded, so a storage failure must not report the
+    // registration as failed and invite a duplicate retry.
+    try {
+      await localStore.set('preapprovalRegistered', true);
+    } catch {
+      // Best-effort persistence; the in-memory marker still protects this runtime.
+    }
+    markPreapprovalRegistered();
     return ok({ success: true });
   } catch (e: unknown) {
     return err(e instanceof Error ? e.message : 'Transfer preapproval registration failed');
@@ -337,6 +343,7 @@ export async function handleMaybeAutoRegisterPreapproval(): Promise<
 
 export async function handleDeleteKeystore(): Promise<MessageResponse<void>> {
   try {
+    clearPreapprovalCache();
     await localStore.remove('keystore');
     await localStore.set('onboardingComplete', false);
     await localStore.set('preapprovalRegistered', false);
@@ -359,6 +366,7 @@ export async function handleDeleteKeystore(): Promise<MessageResponse<void>> {
  */
 export async function handleResetKeystoreForRecovery(): Promise<MessageResponse<null>> {
   try {
+    clearPreapprovalCache();
     await localStore.set('keystore', null);
     await localStore.set('onboardingComplete', false);
     await localStore.set('preapprovalRegistered', false);
