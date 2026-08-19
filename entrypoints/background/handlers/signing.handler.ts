@@ -4,6 +4,7 @@ import type { MessageResponse } from '@lib/messaging';
 import type {
   PrepareTransferResponse,
   PrepareTransferTokenStandardResponse,
+  TransferSubmitResult,
 } from '@lib/types';
 import { localStore, sessionStore } from '@lib/storage';
 import { getEncryptionProvider } from '../encryption';
@@ -85,7 +86,7 @@ async function signAndVerify(
 export async function handleSignAndSubmitTransferPreapproval(payload: {
   password: string;
   preparedData: PrepareTransferResponse;
-}): Promise<MessageResponse<{ success: boolean }>> {
+}): Promise<MessageResponse<TransferSubmitResult>> {
   try {
     const { password, preparedData } = payload;
     const partyId = await verifyCurrentParty();
@@ -93,7 +94,7 @@ export async function handleSignAndSubmitTransferPreapproval(payload: {
       password, partyId, preparedData.preparedTransactionHash,
     );
 
-    await apiClient.post('/transfer-offer/submit', {
+    const { data } = await apiClient.post('/transfer-offer/submit', {
       preparedTransaction: preparedData.preparedTransaction,
       preparedTransactionHash: preparedData.preparedTransactionHash,
       hashingSchemeVersion: preparedData.hashingSchemeVersion,
@@ -101,7 +102,10 @@ export async function handleSignAndSubmitTransferPreapproval(payload: {
     });
 
     resetAutoLockTimer();
-    return ok({ success: true });
+    return ok({
+      success: true,
+      updateId: data?.data?.updateId as string | undefined,
+    });
   } catch (e: unknown) {
     return err(e instanceof Error ? e.message : 'Transfer failed');
   }
@@ -110,7 +114,7 @@ export async function handleSignAndSubmitTransferPreapproval(payload: {
 export async function handleSignAndSubmitTransferTokenStandard(payload: {
   password: string;
   preparedData: PrepareTransferTokenStandardResponse;
-}): Promise<MessageResponse<{ success: boolean }>> {
+}): Promise<MessageResponse<TransferSubmitResult>> {
   try {
     const { password, preparedData } = payload;
     const partyId = await verifyCurrentParty();
@@ -118,7 +122,7 @@ export async function handleSignAndSubmitTransferTokenStandard(payload: {
       password, partyId, preparedData.preparedTransactionHash,
     );
 
-    await apiClient.post('/transfer-offer/submit', {
+    const { data } = await apiClient.post('/transfer-offer/submit', {
       preparedTransaction: preparedData.preparedTransaction,
       preparedTransactionHash: preparedData.preparedTransactionHash,
       hashingSchemeVersion: preparedData.hashingSchemeVersion,
@@ -126,7 +130,10 @@ export async function handleSignAndSubmitTransferTokenStandard(payload: {
     });
 
     resetAutoLockTimer();
-    return ok({ success: true });
+    return ok({
+      success: true,
+      updateId: data?.data?.updateId as string | undefined,
+    });
   } catch (e: unknown) {
     return err(e instanceof Error ? e.message : 'Transfer failed');
   }

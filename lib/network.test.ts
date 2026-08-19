@@ -35,4 +35,15 @@ describe('network build gating', () => {
     expect(net.NETWORKS.testnet.apiBaseUrl).toBe(brand.networkApiBaseUrls.testnet);
     expect(net.NETWORKS.localnet.apiBaseUrl).toBe(brand.networkApiBaseUrls.localnet);
   });
+
+  it('transactionExplorerUrl joins base and updateId', async () => {
+    vi.resetModules();
+    const net = await import('./network');
+    expect(
+      net.transactionExplorerUrl(
+        'https://lighthouse.devnet.cantonloop.com/',
+        '12206d0f93',
+      ),
+    ).toBe('https://lighthouse.devnet.cantonloop.com/transactions/12206d0f93');
+  });
 });

@@ -48,3 +48,9 @@ export interface PrepareTransferTokenStandardResponse {
   preparedTransactionHash: string;
   fee?: FeeBlock;
 }
+
+/** Result of a successful transfer-offer submit (executeAndWait). */
+export interface TransferSubmitResult {
+  success: boolean;
+  updateId?: string;
+}

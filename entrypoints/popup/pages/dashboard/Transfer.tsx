@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Loader2Icon, CheckCircleIcon, AlertTriangleIcon } from 'lucide-react';
+import { Loader2Icon, CheckCircleIcon, AlertTriangleIcon, ExternalLinkIcon } from 'lucide-react';
 import { SUPPORTED_TOKENS } from '@lib/constants';
 import {
   usePrepareTransferPreapproval,
@@ -8,12 +8,14 @@ import {
   useSignAndSubmitTransferTokenStandard,
 } from '../../hooks/useTransfer';
 import { useBalances } from '../../hooks/useBalances';
+import { useNetwork } from '../../hooks/useNetwork';
 import { PreparedFeeSection } from '@components/common/PreparedFeeSection';
 import brand from '@brand/brand';
 import type {
   PrepareTransferResponse,
   PrepareTransferTokenStandardResponse,
 } from '@lib/types';
+import { transactionExplorerUrl } from '@lib/network';
 import BigNumber from 'bignumber.js';
 
 export function Transfer() {
@@ -26,6 +28,7 @@ export function Transfer() {
   const [preparedData, setPreparedData] = useState<
     PrepareTransferResponse | PrepareTransferTokenStandardResponse | null
   >(null);
+  const [updateId, setUpdateId] = useState<string | null>(null);
 
   const prepareAmulet = usePrepareTransferPreapproval();
   const submitAmulet = useSignAndSubmitTransferPreapproval();
@@ -33,6 +36,7 @@ export function Transfer() {
   const submitStandard = useSignAndSubmitTransferTokenStandard();
 
   const { data: balancesData } = useBalances();
+  const { config: networkConfig } = useNetwork();
 
   const isAmulet = tokenId === 'Amulet';
   const isPreparing = prepareAmulet.isPending || prepareStandard.isPending;
@@ -44,6 +48,11 @@ export function Transfer() {
   );
   const availableBalance = new BigNumber(selectedBalance?.unlocked ?? '0');
   const lockedBalance = new BigNumber(selectedBalance?.locked ?? '0');
+
+  const explorerHref =
+    updateId && networkConfig?.explorerUrl
+      ? transactionExplorerUrl(networkConfig.explorerUrl, updateId)
+      : null;
 
   const handlePrepare = async () => {
     setError('');
@@ -77,17 +86,16 @@ export function Transfer() {
     if (!preparedData || !password) return;
     setError('');
     try {
-      if (isAmulet) {
-        await submitAmulet.mutateAsync({
-          password,
-          preparedData: preparedData as PrepareTransferResponse,
-        });
-      } else {
-        await submitStandard.mutateAsync({
-          password,
-          preparedData: preparedData as PrepareTransferTokenStandardResponse,
-        });
-      }
+      const result = isAmulet
+        ? await submitAmulet.mutateAsync({
+            password,
+            preparedData: preparedData as PrepareTransferResponse,
+          })
+        : await submitStandard.mutateAsync({
+            password,
+            preparedData: preparedData as PrepareTransferTokenStandardResponse,
+          });
+      setUpdateId(result.updateId ?? null);
       setStep('success');
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Transfer failed');
@@ -102,6 +110,18 @@ export function Transfer() {
         <p className="text-muted-foreground text-center text-sm">
           {amount} {tokenId} sent to recipient
         </p>
+        {explorerHref && (
+          <button
+            type="button"
+            onClick={() => {
+              void chrome.tabs.create({ url: explorerHref });
+            }}
+            className="text-primary inline-flex items-center gap-1.5 text-sm font-medium underline-offset-2 hover:underline"
+          >
+            View on Explorer
+            <ExternalLinkIcon className="h-3.5 w-3.5" />
+          </button>
+        )}
         <button
           onClick={() => {
             setStep('form');
@@ -109,6 +129,7 @@ export function Transfer() {
             setAmount('');
             setPassword('');
             setPreparedData(null);
+            setUpdateId(null);
           }}
           className="bg-primary text-primary-foreground rounded-xl px-6 py-2 text-sm font-medium"
         >
