@@ -22,7 +22,11 @@ vi.mock('@canton-network/core-signing-lib', () => ({
 }));
 
 import { localStore, sessionStore } from '@lib/storage';
-import { handleMaybeAutoRegisterPreapproval, clearPreapprovalCache } from './keystore.handler';
+import {
+  handleMaybeAutoRegisterPreapproval,
+  handleRegisterTransferPreapproval,
+  clearPreapprovalCache,
+} from './keystore.handler';
 import apiClient from '../api-client';
 import { getCachedPrivateKey } from './session.handler';
 
@@ -60,6 +64,8 @@ describe('handleMaybeAutoRegisterPreapproval', () => {
     vi.mocked(apiClient.get).mockReset();
     vi.mocked(apiClient.post).mockReset();
     vi.mocked(getCachedPrivateKey).mockReset();
+    vi.mocked(localStore.get).mockReset();
+    vi.mocked(localStore.get).mockResolvedValue(false); // durable marker off by default
     clearPreapprovalCache(); // reset the 30-min in-memory status cache between tests
   });
 
@@ -115,5 +121,41 @@ describe('handleMaybeAutoRegisterPreapproval', () => {
       '/wallet/transfer-preapproval/submit',
       expect.objectContaining({ partyId: 'p::1', signature: 'SIG', commandId: 'C' }),
     );
+  });
+
+  it('skips (durable) when a prior registration was recorded, without a status check', async () => {
+    vi.mocked(sessionStore.get).mockImplementation(async (k: any) =>
+      k === 'shouldAutoRegisterPreapproval' ? true : k === 'partyId' ? 'p::1' : null);
+    vi.mocked(getCachedPrivateKey).mockReturnValue('PRIV');
+    vi.mocked(localStore.get).mockResolvedValue(true); // durable marker set
+
+    const res = await handleMaybeAutoRegisterPreapproval();
+
+    expect(res.success && res.data).toEqual({ attempted: false, registered: false, reason: 'durable' });
+    expect(apiClient.get).not.toHaveBeenCalled(); // no status check — defense-in-depth
+    expect(apiClient.post).not.toHaveBeenCalled(); // no register
+  });
+});
+
+describe('handleRegisterTransferPreapproval', () => {
+  beforeEach(() => {
+    vi.mocked(sessionStore.get).mockReset();
+    vi.mocked(apiClient.post).mockReset();
+    vi.mocked(getCachedPrivateKey).mockReset();
+    vi.mocked(localStore.set).mockReset();
+    clearPreapprovalCache();
+  });
+
+  it('persists the durable preapprovalRegistered marker on successful submit', async () => {
+    vi.mocked(sessionStore.get).mockImplementation(async (k: any) => (k === 'partyId' ? 'p::1' : null));
+    vi.mocked(getCachedPrivateKey).mockReturnValue('PRIV');
+    vi.mocked(apiClient.post)
+      .mockResolvedValueOnce({ data: { data: { preparedTransaction: 'TX', preparedTransactionHash: 'H', commandId: 'C' } } } as any) // prepare
+      .mockResolvedValueOnce({ data: {} } as any); // submit
+
+    const res = await handleRegisterTransferPreapproval();
+
+    expect(res.success).toBe(true);
+    expect(localStore.set).toHaveBeenCalledWith('preapprovalRegistered', true);
   });
 });

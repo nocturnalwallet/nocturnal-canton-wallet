@@ -7,6 +7,8 @@ export interface LocalStorageSchema {
   user: StoredUser | null;
   settings: SettingsData;
   onboardingComplete: boolean;
+  /** Durable "this account already registered its transfer pre-approval" marker. */
+  preapprovalRegistered: boolean;
 }
 
 const DEFAULTS: LocalStorageSchema = {
@@ -14,6 +16,7 @@ const DEFAULTS: LocalStorageSchema = {
   user: null,
   settings: { autoLockMinutes: 15 },
   onboardingComplete: false,
+  preapprovalRegistered: false,
 };
 
 const LOCAL_KEYS: (keyof LocalStorageSchema)[] = [
@@ -21,10 +24,11 @@ const LOCAL_KEYS: (keyof LocalStorageSchema)[] = [
   'user',
   'settings',
   'onboardingComplete',
+  'preapprovalRegistered',
 ];
 
 /** Keys that are scoped per-user (require userId in prefix). */
-const USER_SCOPED_KEYS: readonly string[] = ['keystore', 'onboardingComplete'];
+const USER_SCOPED_KEYS: readonly string[] = ['keystore', 'onboardingComplete', 'preapprovalRegistered'];
 
 let _networkPrefix: NetworkId = DEFAULT_NETWORK;
 let _userId: string | null = null;

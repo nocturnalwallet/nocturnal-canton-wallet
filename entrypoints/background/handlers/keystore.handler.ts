@@ -239,6 +239,9 @@ export async function handleRegisterTransferPreapproval(): Promise<
     });
 
     markPreapprovalRegistered();
+    // Durable, network+user-scoped marker: survives service-worker restarts so a
+    // transient status-check failure can never re-trigger a duplicate registration.
+    await localStore.set('preapprovalRegistered', true);
     return ok({ success: true });
   } catch (e: unknown) {
     return err(e instanceof Error ? e.message : 'Transfer preapproval registration failed');
@@ -305,6 +308,14 @@ export async function handleMaybeAutoRegisterPreapproval(): Promise<
       return ok({ attempted: false, registered: false, reason: 'locked' });
     }
 
+    // Durable defense-in-depth: if this account already recorded a successful
+    // registration, never re-attempt — even if the authoritative status check
+    // below transiently fails. (If the on-ledger preapproval legitimately
+    // disappears/expires the user can still register manually; renewal is out of scope.)
+    if (await localStore.get('preapprovalRegistered')) {
+      return ok({ attempted: false, registered: false, reason: 'durable' });
+    }
+
     // Idempotent: never register if the party already has an active preapproval.
     const status = await handleGetPreapprovalStatus();
     if (status.success && status.data.hasPreapproval) {
@@ -328,6 +339,7 @@ export async function handleDeleteKeystore(): Promise<MessageResponse<void>> {
   try {
     await localStore.remove('keystore');
     await localStore.set('onboardingComplete', false);
+    await localStore.set('preapprovalRegistered', false);
     await sessionStore.clear();
     return ok(undefined);
   } catch (e: unknown) {
@@ -349,6 +361,7 @@ export async function handleResetKeystoreForRecovery(): Promise<MessageResponse<
   try {
     await localStore.set('keystore', null);
     await localStore.set('onboardingComplete', false);
+    await localStore.set('preapprovalRegistered', false);
     return ok(null);
   } catch (e: unknown) {
     return err(e instanceof Error ? e.message : 'Failed to reset keystore for recovery');
