@@ -15,6 +15,7 @@ import type {
   GetHistoryRequestsQuery,
 } from '@lib/types';
 import { localStore, sessionStore } from '@lib/storage';
+import { getErrorMessage } from '@lib/api-error';
 import apiClient from '../api-client';
 import { getCachedPrivateKey } from './session.handler';
 
@@ -30,7 +31,7 @@ export async function handleFetchBalances(): Promise<
     });
     return ok({ balances: data.data ?? [] });
   } catch (e: unknown) {
-    return err(e instanceof Error ? e.message : 'Failed to fetch balances');
+    return err(getErrorMessage(e, 'Failed to fetch balances'));
   }
 }
 
@@ -46,7 +47,7 @@ export async function handlePrepareTransferPreapproval(
     });
     return ok({ preparedData: data.data });
   } catch (e: unknown) {
-    return err(e instanceof Error ? e.message : 'Prepare transfer failed');
+    return err(getErrorMessage(e, 'Prepare transfer failed'));
   }
 }
 
@@ -60,7 +61,7 @@ export async function handlePrepareTransferTokenStandard(
     );
     return ok({ preparedData: data.data });
   } catch (e: unknown) {
-    return err(e instanceof Error ? e.message : 'Prepare transfer failed');
+    return err(getErrorMessage(e, 'Prepare transfer failed'));
   }
 }
 
