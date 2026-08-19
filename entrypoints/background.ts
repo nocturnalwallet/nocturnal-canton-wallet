@@ -29,6 +29,7 @@ import {
   handleResetKeystoreForRecovery,
   handleRegisterTransferPreapproval,
   handleGetPreapprovalStatus,
+  handleMaybeAutoRegisterPreapproval,
 } from './background/handlers/keystore.handler';
 import {
   handleSignAndSubmitTransferPreapproval,
@@ -182,6 +183,8 @@ async function routeMessage(message: MessageRequest) {
       return handleRegisterTransferPreapproval();
     case MSG.GET_PREAPPROVAL_STATUS:
       return handleGetPreapprovalStatus();
+    case MSG.MAYBE_AUTO_REGISTER_PREAPPROVAL:
+      return handleMaybeAutoRegisterPreapproval();
 
     // Signing
     case MSG.SIGN_AND_SUBMIT_TRANSFER_PREAPPROVAL:

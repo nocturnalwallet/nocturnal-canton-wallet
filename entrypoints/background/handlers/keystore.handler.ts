@@ -1,7 +1,13 @@
 import { createKeyPair, getPublicKeyFromPrivate, signTransactionHash } from '@canton-network/core-signing-lib';
 import brand from '@brand/brand';
 import { ok, err } from '@lib/messaging';
-import type { MessageResponse, KeyPairData, OnboardingPrepareData, PreapprovalStatusData } from '@lib/messaging';
+import type {
+  MessageResponse,
+  KeyPairData,
+  OnboardingPrepareData,
+  PreapprovalStatusData,
+  AutoRegisterPreapprovalData,
+} from '@lib/messaging';
 import { localStore, sessionStore } from '@lib/storage';
 import { getEncryptionProvider } from '../encryption';
 import apiClient from '../api-client';
@@ -232,6 +238,15 @@ export async function handleRegisterTransferPreapproval(): Promise<
       commandId: prepared.commandId,
     });
 
+    // Durable, network+user-scoped marker: survives service-worker restarts so a
+    // transient status-check failure can never re-trigger a duplicate registration.
+    // Submission has already succeeded, so a storage failure must not report the
+    // registration as failed and invite a duplicate retry.
+    try {
+      await localStore.set('preapprovalRegistered', true);
+    } catch {
+      // Best-effort persistence; the in-memory marker still protects this runtime.
+    }
     markPreapprovalRegistered();
     return ok({ success: true });
   } catch (e: unknown) {
@@ -285,10 +300,53 @@ export async function handleGetPreapprovalStatus(): Promise<
   }
 }
 
+export async function handleMaybeAutoRegisterPreapproval(): Promise<
+  MessageResponse<AutoRegisterPreapprovalData>
+> {
+  try {
+    const shouldAuto = await sessionStore.get('shouldAutoRegisterPreapproval');
+    if (!shouldAuto) {
+      return ok({ attempted: false, registered: false, reason: 'disabled' });
+    }
+
+    // Silent path only: requires the in-memory key cached at unlock/onboarding.
+    if (!getCachedPrivateKey()) {
+      return ok({ attempted: false, registered: false, reason: 'locked' });
+    }
+
+    // Durable defense-in-depth: if this account already recorded a successful
+    // registration, never re-attempt — even if the authoritative status check
+    // below transiently fails. (If the on-ledger preapproval legitimately
+    // disappears/expires the user can still register manually; renewal is out of scope.)
+    if (await localStore.get('preapprovalRegistered')) {
+      return ok({ attempted: false, registered: false, reason: 'durable' });
+    }
+
+    // Idempotent: never register if the party already has an active preapproval.
+    const status = await handleGetPreapprovalStatus();
+    if (status.success && status.data.hasPreapproval) {
+      return ok({ attempted: false, registered: false, reason: 'already-registered' });
+    }
+
+    const res = await handleRegisterTransferPreapproval();
+    if (res.success) return ok({ attempted: true, registered: true });
+    return ok({ attempted: true, registered: false, reason: res.error });
+  } catch (e: unknown) {
+    // Best-effort: never throw out of the auto path.
+    return ok({
+      attempted: true,
+      registered: false,
+      reason: e instanceof Error ? e.message : 'auto-register failed',
+    });
+  }
+}
+
 export async function handleDeleteKeystore(): Promise<MessageResponse<void>> {
   try {
+    clearPreapprovalCache();
     await localStore.remove('keystore');
     await localStore.set('onboardingComplete', false);
+    await localStore.set('preapprovalRegistered', false);
     await sessionStore.clear();
     return ok(undefined);
   } catch (e: unknown) {
@@ -308,8 +366,10 @@ export async function handleDeleteKeystore(): Promise<MessageResponse<void>> {
  */
 export async function handleResetKeystoreForRecovery(): Promise<MessageResponse<null>> {
   try {
+    clearPreapprovalCache();
     await localStore.set('keystore', null);
     await localStore.set('onboardingComplete', false);
+    await localStore.set('preapprovalRegistered', false);
     return ok(null);
   } catch (e: unknown) {
     return err(e instanceof Error ? e.message : 'Failed to reset keystore for recovery');

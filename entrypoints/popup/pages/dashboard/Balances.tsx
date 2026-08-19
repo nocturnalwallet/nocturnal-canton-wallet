@@ -1,6 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useBalances } from '../../hooks/useBalances';
-import { usePreapprovalStatus, useRegisterPreapproval } from '../../hooks/useWallet';
+import {
+  usePreapprovalStatus,
+  useRegisterPreapproval,
+  useMaybeAutoRegisterPreapproval,
+} from '../../hooks/useWallet';
 import { Loader2Icon, AlertCircleIcon, ShieldCheckIcon, CheckCircle2Icon, ChevronRightIcon, RefreshCwIcon } from 'lucide-react';
 import { IconCanton } from '@assets/icons/icon-canton';
 import { IconCBTCCoin } from '@assets/icons/icon-yield-coin';
@@ -25,6 +29,14 @@ export function Balances() {
   const [preapprovalError, setPreapprovalError] = useState('');
   const [showSuccess, setShowSuccess] = useState(false);
   const [selectedTokenId, setSelectedTokenId] = useState<string | null>(null);
+
+  const autoRegister = useMaybeAutoRegisterPreapproval();
+  const autoRegisterFired = useRef(false);
+  useEffect(() => {
+    if (autoRegisterFired.current) return;
+    autoRegisterFired.current = true;
+    autoRegister.mutate(); // best-effort; the handler decides (flag/locked/already/register)
+  }, [autoRegister]);
 
   const handleRegisterPreapproval = async () => {
     setPreapprovalError('');
@@ -64,6 +76,7 @@ export function Balances() {
   const showPreapprovalBanner =
     !preapprovalLoading &&
     !showSuccess &&
+    !autoRegister.isPending &&
     (!preapprovalData || !preapprovalData.hasPreapproval);
 
   const selectedToken = selectedTokenId
