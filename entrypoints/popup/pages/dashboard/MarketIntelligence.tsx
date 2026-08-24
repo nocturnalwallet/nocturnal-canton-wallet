@@ -8,6 +8,7 @@ import {
   RefreshCwIcon,
   ChevronDownIcon,
   ChevronUpIcon,
+  InfoIcon,
 } from 'lucide-react';
 import {
   useElfaTrendingTokens,
@@ -104,15 +105,24 @@ function ViewHeader({
   onWindow,
   onRefresh,
   spinning,
+  info,
 }: {
   window: ElfaTimeWindow;
   onWindow: (w: ElfaTimeWindow) => void;
   onRefresh: () => void;
   spinning: boolean;
+  info?: string;
 }) {
   return (
     <div className="flex items-center justify-between">
-      <WindowToggle value={window} onChange={onWindow} />
+      <div className="flex items-center gap-1.5">
+        <WindowToggle value={window} onChange={onWindow} />
+        {info && (
+          <span title={info} className="text-muted-foreground inline-flex cursor-help">
+            <InfoIcon className="h-3.5 w-3.5" />
+          </span>
+        )}
+      </div>
       <button
         onClick={onRefresh}
         disabled={spinning}
@@ -183,6 +193,8 @@ function TrendingTokensView({ window, onWindow, active }: ViewProps) {
     active,
   );
   const tokens = data?.data ?? [];
+  // Mindshare = each token's share of total mentions across the shown set.
+  const totalMentions = tokens.reduce((sum, t) => sum + (t.current_count || 0), 0) || 1;
   return (
     <div className="space-y-2 p-3">
       <ViewHeader
@@ -190,6 +202,7 @@ function TrendingTokensView({ window, onWindow, active }: ViewProps) {
         onWindow={onWindow}
         onRefresh={refetch}
         spinning={isFetching}
+        info="Ranked by social mentions over the selected window (via Elfa). The bar shows each token's share of total mentions (mindshare)."
       />
       <StateWrap
         isLoading={isLoading}
@@ -200,29 +213,43 @@ function TrendingTokensView({ window, onWindow, active }: ViewProps) {
       >
         {tokens.map((t, i) => {
           const up = t.change_percent >= 0;
+          const share = (t.current_count / totalMentions) * 100;
           return (
             <div
               key={t.token}
-              className="bg-primary/5 border-primary/10 flex items-center gap-3 rounded-xl border p-3"
+              className="bg-primary/5 border-primary/10 flex flex-col gap-2 rounded-xl border p-3"
             >
-              <span className="text-muted-foreground w-4 text-xs tabular-nums">{i + 1}</span>
-              <span className="text-foreground flex-1 font-medium uppercase">{t.token}</span>
-              <span className="text-muted-foreground text-xs tabular-nums">
-                {t.current_count.toLocaleString()} mentions
-              </span>
-              <span
-                className={`flex items-center gap-0.5 text-xs font-medium tabular-nums ${
-                  up ? 'text-positive' : 'text-destructive'
-                }`}
-              >
-                {up ? (
-                  <TrendingUpIcon className="h-3 w-3" />
-                ) : (
-                  <TrendingDownIcon className="h-3 w-3" />
-                )}
-                {up ? '+' : ''}
-                {t.change_percent.toFixed(1)}%
-              </span>
+              <div className="flex items-center gap-3">
+                <span className="text-muted-foreground w-4 text-xs tabular-nums">{i + 1}</span>
+                <span className="text-foreground flex-1 font-medium uppercase">{t.token}</span>
+                <span className="text-muted-foreground text-xs tabular-nums">
+                  {t.current_count.toLocaleString()} mentions
+                </span>
+                <span
+                  className={`flex items-center gap-0.5 text-xs font-medium tabular-nums ${
+                    up ? 'text-positive' : 'text-destructive'
+                  }`}
+                >
+                  {up ? (
+                    <TrendingUpIcon className="h-3 w-3" />
+                  ) : (
+                    <TrendingDownIcon className="h-3 w-3" />
+                  )}
+                  {up ? '+' : ''}
+                  {t.change_percent.toFixed(1)}%
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="bg-primary/10 h-1.5 flex-1 overflow-hidden rounded-full">
+                  <div
+                    className="bg-primary h-full rounded-full"
+                    style={{ width: `${Math.max(share, 2)}%` }}
+                  />
+                </div>
+                <span className="text-muted-foreground w-10 text-right text-[10px] tabular-nums">
+                  {share.toFixed(1)}%
+                </span>
+              </div>
             </div>
           );
         })}
