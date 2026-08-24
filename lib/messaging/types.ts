@@ -129,6 +129,9 @@ export type MessageRequest =
     }
   | { action: typeof MSG.FETCH_ABOUT_ME }
   | { action: typeof MSG.REQUEST_FAUCET; payload: { password: string; amount: string } }
+  | { action: typeof MSG.FETCH_ELFA_TRENDING_TOKENS }
+  | { action: typeof MSG.FETCH_ELFA_TOKEN_NEWS }
+  | { action: typeof MSG.FETCH_ELFA_NARRATIVES }
   // dApp approval flow
   | { action: typeof MSG.GET_DAPP_APPROVAL; payload: { requestId: string } }
   | { action: typeof MSG.DAPP_APPROVAL_RESULT; payload: { requestId: string; approved: boolean } };
@@ -175,6 +178,47 @@ export interface KeyPairData {
 
 export interface BalancesData {
   balances: TokenBalance[];
+}
+
+// ── Elfa market intelligence (Phase 1, native data proxied via backend) ──
+
+export interface ElfaTrendingToken {
+  token: string;
+  current_count: number;
+  previous_count: number;
+  change_percent: number;
+}
+
+export interface ElfaTrendingTokensData {
+  total: number;
+  page: number;
+  pageSize: number;
+  data: ElfaTrendingToken[];
+}
+
+export interface ElfaNewsItem {
+  tweetId: string;
+  link: string;
+  likeCount: number;
+  repostCount: number;
+  viewCount: number;
+  mentionedAt: string;
+  type: string;
+  account: { username: string; isVerified: boolean };
+}
+
+/** token-news returns a bare array of mention items (no tweet text). */
+export type ElfaTokenNewsData = ElfaNewsItem[];
+
+export interface ElfaNarrative {
+  narrative?: string;
+  theme?: string;
+  [key: string]: unknown;
+}
+
+export interface ElfaNarrativesData {
+  trending_narratives: ElfaNarrative[];
+  metadata?: unknown;
 }
 
 export interface PaginatedOffersData {
