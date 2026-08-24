@@ -202,7 +202,7 @@ function TrendingTokensView({ window, onWindow, active }: ViewProps) {
         onWindow={onWindow}
         onRefresh={refetch}
         spinning={isFetching}
-        info="Ranked by social mentions over the selected window (via Elfa). The bar shows each token's share of total mentions (mindshare)."
+        info="Ranked by trending social mentions (via Elfa). Change % = growth in mention count vs the prior window. Bar = each token's share of the top 10 shown. These are a trending signal and differ from Elfa Chat's full-corpus mindshare figures."
       />
       <StateWrap
         isLoading={isLoading}
@@ -211,6 +211,9 @@ function TrendingTokensView({ window, onWindow, active }: ViewProps) {
         emptyText="No trending tokens right now."
         onRetry={refetch}
       >
+        <p className="text-muted-foreground px-0.5 text-[10px] leading-snug">
+          Change = mentions vs prior {window} · bar = share of top {tokens.length}
+        </p>
         {tokens.map((t, i) => {
           const up = t.change_percent >= 0;
           const share = (t.current_count / totalMentions) * 100;
@@ -253,6 +256,9 @@ function TrendingTokensView({ window, onWindow, active }: ViewProps) {
             </div>
           );
         })}
+        <p className="text-muted-foreground px-0.5 pt-1 text-[10px] leading-snug">
+          Trending signal — differs from Elfa Chat's full-corpus totals.
+        </p>
       </StateWrap>
     </div>
   );
