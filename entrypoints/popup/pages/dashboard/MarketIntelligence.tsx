@@ -242,11 +242,43 @@ function NarrativesView({ active }: { active: boolean }) {
         emptyText="No trending narratives right now."
         onRetry={refetch}
       >
-        {narratives.map((n, i) => (
-          <div key={i} className="bg-primary/5 border-primary/10 rounded-xl border p-3">
-            <p className="text-foreground text-sm font-medium">{narrativeLabel(n)}</p>
-          </div>
-        ))}
+        {narratives.map((n, i) => {
+          const href = n.source_links?.[0];
+          const count = n.source_links?.length ?? 0;
+          const body = (
+            <>
+              <div className="min-w-0 flex-1">
+                <p className="text-foreground text-sm font-medium">{narrativeLabel(n)}</p>
+                {count > 0 && (
+                  <p className="text-muted-foreground mt-1 text-xs">
+                    {count} source{count > 1 ? 's' : ''}
+                  </p>
+                )}
+              </div>
+              {href && (
+                <ExternalLinkIcon className="text-muted-foreground mt-0.5 h-3.5 w-3.5 shrink-0" />
+              )}
+            </>
+          );
+          return href ? (
+            <a
+              key={i}
+              href={href}
+              target="_blank"
+              rel="noreferrer"
+              className="bg-primary/5 border-primary/10 hover:bg-primary/10 flex items-start gap-2 rounded-xl border p-3 transition-colors"
+            >
+              {body}
+            </a>
+          ) : (
+            <div
+              key={i}
+              className="bg-primary/5 border-primary/10 flex items-start gap-2 rounded-xl border p-3"
+            >
+              {body}
+            </div>
+          );
+        })}
       </StateWrap>
     </div>
   );

@@ -213,6 +213,9 @@ export type ElfaTokenNewsData = ElfaNewsItem[];
 export interface ElfaNarrative {
   narrative?: string;
   theme?: string;
+  /** URLs of the posts that evidence this narrative. */
+  source_links?: string[];
+  tweet_ids?: string[];
   [key: string]: unknown;
 }
 
