@@ -6,13 +6,15 @@ import {
   TrendingDownIcon,
   ExternalLinkIcon,
   RefreshCwIcon,
+  ChevronDownIcon,
+  ChevronUpIcon,
 } from 'lucide-react';
 import {
   useElfaTrendingTokens,
   useElfaTokenNews,
   useElfaNarratives,
 } from '../../hooks/useElfa';
-import type { ElfaNarrative } from '@lib/messaging';
+import type { ElfaNarrative, ElfaTimeWindow } from '@lib/messaging';
 
 type View = 'tokens' | 'news' | 'narratives';
 
@@ -22,14 +24,17 @@ const VIEWS: { id: View; label: string }[] = [
   { id: 'narratives', label: 'Narratives' },
 ];
 
+const WINDOWS: ElfaTimeWindow[] = ['24h', '7d'];
+
 /**
  * Phase-1 Market Intelligence — renders Elfa's read-only data natively (no
  * iframe / widget). Data is proxied by the wallet-provider backend so the Elfa
  * key stays server-side. Only the active sub-tab fetches, to conserve the
- * free-tier credit budget.
+ * free-tier credit budget. The 24h/7d window is shared across all sub-tabs.
  */
 export function MarketIntelligence() {
   const [view, setView] = useState<View>('tokens');
+  const [window, setWindow] = useState<ElfaTimeWindow>('24h');
 
   return (
     <div className="flex h-full flex-col">
@@ -51,14 +56,71 @@ export function MarketIntelligence() {
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        {view === 'tokens' && <TrendingTokensView active={view === 'tokens'} />}
-        {view === 'news' && <TokenNewsView active={view === 'news'} />}
-        {view === 'narratives' && <NarrativesView active={view === 'narratives'} />}
+        {view === 'tokens' && (
+          <TrendingTokensView window={window} onWindow={setWindow} active />
+        )}
+        {view === 'news' && <TokenNewsView window={window} onWindow={setWindow} active />}
+        {view === 'narratives' && (
+          <NarrativesView window={window} onWindow={setWindow} active />
+        )}
       </div>
 
       <p className="text-muted-foreground border-border border-t px-3 py-1.5 text-center text-[10px]">
         Powered by Elfa
       </p>
+    </div>
+  );
+}
+
+function WindowToggle({
+  value,
+  onChange,
+}: {
+  value: ElfaTimeWindow;
+  onChange: (w: ElfaTimeWindow) => void;
+}) {
+  return (
+    <div className="bg-secondary/60 flex rounded-lg p-0.5">
+      {WINDOWS.map((w) => (
+        <button
+          key={w}
+          onClick={() => onChange(w)}
+          className={`rounded-md px-2 py-0.5 text-xs font-medium transition-colors ${
+            value === w
+              ? 'bg-primary/15 text-primary'
+              : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          {w}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Header row shared by every view: window toggle on the left, refresh on the right. */
+function ViewHeader({
+  window,
+  onWindow,
+  onRefresh,
+  spinning,
+}: {
+  window: ElfaTimeWindow;
+  onWindow: (w: ElfaTimeWindow) => void;
+  onRefresh: () => void;
+  spinning: boolean;
+}) {
+  return (
+    <div className="flex items-center justify-between">
+      <WindowToggle value={window} onChange={onWindow} />
+      <button
+        onClick={onRefresh}
+        disabled={spinning}
+        className="text-muted-foreground hover:text-primary flex items-center gap-1 text-xs transition-colors disabled:opacity-50"
+      >
+        <RefreshCwIcon className={`h-3 w-3 ${spinning ? 'animate-spin' : ''}`} />
+        Refresh
+      </button>
     </div>
   );
 }
@@ -109,28 +171,26 @@ function StateWrap({
   return <>{children}</>;
 }
 
-function SectionRefresh({ onClick, spinning }: { onClick: () => void; spinning: boolean }) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={spinning}
-      className="text-muted-foreground hover:text-primary flex items-center gap-1 text-xs transition-colors disabled:opacity-50"
-    >
-      <RefreshCwIcon className={`h-3 w-3 ${spinning ? 'animate-spin' : ''}`} />
-      Refresh
-    </button>
-  );
+interface ViewProps {
+  window: ElfaTimeWindow;
+  onWindow: (w: ElfaTimeWindow) => void;
+  active: boolean;
 }
 
-function TrendingTokensView({ active }: { active: boolean }) {
-  const { data, isLoading, error, refetch, isFetching } = useElfaTrendingTokens(active);
+function TrendingTokensView({ window, onWindow, active }: ViewProps) {
+  const { data, isLoading, error, refetch, isFetching } = useElfaTrendingTokens(
+    window,
+    active,
+  );
   const tokens = data?.data ?? [];
   return (
     <div className="space-y-2 p-3">
-      <div className="flex items-center justify-between">
-        <p className="text-muted-foreground text-xs font-medium">Trending · 24h</p>
-        <SectionRefresh onClick={() => refetch()} spinning={isFetching} />
-      </div>
+      <ViewHeader
+        window={window}
+        onWindow={onWindow}
+        onRefresh={refetch}
+        spinning={isFetching}
+      />
       <StateWrap
         isLoading={isLoading}
         error={error}
@@ -171,15 +231,17 @@ function TrendingTokensView({ active }: { active: boolean }) {
   );
 }
 
-function TokenNewsView({ active }: { active: boolean }) {
-  const { data, isLoading, error, refetch, isFetching } = useElfaTokenNews(active);
+function TokenNewsView({ window, onWindow, active }: ViewProps) {
+  const { data, isLoading, error, refetch, isFetching } = useElfaTokenNews(window, active);
   const items = data ?? [];
   return (
     <div className="space-y-2 p-3">
-      <div className="flex items-center justify-between">
-        <p className="text-muted-foreground text-xs font-medium">Latest mentions · 24h</p>
-        <SectionRefresh onClick={() => refetch()} spinning={isFetching} />
-      </div>
+      <ViewHeader
+        window={window}
+        onWindow={onWindow}
+        onRefresh={refetch}
+        spinning={isFetching}
+      />
       <StateWrap
         isLoading={isLoading}
         error={error}
@@ -226,15 +288,73 @@ function narrativeLabel(n: ElfaNarrative): string {
   );
 }
 
-function NarrativesView({ active }: { active: boolean }) {
-  const { data, isLoading, error, refetch, isFetching } = useElfaNarratives(active);
+/** Parse an @handle from an x.com/<user>/status/<id> URL for a friendlier label. */
+function handleFromUrl(link: string): string {
+  try {
+    const seg = new URL(link).pathname.split('/').filter(Boolean);
+    return seg[0] ? `@${seg[0]}` : link;
+  } catch {
+    return link;
+  }
+}
+
+function NarrativeCard({ n }: { n: ElfaNarrative }) {
+  const [open, setOpen] = useState(false);
+  const links = n.source_links ?? [];
+  const count = links.length;
+  return (
+    <div className="bg-primary/5 border-primary/10 overflow-hidden rounded-xl border">
+      <button
+        onClick={() => count > 0 && setOpen((o) => !o)}
+        disabled={count === 0}
+        className="flex w-full items-start gap-2 p-3 text-left"
+      >
+        <div className="min-w-0 flex-1">
+          <p className="text-foreground text-sm font-medium">{narrativeLabel(n)}</p>
+          {count > 0 && (
+            <p className="text-muted-foreground mt-1 text-xs">
+              {open ? 'Hide' : 'Show'} {count} source{count > 1 ? 's' : ''}
+            </p>
+          )}
+        </div>
+        {count > 0 &&
+          (open ? (
+            <ChevronUpIcon className="text-muted-foreground mt-0.5 h-4 w-4 shrink-0" />
+          ) : (
+            <ChevronDownIcon className="text-muted-foreground mt-0.5 h-4 w-4 shrink-0" />
+          ))}
+      </button>
+      {open && count > 0 && (
+        <div className="border-primary/10 space-y-1.5 border-t px-3 py-2">
+          {links.map((link, j) => (
+            <a
+              key={j}
+              href={link}
+              target="_blank"
+              rel="noreferrer"
+              className="text-muted-foreground hover:text-primary flex items-center gap-1.5 text-xs transition-colors"
+            >
+              <ExternalLinkIcon className="h-3 w-3 shrink-0" />
+              <span className="truncate">{handleFromUrl(link)}</span>
+            </a>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function NarrativesView({ window, onWindow, active }: ViewProps) {
+  const { data, isLoading, error, refetch, isFetching } = useElfaNarratives(window, active);
   const narratives = data?.trending_narratives ?? [];
   return (
     <div className="space-y-2 p-3">
-      <div className="flex items-center justify-between">
-        <p className="text-muted-foreground text-xs font-medium">Trending narratives</p>
-        <SectionRefresh onClick={() => refetch()} spinning={isFetching} />
-      </div>
+      <ViewHeader
+        window={window}
+        onWindow={onWindow}
+        onRefresh={refetch}
+        spinning={isFetching}
+      />
       <StateWrap
         isLoading={isLoading}
         error={error}
@@ -242,43 +362,9 @@ function NarrativesView({ active }: { active: boolean }) {
         emptyText="No trending narratives right now."
         onRetry={refetch}
       >
-        {narratives.map((n, i) => {
-          const href = n.source_links?.[0];
-          const count = n.source_links?.length ?? 0;
-          const body = (
-            <>
-              <div className="min-w-0 flex-1">
-                <p className="text-foreground text-sm font-medium">{narrativeLabel(n)}</p>
-                {count > 0 && (
-                  <p className="text-muted-foreground mt-1 text-xs">
-                    {count} source{count > 1 ? 's' : ''}
-                  </p>
-                )}
-              </div>
-              {href && (
-                <ExternalLinkIcon className="text-muted-foreground mt-0.5 h-3.5 w-3.5 shrink-0" />
-              )}
-            </>
-          );
-          return href ? (
-            <a
-              key={i}
-              href={href}
-              target="_blank"
-              rel="noreferrer"
-              className="bg-primary/5 border-primary/10 hover:bg-primary/10 flex items-start gap-2 rounded-xl border p-3 transition-colors"
-            >
-              {body}
-            </a>
-          ) : (
-            <div
-              key={i}
-              className="bg-primary/5 border-primary/10 flex items-start gap-2 rounded-xl border p-3"
-            >
-              {body}
-            </div>
-          );
-        })}
+        {narratives.map((n, i) => (
+          <NarrativeCard key={i} n={n} />
+        ))}
       </StateWrap>
     </div>
   );

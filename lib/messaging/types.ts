@@ -129,9 +129,9 @@ export type MessageRequest =
     }
   | { action: typeof MSG.FETCH_ABOUT_ME }
   | { action: typeof MSG.REQUEST_FAUCET; payload: { password: string; amount: string } }
-  | { action: typeof MSG.FETCH_ELFA_TRENDING_TOKENS }
-  | { action: typeof MSG.FETCH_ELFA_TOKEN_NEWS }
-  | { action: typeof MSG.FETCH_ELFA_NARRATIVES }
+  | { action: typeof MSG.FETCH_ELFA_TRENDING_TOKENS; payload: { window: ElfaTimeWindow } }
+  | { action: typeof MSG.FETCH_ELFA_TOKEN_NEWS; payload: { window: ElfaTimeWindow } }
+  | { action: typeof MSG.FETCH_ELFA_NARRATIVES; payload: { window: ElfaTimeWindow } }
   // dApp approval flow
   | { action: typeof MSG.GET_DAPP_APPROVAL; payload: { requestId: string } }
   | { action: typeof MSG.DAPP_APPROVAL_RESULT; payload: { requestId: string; approved: boolean } };
@@ -181,6 +181,10 @@ export interface BalancesData {
 }
 
 // ── Elfa market intelligence (Phase 1, native data proxied via backend) ──
+
+/** Rolling window offered in the UI; mapped to Elfa params server-side
+ *  (timeWindow for tokens/news, timeFrame day|week for narratives). */
+export type ElfaTimeWindow = '24h' | '7d';
 
 export interface ElfaTrendingToken {
   token: string;

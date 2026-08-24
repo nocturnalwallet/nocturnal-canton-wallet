@@ -248,12 +248,12 @@ export async function handlePrepareWithdraw(payload: {
 // The wallet-provider backend proxies Elfa's /v2/* data API (the Elfa key stays
 // server-side). Each handler unwraps the backend's `{ data }` envelope.
 
-export async function handleFetchElfaTrendingTokens(): Promise<
-  MessageResponse<ElfaTrendingTokensData>
-> {
+export async function handleFetchElfaTrendingTokens(
+  window: string,
+): Promise<MessageResponse<ElfaTrendingTokensData>> {
   try {
     const { data } = await apiClient.get('/elfa/trending-tokens', {
-      params: { timeWindow: '24h', pageSize: '10' },
+      params: { timeWindow: window, pageSize: '10' },
     });
     return ok(data.data);
   } catch (e: unknown) {
@@ -261,12 +261,12 @@ export async function handleFetchElfaTrendingTokens(): Promise<
   }
 }
 
-export async function handleFetchElfaTokenNews(): Promise<
-  MessageResponse<ElfaTokenNewsData>
-> {
+export async function handleFetchElfaTokenNews(
+  window: string,
+): Promise<MessageResponse<ElfaTokenNewsData>> {
   try {
     const { data } = await apiClient.get('/elfa/token-news', {
-      params: { timeWindow: '24h', pageSize: '15' },
+      params: { timeWindow: window, pageSize: '15' },
     });
     return ok(data.data);
   } catch (e: unknown) {
@@ -274,12 +274,13 @@ export async function handleFetchElfaTokenNews(): Promise<
   }
 }
 
-export async function handleFetchElfaNarratives(): Promise<
-  MessageResponse<ElfaNarrativesData>
-> {
+export async function handleFetchElfaNarratives(
+  window: string,
+): Promise<MessageResponse<ElfaNarrativesData>> {
   try {
+    // Narratives use timeFrame (day|week) rather than a rolling timeWindow.
     const { data } = await apiClient.get('/elfa/trending-narratives', {
-      params: { timeFrame: 'day' },
+      params: { timeFrame: window === '7d' ? 'week' : 'day' },
     });
     return ok(data.data);
   } catch (e: unknown) {
