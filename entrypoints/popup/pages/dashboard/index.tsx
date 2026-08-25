@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { WalletIcon, SendIcon, InboxIcon, HistoryIcon, SettingsIcon, Maximize2Icon, ChevronDownIcon, CopyIcon, CheckIcon } from 'lucide-react';
+import { WalletIcon, SendIcon, InboxIcon, HistoryIcon, TrendingUpIcon, SettingsIcon, Maximize2Icon, ChevronDownIcon, CopyIcon, CheckIcon } from 'lucide-react';
 import { IconLogo } from '@assets/icons/icon-logo';
 import brand from '@brand/brand';
 import { Balances } from './Balances';
@@ -7,6 +7,7 @@ import { Transfer } from './Transfer';
 import { Offers } from './offers';
 import { HistoryTab } from './offers/HistoryTab';
 import { Settings } from './Settings';
+import { MarketIntelligence } from './MarketIntelligence';
 import { useLock } from '../../hooks/useLockState';
 import { useAuthState, useLogout } from '../../hooks/useAuth';
 import { useNetwork } from '../../hooks/useNetwork';
@@ -30,7 +31,7 @@ function formatPartyId(partyId: string): string {
   return `${hint}::${sig.slice(0, 10)}…${sig.slice(-10)}`;
 }
 
-type Tab = 'balances' | 'transfer' | 'offers' | 'history';
+type Tab = 'balances' | 'transfer' | 'offers' | 'history' | 'market';
 
 interface Props {
   onLock: () => void;
@@ -87,6 +88,7 @@ export function Dashboard({ onLock, onLogout }: Props) {
     { id: 'transfer', label: 'Send', icon: SendIcon },
     { id: 'offers', label: 'Offers', icon: InboxIcon },
     { id: 'history', label: 'History', icon: HistoryIcon },
+    { id: 'market', label: 'Markets', icon: TrendingUpIcon },
   ];
 
   if (showSettings) {
@@ -201,6 +203,7 @@ export function Dashboard({ onLock, onLogout }: Props) {
         {tab === 'transfer' && <Transfer />}
         {tab === 'offers' && <Offers />}
         {tab === 'history' && <HistoryTab />}
+        {tab === 'market' && <MarketIntelligence />}
       </div>
 
       {/* Bottom nav */}

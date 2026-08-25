@@ -7,6 +7,9 @@ import type {
 
   AboutMeData,
   PrepareData,
+  ElfaTrendingTokensData,
+  ElfaTokenNewsData,
+  ElfaNarrativesData,
 } from '@lib/messaging';
 import type {
   PrepareTransferProps,
@@ -238,5 +241,49 @@ export async function handlePrepareWithdraw(payload: {
     return ok({ preparedData: data.data });
   } catch (e: unknown) {
     return err(e instanceof Error ? e.message : 'Prepare withdraw failed');
+  }
+}
+
+// ── Elfa market intelligence (Phase 1) ──
+// The wallet-provider backend proxies Elfa's /v2/* data API (the Elfa key stays
+// server-side). Each handler unwraps the backend's `{ data }` envelope.
+
+export async function handleFetchElfaTrendingTokens(
+  window: string,
+): Promise<MessageResponse<ElfaTrendingTokensData>> {
+  try {
+    const { data } = await apiClient.get('/elfa/trending-tokens', {
+      params: { timeWindow: window, pageSize: '10' },
+    });
+    return ok(data.data);
+  } catch (e: unknown) {
+    return err(getErrorMessage(e, 'Failed to load trending tokens'));
+  }
+}
+
+export async function handleFetchElfaTokenNews(
+  window: string,
+): Promise<MessageResponse<ElfaTokenNewsData>> {
+  try {
+    const { data } = await apiClient.get('/elfa/token-news', {
+      params: { timeWindow: window, pageSize: '15' },
+    });
+    return ok(data.data);
+  } catch (e: unknown) {
+    return err(getErrorMessage(e, 'Failed to load token news'));
+  }
+}
+
+export async function handleFetchElfaNarratives(
+  window: string,
+): Promise<MessageResponse<ElfaNarrativesData>> {
+  try {
+    // Narratives use timeFrame (day|week) rather than a rolling timeWindow.
+    const { data } = await apiClient.get('/elfa/trending-narratives', {
+      params: { timeFrame: window === '7d' ? 'week' : 'day' },
+    });
+    return ok(data.data);
+  } catch (e: unknown) {
+    return err(getErrorMessage(e, 'Failed to load narratives'));
   }
 }

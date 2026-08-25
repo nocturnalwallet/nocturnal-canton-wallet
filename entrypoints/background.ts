@@ -51,6 +51,9 @@ import {
   handleFetchAboutMe,
   handleRequestFaucet,
   handlePrepareWithdraw,
+  handleFetchElfaTrendingTokens,
+  handleFetchElfaTokenNews,
+  handleFetchElfaNarratives,
 } from './background/handlers/api.handler';
 import {
   handleGetNetwork,
@@ -222,6 +225,12 @@ case MSG.FETCH_ABOUT_ME:
       return handleFetchAboutMe();
     case MSG.REQUEST_FAUCET:
       return handleRequestFaucet(message.payload.password, message.payload.amount);
+    case MSG.FETCH_ELFA_TRENDING_TOKENS:
+      return handleFetchElfaTrendingTokens(message.payload.window);
+    case MSG.FETCH_ELFA_TOKEN_NEWS:
+      return handleFetchElfaTokenNews(message.payload.window);
+    case MSG.FETCH_ELFA_NARRATIVES:
+      return handleFetchElfaNarratives(message.payload.window);
 
     // dApp approval flow
     case MSG.GET_DAPP_APPROVAL: {
