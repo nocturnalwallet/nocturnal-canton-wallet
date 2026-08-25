@@ -27,7 +27,7 @@ The backend base URL comes from the active network (`branding/ginkgo/brand.ts` �
 
 `entrypoints/popup/pages/dashboard/MarketIntelligence.tsx` — a segmented view with a shared 24h/7d window toggle:
 
-- **Tokens** — ranked by social mentions; each row shows mention count, mention-count growth vs the prior window (green/red %), and a **mindshare bar** (share of the top-N shown) with a % label. A header legend + info tooltip explain the metrics. **Tap a token** to drill down into its top mentions (`ElfaTokenDetail` → `top-mentions`).
+- **Tokens** — ranked by social mentions; each row shows mention count, mention-count growth vs the prior window (green/red %), and a **mindshare bar** (share of the top-N shown) with a % label. A header legend + info tooltip explain the metrics. **Tap a token** to drill down into its top mentions (`ElfaTokenDetail` → `top-mentions`). A pinned **Canton Coin (CC)** card shows its on-ledger USD price — Elfa doesn't track CC, so the backend injects it (`canton` field on the trending-tokens response, sourced from the mining-round `amuletPrice`).
 - **Narratives** — narrative clusters; each card is **collapsible** to reveal all its source posts (`source_links`), labelled by `@handle`.
 - **Search** — a search box (Canton-first quick chips: `Canton, CC, cBTC, cETH, SPCX`) over social mentions (`keyword-mentions`); explicit submit to conserve credits.
 

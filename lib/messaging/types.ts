@@ -196,11 +196,19 @@ export interface ElfaTrendingToken {
   change_percent: number;
 }
 
+/** Canton Coin row injected server-side (Elfa doesn't track CC). */
+export interface ElfaCantonCoin {
+  token: string;
+  label: string;
+  priceUsd: string;
+}
+
 export interface ElfaTrendingTokensData {
   total: number;
   page: number;
   pageSize: number;
   data: ElfaTrendingToken[];
+  canton?: ElfaCantonCoin | null;
 }
 
 export interface ElfaNewsItem {
