@@ -5,7 +5,7 @@ import { StateWrap } from './elfa-shared';
 import { ElfaMentionRow } from './ElfaMentionRow';
 
 // Canton-first quick queries. Search is explicit (submit) to conserve credits.
-const QUICK = ['canton', 'cbtc', 'usdc'];
+const QUICK = ['Canton', 'CC', 'cBTC', 'cETH', 'SPCX'];
 
 export function ElfaSearch() {
   const [input, setInput] = useState('');

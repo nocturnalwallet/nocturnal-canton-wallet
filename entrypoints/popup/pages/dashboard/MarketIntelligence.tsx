@@ -11,20 +11,17 @@ import {
 } from 'lucide-react';
 import {
   useElfaTrendingTokens,
-  useElfaTokenNews,
   useElfaNarratives,
 } from '../../hooks/useElfa';
 import type { ElfaNarrative, ElfaTimeWindow } from '@lib/messaging';
 import { StateWrap, handleFromUrl } from './elfa-shared';
-import { ElfaMentionRow } from './ElfaMentionRow';
 import { ElfaTokenDetail } from './ElfaTokenDetail';
 import { ElfaSearch } from './ElfaSearch';
 
-type View = 'tokens' | 'news' | 'narratives' | 'search';
+type View = 'tokens' | 'narratives' | 'search';
 
 const VIEWS: { id: View; label: string }[] = [
   { id: 'tokens', label: 'Tokens' },
-  { id: 'news', label: 'News' },
   { id: 'narratives', label: 'Narratives' },
   { id: 'search', label: 'Search' },
 ];
@@ -78,7 +75,6 @@ export function MarketIntelligence() {
               onSelect={setDrillToken}
             />
           ))}
-        {view === 'news' && <TokenNewsView window={window} onWindow={setWindow} active />}
         {view === 'narratives' && (
           <NarrativesView window={window} onWindow={setWindow} active />
         )}
@@ -239,32 +235,6 @@ function TrendingTokensView({
         <p className="text-muted-foreground px-0.5 pt-1 text-[10px] leading-snug">
           Trending signal — differs from Elfa Chat's full-corpus totals.
         </p>
-      </StateWrap>
-    </div>
-  );
-}
-
-function TokenNewsView({ window, onWindow, active }: ViewProps) {
-  const { data, isLoading, error, refetch, isFetching } = useElfaTokenNews(window, active);
-  const items = data ?? [];
-  return (
-    <div className="space-y-2 p-3">
-      <ViewHeader
-        window={window}
-        onWindow={onWindow}
-        onRefresh={refetch}
-        spinning={isFetching}
-      />
-      <StateWrap
-        isLoading={isLoading}
-        error={error}
-        isEmpty={items.length === 0}
-        emptyText="No recent news mentions."
-        onRetry={refetch}
-      >
-        {items.map((n) => (
-          <ElfaMentionRow key={n.tweetId} mention={n} />
-        ))}
       </StateWrap>
     </div>
   );
