@@ -54,6 +54,9 @@ import {
   handleFetchElfaTrendingTokens,
   handleFetchElfaTokenNews,
   handleFetchElfaNarratives,
+  handleFetchElfaTopMentions,
+  handleFetchElfaKeywordMentions,
+  handleFetchElfaSmartStats,
 } from './background/handlers/api.handler';
 import {
   handleGetNetwork,
@@ -231,6 +234,12 @@ case MSG.FETCH_ABOUT_ME:
       return handleFetchElfaTokenNews(message.payload.window);
     case MSG.FETCH_ELFA_NARRATIVES:
       return handleFetchElfaNarratives(message.payload.window);
+    case MSG.FETCH_ELFA_TOP_MENTIONS:
+      return handleFetchElfaTopMentions(message.payload.ticker);
+    case MSG.FETCH_ELFA_KEYWORD_MENTIONS:
+      return handleFetchElfaKeywordMentions(message.payload.keywords);
+    case MSG.FETCH_ELFA_SMART_STATS:
+      return handleFetchElfaSmartStats(message.payload.username);
 
     // dApp approval flow
     case MSG.GET_DAPP_APPROVAL: {

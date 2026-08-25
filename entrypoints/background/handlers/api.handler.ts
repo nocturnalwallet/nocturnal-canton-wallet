@@ -10,6 +10,9 @@ import type {
   ElfaTrendingTokensData,
   ElfaTokenNewsData,
   ElfaNarrativesData,
+  ElfaTopMentionsData,
+  ElfaKeywordMentionsData,
+  ElfaSmartStats,
 } from '@lib/messaging';
 import type {
   PrepareTransferProps,
@@ -285,5 +288,44 @@ export async function handleFetchElfaNarratives(
     return ok(data.data);
   } catch (e: unknown) {
     return err(getErrorMessage(e, 'Failed to load narratives'));
+  }
+}
+
+export async function handleFetchElfaTopMentions(
+  ticker: string,
+): Promise<MessageResponse<ElfaTopMentionsData>> {
+  try {
+    const { data } = await apiClient.get('/elfa/top-mentions', {
+      params: { ticker, pageSize: '15' },
+    });
+    return ok(data.data);
+  } catch (e: unknown) {
+    return err(getErrorMessage(e, 'Failed to load mentions'));
+  }
+}
+
+export async function handleFetchElfaKeywordMentions(
+  keywords: string,
+): Promise<MessageResponse<ElfaKeywordMentionsData>> {
+  try {
+    const { data } = await apiClient.get('/elfa/keyword-mentions', {
+      params: { keywords, limit: '20' },
+    });
+    return ok(data.data);
+  } catch (e: unknown) {
+    return err(getErrorMessage(e, 'Search failed'));
+  }
+}
+
+export async function handleFetchElfaSmartStats(
+  username: string,
+): Promise<MessageResponse<ElfaSmartStats>> {
+  try {
+    const { data } = await apiClient.get('/elfa/smart-stats', {
+      params: { username },
+    });
+    return ok(data.data);
+  } catch (e: unknown) {
+    return err(getErrorMessage(e, 'Failed to load account stats'));
   }
 }

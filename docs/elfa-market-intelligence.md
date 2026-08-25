@@ -25,9 +25,12 @@ The backend base URL comes from the active network (`branding/ginkgo/brand.ts` �
 
 `entrypoints/popup/pages/dashboard/MarketIntelligence.tsx` — a segmented view with a shared 24h/7d window toggle:
 
-- **Tokens** — ranked by social mentions; each row shows mention count, mention-count growth vs the prior window (green/red %), and a **mindshare bar** (share of the top-N shown) with a % label. A header legend + info tooltip explain the metrics.
-- **News** — recent mentions, each linking out to the post (no tweet text — Elfa's is a measurement endpoint).
+- **Tokens** — ranked by social mentions; each row shows mention count, mention-count growth vs the prior window (green/red %), and a **mindshare bar** (share of the top-N shown) with a % label. A header legend + info tooltip explain the metrics. **Tap a token** to drill down into its top mentions (`ElfaTokenDetail` → `top-mentions`).
+- **News** — recent mentions, each rendered by the shared `ElfaMentionRow`.
 - **Narratives** — narrative clusters; each card is **collapsible** to reveal all its source posts (`source_links`), labelled by `@handle`.
+- **Search** — a search box (with Canton-first quick chips) over social mentions (`keyword-mentions`); explicit submit to conserve credits.
+
+**Shared `ElfaMentionRow`** (News / drill-down / Search): shows `@handle` + time + views, links to the post, and has an on-tap **credibility** expander that lazily loads the author's Elfa `smart-stats` (smart followers, avg reach, followers, engagement). The `useElfaSmartStats` hook caches 30 min so repeat taps on the same handle cost no credits.
 
 Every sub-tab has loading / error (with Retry) / empty states and a Refresh control, and a "Powered by Elfa" footer.
 
@@ -49,13 +52,17 @@ Elfa's free tier is 1000 credits/month, so the tab is frugal:
 
 ## Files
 
-- `entrypoints/popup/pages/dashboard/MarketIntelligence.tsx` — the tab UI
-- `entrypoints/popup/hooks/useElfa.ts` — `useElfaTrendingTokens` / `useElfaTokenNews` / `useElfaNarratives`
+- `entrypoints/popup/pages/dashboard/MarketIntelligence.tsx` — the tab container (segmented Tokens/News/Narratives/Search + drill-down state)
+- `entrypoints/popup/pages/dashboard/elfa-shared.tsx` — `StateWrap`, `handleFromUrl`, `compactNumber`
+- `entrypoints/popup/pages/dashboard/ElfaMentionRow.tsx` — shared mention row + credibility expander
+- `entrypoints/popup/pages/dashboard/ElfaTokenDetail.tsx` — token drill-down (top mentions)
+- `entrypoints/popup/pages/dashboard/ElfaSearch.tsx` — keyword search sub-tab
+- `entrypoints/popup/hooks/useElfa.ts` — `useElfaTrendingTokens` / `useElfaTokenNews` / `useElfaNarratives` / `useElfaTopMentions` / `useElfaKeywordMentions` / `useElfaSmartStats`
 - `entrypoints/popup/pages/dashboard/index.tsx` — registers the `market` tab in the bottom nav
 - `entrypoints/background/handlers/api.handler.ts` — `handleFetchElfa*` proxy handlers
 - `entrypoints/background.ts` — routes the `FETCH_ELFA_*` actions
-- `lib/messaging/constants.ts` — `FETCH_ELFA_TRENDING_TOKENS` / `_TOKEN_NEWS` / `_NARRATIVES`
-- `lib/messaging/types.ts` — request variants + `ElfaTimeWindow`, `ElfaTrendingTokensData`, `ElfaTokenNewsData`, `ElfaNarrativesData`, `ElfaNarrative`
+- `lib/messaging/constants.ts` — `FETCH_ELFA_TRENDING_TOKENS` / `_TOKEN_NEWS` / `_NARRATIVES` / `_TOP_MENTIONS` / `_KEYWORD_MENTIONS` / `_SMART_STATS`
+- `lib/messaging/types.ts` — request variants + `ElfaTimeWindow`, `ElfaTrendingTokensData`, `ElfaTokenNewsData`, `ElfaNarrativesData`, `ElfaNarrative`, `ElfaMention`, `ElfaTopMentionsData`, `ElfaKeywordMentionsData`, `ElfaSmartStats`
 - `lib/constants.ts` — `queryKey.ELFA_*`
 
 ## Dependencies & config

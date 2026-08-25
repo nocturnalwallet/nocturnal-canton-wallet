@@ -132,6 +132,9 @@ export type MessageRequest =
   | { action: typeof MSG.FETCH_ELFA_TRENDING_TOKENS; payload: { window: ElfaTimeWindow } }
   | { action: typeof MSG.FETCH_ELFA_TOKEN_NEWS; payload: { window: ElfaTimeWindow } }
   | { action: typeof MSG.FETCH_ELFA_NARRATIVES; payload: { window: ElfaTimeWindow } }
+  | { action: typeof MSG.FETCH_ELFA_TOP_MENTIONS; payload: { ticker: string } }
+  | { action: typeof MSG.FETCH_ELFA_KEYWORD_MENTIONS; payload: { keywords: string } }
+  | { action: typeof MSG.FETCH_ELFA_SMART_STATS; payload: { username: string } }
   // dApp approval flow
   | { action: typeof MSG.GET_DAPP_APPROVAL; payload: { requestId: string } }
   | { action: typeof MSG.DAPP_APPROVAL_RESULT; payload: { requestId: string; approved: boolean } };
@@ -226,6 +229,30 @@ export interface ElfaNarrative {
 export interface ElfaNarrativesData {
   trending_narratives: ElfaNarrative[];
   metadata?: unknown;
+}
+
+/** A social mention. Superset shape shared by token-news, top-mentions, and
+ *  keyword-mentions (top-mentions may omit `account`). */
+export interface ElfaMention {
+  tweetId: string;
+  link: string;
+  likeCount?: number;
+  repostCount?: number;
+  viewCount?: number;
+  mentionedAt: string;
+  type?: string;
+  account?: { username: string; isVerified: boolean };
+}
+
+export type ElfaTopMentionsData = ElfaMention[];
+export type ElfaKeywordMentionsData = ElfaMention[];
+
+export interface ElfaSmartStats {
+  smartFollowingCount: number;
+  smartFollowerCount: number;
+  averageEngagement: number;
+  averageReach: number;
+  followerCount: number;
 }
 
 export interface PaginatedOffersData {

@@ -1,13 +1,12 @@
 import { useState } from 'react';
 import {
-  Loader2Icon,
-  AlertCircleIcon,
   TrendingUpIcon,
   TrendingDownIcon,
   ExternalLinkIcon,
   RefreshCwIcon,
   ChevronDownIcon,
   ChevronUpIcon,
+  ChevronRightIcon,
   InfoIcon,
 } from 'lucide-react';
 import {
@@ -16,13 +15,18 @@ import {
   useElfaNarratives,
 } from '../../hooks/useElfa';
 import type { ElfaNarrative, ElfaTimeWindow } from '@lib/messaging';
+import { StateWrap, handleFromUrl } from './elfa-shared';
+import { ElfaMentionRow } from './ElfaMentionRow';
+import { ElfaTokenDetail } from './ElfaTokenDetail';
+import { ElfaSearch } from './ElfaSearch';
 
-type View = 'tokens' | 'news' | 'narratives';
+type View = 'tokens' | 'news' | 'narratives' | 'search';
 
 const VIEWS: { id: View; label: string }[] = [
   { id: 'tokens', label: 'Tokens' },
   { id: 'news', label: 'News' },
   { id: 'narratives', label: 'Narratives' },
+  { id: 'search', label: 'Search' },
 ];
 
 const WINDOWS: ElfaTimeWindow[] = ['24h', '7d'];
@@ -31,11 +35,17 @@ const WINDOWS: ElfaTimeWindow[] = ['24h', '7d'];
  * Phase-1 Market Intelligence — renders Elfa's read-only data natively (no
  * iframe / widget). Data is proxied by the wallet-provider backend so the Elfa
  * key stays server-side. Only the active sub-tab fetches, to conserve the
- * free-tier credit budget. The 24h/7d window is shared across all sub-tabs.
+ * free-tier credit budget. The 24h/7d window is shared across Tokens/News/Narratives.
  */
 export function MarketIntelligence() {
   const [view, setView] = useState<View>('tokens');
   const [window, setWindow] = useState<ElfaTimeWindow>('24h');
+  const [drillToken, setDrillToken] = useState<string | null>(null);
+
+  const changeView = (v: View) => {
+    setView(v);
+    setDrillToken(null);
+  };
 
   return (
     <div className="flex h-full flex-col">
@@ -44,7 +54,7 @@ export function MarketIntelligence() {
         {VIEWS.map(({ id, label }) => (
           <button
             key={id}
-            onClick={() => setView(id)}
+            onClick={() => changeView(id)}
             className={`flex-1 rounded-lg py-1.5 text-xs font-medium transition-colors ${
               view === id
                 ? 'bg-primary/10 text-primary'
@@ -57,13 +67,22 @@ export function MarketIntelligence() {
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        {view === 'tokens' && (
-          <TrendingTokensView window={window} onWindow={setWindow} active />
-        )}
+        {view === 'tokens' &&
+          (drillToken ? (
+            <ElfaTokenDetail token={drillToken} onBack={() => setDrillToken(null)} />
+          ) : (
+            <TrendingTokensView
+              window={window}
+              onWindow={setWindow}
+              active
+              onSelect={setDrillToken}
+            />
+          ))}
         {view === 'news' && <TokenNewsView window={window} onWindow={setWindow} active />}
         {view === 'narratives' && (
           <NarrativesView window={window} onWindow={setWindow} active />
         )}
+        {view === 'search' && <ElfaSearch />}
       </div>
 
       <p className="text-muted-foreground border-border border-t px-3 py-1.5 text-center text-[10px]">
@@ -99,7 +118,7 @@ function WindowToggle({
   );
 }
 
-/** Header row shared by every view: window toggle on the left, refresh on the right. */
+/** Header row: window toggle (+ optional info tooltip) on the left, refresh on the right. */
 function ViewHeader({
   window,
   onWindow,
@@ -135,59 +154,18 @@ function ViewHeader({
   );
 }
 
-/** Shared loading / error / empty scaffolding. */
-function StateWrap({
-  isLoading,
-  error,
-  isEmpty,
-  emptyText,
-  onRetry,
-  children,
-}: {
-  isLoading: boolean;
-  error: unknown;
-  isEmpty: boolean;
-  emptyText: string;
-  onRetry: () => void;
-  children: React.ReactNode;
-}) {
-  if (isLoading) {
-    return (
-      <div className="flex h-40 items-center justify-center">
-        <Loader2Icon className="text-primary h-6 w-6 animate-spin" />
-      </div>
-    );
-  }
-  if (error) {
-    return (
-      <div className="flex h-40 flex-col items-center justify-center gap-2 px-4 text-center">
-        <AlertCircleIcon className="text-destructive h-5 w-5" />
-        <p className="text-destructive text-sm">
-          {error instanceof Error ? error.message : 'Failed to load'}
-        </p>
-        <button onClick={onRetry} className="text-primary text-xs hover:underline">
-          Retry
-        </button>
-      </div>
-    );
-  }
-  if (isEmpty) {
-    return (
-      <div className="flex h-40 items-center justify-center px-6 text-center">
-        <p className="text-muted-foreground text-xs">{emptyText}</p>
-      </div>
-    );
-  }
-  return <>{children}</>;
-}
-
 interface ViewProps {
   window: ElfaTimeWindow;
   onWindow: (w: ElfaTimeWindow) => void;
   active: boolean;
 }
 
-function TrendingTokensView({ window, onWindow, active }: ViewProps) {
+function TrendingTokensView({
+  window,
+  onWindow,
+  active,
+  onSelect,
+}: ViewProps & { onSelect: (token: string) => void }) {
   const { data, isLoading, error, refetch, isFetching } = useElfaTrendingTokens(
     window,
     active,
@@ -202,7 +180,7 @@ function TrendingTokensView({ window, onWindow, active }: ViewProps) {
         onWindow={onWindow}
         onRefresh={refetch}
         spinning={isFetching}
-        info="Ranked by trending social mentions (via Elfa). Change % = growth in mention count vs the prior window. Bar = each token's share of the top 10 shown. These are a trending signal and differ from Elfa Chat's full-corpus mindshare figures."
+        info="Ranked by trending social mentions (via Elfa). Change % = growth in mention count vs the prior window. Bar = each token's share of the top 10 shown. Tap a token for its top mentions. These differ from Elfa Chat's full-corpus mindshare figures."
       />
       <StateWrap
         isLoading={isLoading}
@@ -212,15 +190,16 @@ function TrendingTokensView({ window, onWindow, active }: ViewProps) {
         onRetry={refetch}
       >
         <p className="text-muted-foreground px-0.5 text-[10px] leading-snug">
-          Change = mentions vs prior {window} · bar = share of top {tokens.length}
+          Change = mentions vs prior {window} · bar = share of top {tokens.length} · tap for mentions
         </p>
         {tokens.map((t, i) => {
           const up = t.change_percent >= 0;
           const share = (t.current_count / totalMentions) * 100;
           return (
-            <div
+            <button
               key={t.token}
-              className="bg-primary/5 border-primary/10 flex flex-col gap-2 rounded-xl border p-3"
+              onClick={() => onSelect(t.token)}
+              className="bg-primary/5 border-primary/10 hover:bg-primary/10 hover:border-primary/25 flex w-full flex-col gap-2 rounded-xl border p-3 text-left transition-colors"
             >
               <div className="flex items-center gap-3">
                 <span className="text-muted-foreground w-4 text-xs tabular-nums">{i + 1}</span>
@@ -241,6 +220,7 @@ function TrendingTokensView({ window, onWindow, active }: ViewProps) {
                   {up ? '+' : ''}
                   {t.change_percent.toFixed(1)}%
                 </span>
+                <ChevronRightIcon className="text-muted-foreground h-4 w-4 shrink-0" />
               </div>
               <div className="flex items-center gap-2">
                 <div className="bg-primary/10 h-1.5 flex-1 overflow-hidden rounded-full">
@@ -253,7 +233,7 @@ function TrendingTokensView({ window, onWindow, active }: ViewProps) {
                   {share.toFixed(1)}%
                 </span>
               </div>
-            </div>
+            </button>
           );
         })}
         <p className="text-muted-foreground px-0.5 pt-1 text-[10px] leading-snug">
@@ -283,30 +263,7 @@ function TokenNewsView({ window, onWindow, active }: ViewProps) {
         onRetry={refetch}
       >
         {items.map((n) => (
-          <a
-            key={n.tweetId}
-            href={n.link}
-            target="_blank"
-            rel="noreferrer"
-            className="bg-primary/5 border-primary/10 hover:bg-primary/10 flex items-center gap-2 rounded-xl border p-3 transition-colors"
-          >
-            <div className="min-w-0 flex-1">
-              <p className="text-foreground truncate text-sm font-medium">
-                @{n.account.username}
-              </p>
-              <p className="text-muted-foreground text-xs">
-                {new Date(n.mentionedAt).toLocaleString(undefined, {
-                  month: 'short',
-                  day: 'numeric',
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })}
-                {' · '}
-                {n.viewCount.toLocaleString()} views
-              </p>
-            </div>
-            <ExternalLinkIcon className="text-muted-foreground h-3.5 w-3.5 shrink-0" />
-          </a>
+          <ElfaMentionRow key={n.tweetId} mention={n} />
         ))}
       </StateWrap>
     </div>
@@ -319,16 +276,6 @@ function narrativeLabel(n: ElfaNarrative): string {
     (typeof n.theme === 'string' && n.theme) ||
     'Untitled narrative'
   );
-}
-
-/** Parse an @handle from an x.com/<user>/status/<id> URL for a friendlier label. */
-function handleFromUrl(link: string): string {
-  try {
-    const seg = new URL(link).pathname.split('/').filter(Boolean);
-    return seg[0] ? `@${seg[0]}` : link;
-  } catch {
-    return link;
-  }
 }
 
 function NarrativeCard({ n }: { n: ElfaNarrative }) {
@@ -359,18 +306,21 @@ function NarrativeCard({ n }: { n: ElfaNarrative }) {
       </button>
       {open && count > 0 && (
         <div className="border-primary/10 space-y-1.5 border-t px-3 py-2">
-          {links.map((link, j) => (
-            <a
-              key={j}
-              href={link}
-              target="_blank"
-              rel="noreferrer"
-              className="text-muted-foreground hover:text-primary flex items-center gap-1.5 text-xs transition-colors"
-            >
-              <ExternalLinkIcon className="h-3 w-3 shrink-0" />
-              <span className="truncate">{handleFromUrl(link)}</span>
-            </a>
-          ))}
+          {links.map((link, j) => {
+            const h = handleFromUrl(link);
+            return (
+              <a
+                key={j}
+                href={link}
+                target="_blank"
+                rel="noreferrer"
+                className="text-muted-foreground hover:text-primary flex items-center gap-1.5 text-xs transition-colors"
+              >
+                <ExternalLinkIcon className="h-3 w-3 shrink-0" />
+                <span className="truncate">{h ? `@${h}` : link}</span>
+              </a>
+            );
+          })}
         </div>
       )}
     </div>
