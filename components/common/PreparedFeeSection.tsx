@@ -1,4 +1,5 @@
 import type { FeeBlock } from '@lib/types';
+import { tokenSymbol } from '@lib/constants';
 
 function isDisplayableFee(fee: FeeBlock): boolean {
   const hasTotal = Boolean(fee.totalFee);
@@ -19,7 +20,7 @@ export function PreparedFeeSection({ fee }: { fee: FeeBlock }) {
         <div key={`${line.description}-${index}`} className="flex justify-between gap-3">
           <span className="text-muted-foreground">{line.description}</span>
           <span className="text-foreground shrink-0">
-            {line.amount} {fee.currency}
+            {line.amount} {tokenSymbol(fee.currency)}
           </span>
         </div>
       ))}
@@ -27,7 +28,7 @@ export function PreparedFeeSection({ fee }: { fee: FeeBlock }) {
         <div className="border-primary/10 flex justify-between gap-3 border-t pt-2 font-medium">
           <span className="text-muted-foreground">Total estimated fee</span>
           <span className="text-foreground shrink-0">
-            {fee.totalFee} {fee.currency}
+            {fee.totalFee} {tokenSymbol(fee.currency)}
           </span>
         </div>
       ) : null}

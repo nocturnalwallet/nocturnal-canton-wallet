@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Loader2Icon, CheckCircleIcon, AlertTriangleIcon, ExternalLinkIcon } from 'lucide-react';
-import { SUPPORTED_TOKENS } from '@lib/constants';
+import { SUPPORTED_TOKENS, tokenDisplayName, tokenSymbol } from '@lib/constants';
 import {
   usePrepareTransferPreapproval,
   useSignAndSubmitTransferPreapproval,
@@ -108,7 +108,7 @@ export function Transfer() {
         <CheckCircleIcon className="text-positive h-16 w-16" />
         <h2 className="text-foreground text-lg font-bold">Transfer Sent</h2>
         <p className="text-muted-foreground text-center text-sm">
-          {amount} {tokenId} sent to recipient
+          {amount} {tokenSymbol(tokenId)} sent to recipient
         </p>
         {explorerHref && (
           <button
@@ -146,7 +146,7 @@ export function Transfer() {
         <div className="bg-secondary space-y-2 rounded-xl p-4 text-sm">
           <div className="flex justify-between">
             <span className="text-muted-foreground">Token</span>
-            <span className="text-foreground">{tokenId}</span>
+            <span className="text-foreground">{tokenDisplayName(tokenId)}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Amount</span>

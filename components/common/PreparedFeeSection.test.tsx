@@ -31,11 +31,11 @@ describe('PreparedFeeSection', () => {
     expect(html).toContain('Estimated fee');
     expect(html).toContain('Estimate — may not be charged depending on network conditions.');
     expect(html).toContain('Wallet fee');
-    expect(html).toContain('0.5 Amulet');
+    expect(html).toContain('0.5 CC');
     expect(html).toContain('Network fee');
-    expect(html).toContain('5.6291148501 Amulet');
+    expect(html).toContain('5.6291148501 CC');
     expect(html).toContain('Total estimated fee');
-    expect(html).toContain('6.1291148501 Amulet');
+    expect(html).toContain('6.1291148501 CC');
     expect(html).not.toContain('party::abc');
   });
 
@@ -55,7 +55,7 @@ describe('PreparedFeeSection', () => {
       createElement(PreparedFeeSection, { fee: feeWithCostEstimation }),
     );
     expect(html).toContain('Wallet fee');
-    expect(html).toContain('0.5 Amulet');
+    expect(html).toContain('0.5 CC');
     expect(html).not.toContain('confirmationRequestBytes');
     expect(html).not.toContain('rateUsdPerMb');
   });
@@ -85,6 +85,6 @@ describe('PreparedFeeSection', () => {
       }),
     );
     expect(html).toContain('Estimated fee');
-    expect(html).toContain('1.25 Amulet');
+    expect(html).toContain('1.25 CC');
   });
 });

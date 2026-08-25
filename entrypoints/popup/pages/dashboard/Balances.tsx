@@ -11,6 +11,7 @@ import { IconCBTCCoin } from '@assets/icons/icon-yield-coin';
 import { IconUSDC } from '@assets/icons/icon-usdc';
 import { IconDefaultToken } from '@assets/icons/icon-default-token';
 import { TokenDetail } from './TokenDetail';
+import { tokenDisplayName } from '@lib/constants';
 import BigNumber from 'bignumber.js';
 
 const TOKEN_ICONS: Record<string, React.FC<React.SVGProps<SVGSVGElement>>> = {
@@ -99,7 +100,7 @@ export function Balances() {
             </p>
           </div>
           <p className="text-muted-foreground mb-2 text-xs">
-            Register transfer pre-approval to enable receiving Amulet transfers.
+            Register transfer pre-approval to enable receiving Canton Coin transfers.
           </p>
           {preapprovalError && (
             <div className="mb-2 flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2">
@@ -172,7 +173,7 @@ export function Balances() {
                 <Icon className="h-8 w-8" />
               </div>
               <div className="flex-1">
-                <p className="text-foreground font-medium">{tokenId}</p>
+                <p className="text-foreground font-medium">{tokenDisplayName(tokenId)}</p>
                 <p className="text-muted-foreground text-xs">
                   Available: {new BigNumber(b.unlocked ?? '0').toFormat()}
                 </p>
