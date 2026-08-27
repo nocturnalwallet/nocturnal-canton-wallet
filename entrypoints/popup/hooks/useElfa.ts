@@ -1,7 +1,6 @@
 import { sendMessage, MSG } from '@lib/messaging';
 import type {
   ElfaTrendingTokensData,
-  ElfaTokenNewsData,
   ElfaNarrativesData,
   ElfaTimeWindow,
   ElfaTopMentionsData,
@@ -22,19 +21,6 @@ export function useElfaTrendingTokens(window: ElfaTimeWindow, enabled = true) {
     queryFn: () =>
       sendMessage<ElfaTrendingTokensData>({
         action: MSG.FETCH_ELFA_TRENDING_TOKENS,
-        payload: { window },
-      }),
-    enabled,
-    ...SHARED,
-  });
-}
-
-export function useElfaTokenNews(window: ElfaTimeWindow, enabled = true) {
-  return useQuery({
-    queryKey: [queryKey.ELFA_TOKEN_NEWS, window],
-    queryFn: () =>
-      sendMessage<ElfaTokenNewsData>({
-        action: MSG.FETCH_ELFA_TOKEN_NEWS,
         payload: { window },
       }),
     enabled,

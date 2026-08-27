@@ -4,7 +4,7 @@ import { IconCanton } from '@assets/icons/icon-canton';
 import { IconCBTCCoin } from '@assets/icons/icon-yield-coin';
 import { IconUSDC } from '@assets/icons/icon-usdc';
 import { IconDefaultToken } from '@assets/icons/icon-default-token';
-import { SUPPORTED_TOKENS } from '@lib/constants';
+import { SUPPORTED_TOKENS, tokenDisplayName, tokenSymbol } from '@lib/constants';
 import { format } from '@lib/format';
 import type { TokenBalance } from '@lib/types';
 import { useNetwork } from '../../hooks/useNetwork';
@@ -32,8 +32,8 @@ export function TokenDetail({ balance, onBack }: Props) {
   const tokenId = balance.instrumentId?.id ?? 'Unknown';
   const Icon = TOKEN_ICONS[tokenId] ?? IconDefaultToken;
   const tokenMeta = SUPPORTED_TOKENS.find((t) => t.id === tokenId);
-  const tokenName = tokenMeta?.chainName ?? tokenId;
-  const symbol = tokenMeta?.symbol ?? tokenId;
+  const tokenName = tokenDisplayName(tokenId);
+  const symbol = tokenSymbol(tokenId);
 
   const unlocked = new BigNumber(balance.unlocked ?? '0');
   const locked = new BigNumber(balance.locked ?? '0');

@@ -15,7 +15,7 @@ import {
 } from '../../hooks/useElfa';
 import type { ElfaNarrative, ElfaTimeWindow } from '@lib/messaging';
 import { IconCanton } from '@assets/icons/icon-canton';
-import { StateWrap, handleFromUrl } from './elfa-shared';
+import { StateWrap, handleFromUrl, safeExternalUrl } from './elfa-shared';
 import { ElfaTokenDetail } from './ElfaTokenDetail';
 import { ElfaSearch } from './ElfaSearch';
 
@@ -273,7 +273,10 @@ function narrativeLabel(n: ElfaNarrative): string {
 
 function NarrativeCard({ n }: { n: ElfaNarrative }) {
   const [open, setOpen] = useState(false);
-  const links = n.source_links ?? [];
+  // Only keep safe http(s) source links (Elfa data is third-party).
+  const links = (n.source_links ?? [])
+    .map((l) => safeExternalUrl(l))
+    .filter((l): l is string => l !== null);
   const count = links.length;
   return (
     <div className="bg-primary/5 border-primary/10 overflow-hidden rounded-xl border">
