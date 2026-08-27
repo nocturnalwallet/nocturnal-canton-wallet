@@ -88,7 +88,7 @@ export function Dashboard({ onLock, onLogout }: Props) {
     { id: 'transfer', label: 'Send', icon: SendIcon },
     { id: 'offers', label: 'Offers', icon: InboxIcon },
     { id: 'history', label: 'History', icon: HistoryIcon },
-    { id: 'market', label: 'Markets', icon: TrendingUpIcon },
+    { id: 'market', label: 'Insights', icon: TrendingUpIcon },
   ];
 
   if (showSettings) {

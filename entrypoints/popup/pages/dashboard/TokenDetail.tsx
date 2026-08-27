@@ -147,7 +147,7 @@ export function TokenDetail({ balance, onBack }: Props) {
               Faucet
             </p>
             <p className="text-muted-foreground text-xs">
-              Request test Amulet tokens on {networkConfig.label} (max 10,000).
+              Request test {tokenName} tokens on {networkConfig.label} (max 10,000).
             </p>
             <input
               type="number"
@@ -179,7 +179,7 @@ export function TokenDetail({ balance, onBack }: Props) {
               className="bg-primary text-primary-foreground flex w-full items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-medium transition-opacity hover:opacity-90 disabled:opacity-50"
             >
               <DropletsIcon className="h-4 w-4" />
-              {faucetLoading ? 'Requesting...' : `Request ${faucetAmount || '0'} Amulet`}
+              {faucetLoading ? 'Requesting...' : `Request ${faucetAmount || '0'} ${symbol}`}
             </button>
             {faucetSuccess && (
               <p className="text-positive text-center text-xs">Faucet request sent!</p>
