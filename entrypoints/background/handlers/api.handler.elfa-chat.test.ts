@@ -7,9 +7,6 @@ vi.mock('@canton-network/core-signing-lib', () => ({
 vi.mock('@lib/storage', () => ({
   localStore: { get: vi.fn(), set: vi.fn() },
   sessionStore: { get: vi.fn() },
-}));
-
-vi.mock('@lib/storage/local', () => ({
   hasUserScope: vi.fn(),
   getStorageScope: vi.fn(),
 }));
@@ -22,8 +19,7 @@ vi.mock('./session.handler', () => ({
   getCachedPrivateKey: vi.fn(),
 }));
 
-import { localStore } from '@lib/storage';
-import { getStorageScope, hasUserScope } from '@lib/storage/local';
+import { getStorageScope, hasUserScope, localStore } from '@lib/storage';
 import apiClient from '../api-client';
 import {
   handleClearElfaChat,
@@ -137,6 +133,61 @@ describe('Elfa chat background handlers', () => {
       { message: 'Hello' },
       { timeout: 65_000 },
     );
+  });
+
+  it('rejects a chat response with no message without changing storage', async () => {
+    vi.mocked(apiClient.post).mockResolvedValue({
+      data: {
+        data: {
+          sessionId: 'session-1',
+          creditsConsumed: 1,
+        },
+      },
+    });
+
+    await expect(handleElfaChat('What is trending?')).resolves.toEqual({
+      success: false,
+      error: 'Chat returned an invalid response',
+    });
+    expect(localStore.set).not.toHaveBeenCalled();
+  });
+
+  it('does not restore an in-flight transcript after chat is cleared', async () => {
+    let resolvePost!: (value: {
+      data: {
+        data: {
+          sessionId: string;
+          message: string;
+          creditsConsumed: number;
+        };
+      };
+    }) => void;
+    vi.mocked(apiClient.post).mockReturnValue(
+      new Promise((resolve) => {
+        resolvePost = resolve;
+      }),
+    );
+
+    const sendResult = handleElfaChat('What is trending?');
+    await vi.waitFor(() => expect(apiClient.post).toHaveBeenCalledOnce());
+
+    await handleClearElfaChat();
+    resolvePost({
+      data: {
+        data: {
+          sessionId: 'session-1',
+          message: 'AI and gaming tokens are trending.',
+          creditsConsumed: 1,
+        },
+      },
+    });
+    await expect(sendResult).resolves.toMatchObject({ success: true });
+
+    expect(localStore.set).toHaveBeenCalledTimes(1);
+    expect(localStore.set).toHaveBeenCalledWith('elfaChat', {
+      sessionId: null,
+      messages: [],
+    });
   });
 
   it('returns the response without persisting after the storage scope changes', async () => {

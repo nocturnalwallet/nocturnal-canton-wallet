@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { SendIcon } from 'lucide-react';
 import type { ElfaChatBlob } from '@lib/elfa-chat';
-import { MSG, sendMessage } from '@lib/messaging';
-import { MessagingError } from '@lib/messaging/protocol';
+import { MessagingError, MSG, sendMessage } from '@lib/messaging';
 
 const MAX_MESSAGE_LENGTH = 2000;
 
@@ -26,7 +25,7 @@ export function ElfaChat() {
   const [pending, setPending] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [hasAttemptedSend, setHasAttemptedSend] = useState(false);
+  const [optimisticMessage, setOptimisticMessage] = useState<string | null>(null);
   const transcriptRef = useRef<HTMLDivElement>(null);
   const loadGenerationRef = useRef(0);
 
@@ -68,13 +67,13 @@ export function ElfaChat() {
   const busy = pending || clearing;
   const canSend =
     message.length > 0 && message.length <= MAX_MESSAGE_LENGTH && !busy;
-  const showOptimisticUser = hasAttemptedSend;
+  const showOptimisticUser = optimisticMessage !== null;
 
   const send = async () => {
     if (!canSend) return;
 
     loadGenerationRef.current += 1;
-    setHasAttemptedSend(true);
+    setOptimisticMessage(message);
     setPending(true);
     setError(null);
     try {
@@ -84,7 +83,7 @@ export function ElfaChat() {
       });
       setChat(blob);
       setDraft('');
-      setHasAttemptedSend(false);
+      setOptimisticMessage(null);
     } catch (cause: unknown) {
       setError(errorMessage(cause));
       reloadPersistedChat();
@@ -103,7 +102,7 @@ export function ElfaChat() {
       await sendMessage<ElfaChatBlob>({ action: MSG.CLEAR_ELFA_CHAT });
       setChat({ sessionId: null, messages: [] });
       setDraft('');
-      setHasAttemptedSend(false);
+      setOptimisticMessage(null);
     } catch (cause: unknown) {
       setError(errorMessage(cause));
       reloadPersistedChat();
@@ -150,7 +149,7 @@ export function ElfaChat() {
             ))}
             {showOptimisticUser && (
               <div className="bg-primary text-primary-foreground max-w-[85%] self-end rounded-xl px-3 py-2 text-xs leading-relaxed whitespace-pre-wrap">
-                {message}
+                {optimisticMessage}
               </div>
             )}
             {pending && (

@@ -1,4 +1,12 @@
-export { localStore, setNetworkPrefix, setUserScope, migrateUnprefixedData, migrateToUserScoped } from './local';
+export {
+  localStore,
+  setNetworkPrefix,
+  setUserScope,
+  hasUserScope,
+  getStorageScope,
+  migrateUnprefixedData,
+  migrateToUserScoped,
+} from './local';
 export { sessionStore } from './session';
 export { networkStore } from './network';
 export type { LocalStorageSchema } from './local';

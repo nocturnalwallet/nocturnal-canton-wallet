@@ -13,7 +13,6 @@ import type {
   ElfaKeywordMentionsData,
   ElfaSmartStats,
   ElfaChatBlob,
-  ElfaChatResult,
 } from '@lib/messaging';
 import type {
   PrepareTransferProps,
@@ -21,8 +20,12 @@ import type {
   GetIncomingRequestsQuery,
   GetHistoryRequestsQuery,
 } from '@lib/types';
-import { localStore, sessionStore } from '@lib/storage';
-import { getStorageScope, hasUserScope } from '@lib/storage/local';
+import {
+  getStorageScope,
+  hasUserScope,
+  localStore,
+  sessionStore,
+} from '@lib/storage';
 import {
   appendElfaTurn,
   emptyElfaChat,
@@ -31,6 +34,8 @@ import {
 import { getErrorMessage } from '@lib/api-error';
 import apiClient from '../api-client';
 import { getCachedPrivateKey } from './session.handler';
+
+let elfaChatTranscriptGeneration = 0;
 
 export async function handleFetchBalances(): Promise<
   MessageResponse<BalancesData>
@@ -388,6 +393,7 @@ export async function handleElfaChat(
 ): Promise<MessageResponse<ElfaChatBlob>> {
   if (!hasUserScope()) return err('Not signed in');
   const storageScope = getStorageScope();
+  const transcriptGeneration = elfaChatTranscriptGeneration;
 
   try {
     const stored = parseElfaChat(await localStore.get('elfaChat'));
@@ -399,7 +405,18 @@ export async function handleElfaChat(
       body,
       { timeout: 65_000 },
     );
-    const result = data.data as ElfaChatResult;
+    const result: unknown = data.data;
+    if (
+      !result ||
+      typeof result !== 'object' ||
+      !('message' in result) ||
+      typeof result.message !== 'string' ||
+      !('sessionId' in result) ||
+      typeof result.sessionId !== 'string' ||
+      result.sessionId.length === 0
+    ) {
+      return err('Chat returned an invalid response');
+    }
     const updated = appendElfaTurn(
       stored,
       message,
@@ -408,6 +425,7 @@ export async function handleElfaChat(
     );
     const currentScope = getStorageScope();
     if (
+      elfaChatTranscriptGeneration === transcriptGeneration &&
       currentScope.userId === storageScope.userId &&
       currentScope.network === storageScope.network
     ) {
@@ -426,6 +444,7 @@ export async function handleClearElfaChat(): Promise<
   MessageResponse<ElfaChatBlob>
 > {
   if (!hasUserScope()) return err('Not signed in');
+  elfaChatTranscriptGeneration += 1;
 
   try {
     const empty = emptyElfaChat();
