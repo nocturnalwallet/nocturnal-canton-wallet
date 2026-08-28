@@ -30,6 +30,17 @@ export function ElfaChat() {
   const transcriptRef = useRef<HTMLDivElement>(null);
   const loadGenerationRef = useRef(0);
 
+  const reloadPersistedChat = () => {
+    const generation = loadGenerationRef.current;
+    void sendMessage<ElfaChatBlob>({ action: MSG.GET_ELFA_CHAT })
+      .then((blob) => {
+        if (loadGenerationRef.current === generation) setChat(blob);
+      })
+      .catch(() => {
+        // Keep the mutation error; transcript may stay stale until remount.
+      });
+  };
+
   useEffect(() => {
     const generation = loadGenerationRef.current;
 
@@ -76,6 +87,7 @@ export function ElfaChat() {
       setHasAttemptedSend(false);
     } catch (cause: unknown) {
       setError(errorMessage(cause));
+      reloadPersistedChat();
     } finally {
       setPending(false);
     }
@@ -94,6 +106,7 @@ export function ElfaChat() {
       setHasAttemptedSend(false);
     } catch (cause: unknown) {
       setError(errorMessage(cause));
+      reloadPersistedChat();
     } finally {
       setClearing(false);
     }
