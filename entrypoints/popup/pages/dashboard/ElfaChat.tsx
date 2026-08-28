@@ -27,20 +27,21 @@ export function ElfaChat() {
   const [error, setError] = useState<string | null>(null);
   const [hasAttemptedSend, setHasAttemptedSend] = useState(false);
   const transcriptRef = useRef<HTMLDivElement>(null);
+  const loadGenerationRef = useRef(0);
 
   useEffect(() => {
-    let mounted = true;
+    const generation = loadGenerationRef.current;
 
     void sendMessage<ElfaChatBlob>({ action: MSG.GET_ELFA_CHAT })
       .then((blob) => {
-        if (mounted) setChat(blob);
+        if (loadGenerationRef.current === generation) setChat(blob);
       })
       .catch((cause: unknown) => {
-        if (mounted) setError(errorMessage(cause));
+        if (loadGenerationRef.current === generation) setError(errorMessage(cause));
       });
 
     return () => {
-      mounted = false;
+      loadGenerationRef.current += 1;
     };
   }, []);
 
@@ -80,6 +81,7 @@ export function ElfaChat() {
   const clear = async () => {
     if (pending) return;
 
+    loadGenerationRef.current += 1;
     setError(null);
     try {
       await sendMessage<ElfaChatBlob>({ action: MSG.CLEAR_ELFA_CHAT });
