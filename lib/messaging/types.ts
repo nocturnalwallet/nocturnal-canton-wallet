@@ -1,5 +1,6 @@
 import type { MSG } from './constants';
 import type { NetworkId, NetworkConfig } from '../network';
+import type { ElfaChatBlob } from '../elfa-chat';
 import type {
   AboutMeResponse,
   AutoApprovalPrepareResponse,
@@ -134,6 +135,9 @@ export type MessageRequest =
   | { action: typeof MSG.FETCH_ELFA_TOP_MENTIONS; payload: { ticker: string } }
   | { action: typeof MSG.FETCH_ELFA_KEYWORD_MENTIONS; payload: { keywords: string } }
   | { action: typeof MSG.FETCH_ELFA_SMART_STATS; payload: { username: string } }
+  | { action: typeof MSG.GET_ELFA_CHAT }
+  | { action: typeof MSG.ELFA_CHAT; payload: { message: string } }
+  | { action: typeof MSG.CLEAR_ELFA_CHAT }
   // dApp approval flow
   | { action: typeof MSG.GET_DAPP_APPROVAL; payload: { requestId: string } }
   | { action: typeof MSG.DAPP_APPROVAL_RESULT; payload: { requestId: string; approved: boolean } };
@@ -188,6 +192,14 @@ export interface BalancesData {
 }
 
 // ── Elfa market intelligence (Phase 1, native data proxied via backend) ──
+
+export type { ElfaChatBlob };
+
+export interface ElfaChatResult {
+  sessionId: string;
+  message: string;
+  creditsConsumed: number;
+}
 
 /** Rolling window offered in the UI; mapped to Elfa params server-side
  *  (timeWindow for tokens/news, timeFrame day|week for narratives). */

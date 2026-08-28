@@ -56,6 +56,9 @@ import {
   handleFetchElfaTopMentions,
   handleFetchElfaKeywordMentions,
   handleFetchElfaSmartStats,
+  handleGetElfaChat,
+  handleElfaChat,
+  handleClearElfaChat,
 } from './background/handlers/api.handler';
 import {
   handleGetNetwork,
@@ -137,7 +140,13 @@ export default defineBackground(() => {
 
 async function routeMessage(message: MessageRequest) {
   // Reset auto-lock timer on user activity (skip read-only state checks)
-  const skipReset = [MSG.GET_AUTH_STATE, MSG.GET_LOCK_STATE, MSG.GET_NETWORK, MSG.GET_DAPP_APPROVAL];
+  const skipReset = [
+    MSG.GET_AUTH_STATE,
+    MSG.GET_LOCK_STATE,
+    MSG.GET_NETWORK,
+    MSG.GET_ELFA_CHAT,
+    MSG.GET_DAPP_APPROVAL,
+  ];
   if (!skipReset.includes(message.action as (typeof skipReset)[number])) {
     resetAutoLockTimer();
   }
@@ -237,6 +246,12 @@ case MSG.FETCH_ABOUT_ME:
       return handleFetchElfaKeywordMentions(message.payload.keywords);
     case MSG.FETCH_ELFA_SMART_STATS:
       return handleFetchElfaSmartStats(message.payload.username);
+    case MSG.GET_ELFA_CHAT:
+      return handleGetElfaChat();
+    case MSG.ELFA_CHAT:
+      return handleElfaChat(message.payload.message);
+    case MSG.CLEAR_ELFA_CHAT:
+      return handleClearElfaChat();
 
     // dApp approval flow
     case MSG.GET_DAPP_APPROVAL: {
