@@ -1,6 +1,6 @@
 import type { NetworkId } from '../network';
 import { DEFAULT_NETWORK } from '../network';
-import type { KeystoreData, SettingsData, StoredUser } from './schemas';
+import type { ElfaChatBlob, KeystoreData, SettingsData, StoredUser } from './schemas';
 
 export interface LocalStorageSchema {
   keystore: KeystoreData | null;
@@ -9,6 +9,7 @@ export interface LocalStorageSchema {
   onboardingComplete: boolean;
   /** Durable "this account already registered its transfer pre-approval" marker. */
   preapprovalRegistered: boolean;
+  elfaChat: ElfaChatBlob | null;
 }
 
 const DEFAULTS: LocalStorageSchema = {
@@ -17,6 +18,7 @@ const DEFAULTS: LocalStorageSchema = {
   settings: { autoLockMinutes: 15 },
   onboardingComplete: false,
   preapprovalRegistered: false,
+  elfaChat: null,
 };
 
 const LOCAL_KEYS: (keyof LocalStorageSchema)[] = [
@@ -25,10 +27,16 @@ const LOCAL_KEYS: (keyof LocalStorageSchema)[] = [
   'settings',
   'onboardingComplete',
   'preapprovalRegistered',
+  'elfaChat',
 ];
 
 /** Keys that are scoped per-user (require userId in prefix). */
-const USER_SCOPED_KEYS: readonly string[] = ['keystore', 'onboardingComplete', 'preapprovalRegistered'];
+const USER_SCOPED_KEYS: readonly string[] = [
+  'keystore',
+  'onboardingComplete',
+  'preapprovalRegistered',
+  'elfaChat',
+];
 
 let _networkPrefix: NetworkId = DEFAULT_NETWORK;
 let _userId: string | null = null;
@@ -39,6 +47,10 @@ export function setNetworkPrefix(network: NetworkId): void {
 
 export function setUserScope(userId: string | null): void {
   _userId = userId;
+}
+
+export function hasUserScope(): boolean {
+  return _userId != null;
 }
 
 function prefixKey(key: string): string {

@@ -142,7 +142,12 @@ export type MessageRequest =
 
 export type MessageResponse<T = unknown> =
   | { success: true; data: T }
-  | { success: false; error: string };
+  | {
+      success: false;
+      error: string;
+      status?: number;
+      retryAfterSeconds?: number;
+    };
 
 // ── Response data by action ──
 
