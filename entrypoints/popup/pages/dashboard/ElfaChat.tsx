@@ -60,6 +60,7 @@ export function ElfaChat() {
   const send = async () => {
     if (!canSend) return;
 
+    loadGenerationRef.current += 1;
     setHasAttemptedSend(true);
     setPending(true);
     setError(null);
