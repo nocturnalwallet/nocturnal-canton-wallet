@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { ExternalLinkIcon, ChevronDownIcon, ChevronUpIcon } from 'lucide-react';
 import type { ElfaMention } from '@lib/messaging';
 import { useElfaSmartStats } from '../../hooks/useElfa';
-import { handleFromUrl, compactNumber } from './elfa-shared';
+import { handleFromUrl, compactNumber, safeExternalUrl } from './elfa-shared';
 
 /**
  * A single social-mention row, shared by News, token drill-down, and Search.
@@ -12,6 +12,7 @@ import { handleFromUrl, compactNumber } from './elfa-shared';
 export function ElfaMentionRow({ mention }: { mention: ElfaMention }) {
   const [open, setOpen] = useState(false);
   const handle = mention.account?.username ?? handleFromUrl(mention.link);
+  const safeLink = safeExternalUrl(mention.link);
   const stats = useElfaSmartStats(handle ?? '', open);
 
   const when = new Date(mention.mentionedAt).toLocaleString(undefined, {
@@ -25,10 +26,11 @@ export function ElfaMentionRow({ mention }: { mention: ElfaMention }) {
     <div className="bg-primary/5 border-primary/10 overflow-hidden rounded-xl border">
       <div className="flex items-center gap-2 p-3">
         <a
-          href={mention.link}
-          target="_blank"
+          href={safeLink ?? undefined}
+          target={safeLink ? '_blank' : undefined}
           rel="noreferrer"
           className="min-w-0 flex-1"
+          aria-disabled={safeLink ? undefined : true}
         >
           <p className="text-foreground truncate text-sm font-medium">
             {handle ? `@${handle}` : 'View post'}
@@ -53,14 +55,16 @@ export function ElfaMentionRow({ mention }: { mention: ElfaMention }) {
             )}
           </button>
         )}
-        <a
-          href={mention.link}
-          target="_blank"
-          rel="noreferrer"
-          className="text-muted-foreground hover:text-primary shrink-0 rounded p-1 transition-colors"
-        >
-          <ExternalLinkIcon className="h-3.5 w-3.5" />
-        </a>
+        {safeLink && (
+          <a
+            href={safeLink}
+            target="_blank"
+            rel="noreferrer"
+            className="text-muted-foreground hover:text-primary shrink-0 rounded p-1 transition-colors"
+          >
+            <ExternalLinkIcon className="h-3.5 w-3.5" />
+          </a>
+        )}
       </div>
       {open && handle && (
         <div className="border-primary/10 border-t px-3 py-2">

@@ -130,7 +130,6 @@ export type MessageRequest =
   | { action: typeof MSG.FETCH_ABOUT_ME }
   | { action: typeof MSG.REQUEST_FAUCET; payload: { password: string; amount: string } }
   | { action: typeof MSG.FETCH_ELFA_TRENDING_TOKENS; payload: { window: ElfaTimeWindow } }
-  | { action: typeof MSG.FETCH_ELFA_TOKEN_NEWS; payload: { window: ElfaTimeWindow } }
   | { action: typeof MSG.FETCH_ELFA_NARRATIVES; payload: { window: ElfaTimeWindow } }
   | { action: typeof MSG.FETCH_ELFA_TOP_MENTIONS; payload: { ticker: string } }
   | { action: typeof MSG.FETCH_ELFA_KEYWORD_MENTIONS; payload: { keywords: string } }
@@ -211,20 +210,6 @@ export interface ElfaTrendingTokensData {
   canton?: ElfaCantonCoin | null;
 }
 
-export interface ElfaNewsItem {
-  tweetId: string;
-  link: string;
-  likeCount: number;
-  repostCount: number;
-  viewCount: number;
-  mentionedAt: string;
-  type: string;
-  account: { username: string; isVerified: boolean };
-}
-
-/** token-news returns a bare array of mention items (no tweet text). */
-export type ElfaTokenNewsData = ElfaNewsItem[];
-
 export interface ElfaNarrative {
   narrative?: string;
   theme?: string;
@@ -239,8 +224,8 @@ export interface ElfaNarrativesData {
   metadata?: unknown;
 }
 
-/** A social mention. Superset shape shared by token-news, top-mentions, and
- *  keyword-mentions (top-mentions may omit `account`). */
+/** A social mention. Shared shape for top-mentions and keyword-mentions
+ *  (top-mentions may omit `account`). */
 export interface ElfaMention {
   tweetId: string;
   link: string;

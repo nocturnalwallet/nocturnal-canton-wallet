@@ -8,7 +8,6 @@ import type {
   AboutMeData,
   PrepareData,
   ElfaTrendingTokensData,
-  ElfaTokenNewsData,
   ElfaNarrativesData,
   ElfaTopMentionsData,
   ElfaKeywordMentionsData,
@@ -261,19 +260,6 @@ export async function handleFetchElfaTrendingTokens(
     return ok(data.data);
   } catch (e: unknown) {
     return err(getErrorMessage(e, 'Failed to load trending tokens'));
-  }
-}
-
-export async function handleFetchElfaTokenNews(
-  window: string,
-): Promise<MessageResponse<ElfaTokenNewsData>> {
-  try {
-    const { data } = await apiClient.get('/elfa/token-news', {
-      params: { timeWindow: window, pageSize: '15' },
-    });
-    return ok(data.data);
-  } catch (e: unknown) {
-    return err(getErrorMessage(e, 'Failed to load token news'));
   }
 }
 
