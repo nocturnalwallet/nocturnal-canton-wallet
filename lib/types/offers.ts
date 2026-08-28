@@ -8,6 +8,21 @@ export interface SubmitRejectProps {
   signature: string;
 }
 
+/** Live pending offers from the ACS (incoming/outgoing-requests). */
+export type PendingOfferStatus = 'LOCKED';
+
+/**
+ * Terminal history statuses. LOCKED is never a /history result — pending
+ * offers are served live from the ledger ACS.
+ */
+export type HistoryOfferStatus =
+  | 'CANCELLED'
+  | 'REJECTED'
+  | 'APPROVED'
+  | 'AUTO_APPROVED';
+
+export type OfferStatus = PendingOfferStatus | HistoryOfferStatus;
+
 export interface GetApproveRequestsResponse {
   amount: string;
   contractId: string;
@@ -26,7 +41,7 @@ export interface GetApproveRequestsResponse {
   updatedAt: string;
   createdAt: string;
   tokenName: string;
-  status: 'LOCKED' | 'CANCELLED' | 'REJECTED' | 'APPROVED';
+  status: OfferStatus;
   requestedAt?: string;
   executeBefore?: string;
 }
@@ -43,5 +58,5 @@ export interface GetHistoryRequestsQuery {
   sender?: string;
   receiver?: string;
   tokenName?: string;
-  status?: 'LOCKED' | 'CANCELLED' | 'REJECTED' | 'APPROVED';
+  status?: HistoryOfferStatus;
 }
