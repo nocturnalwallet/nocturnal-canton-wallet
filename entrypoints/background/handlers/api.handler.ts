@@ -22,7 +22,7 @@ import type {
   GetHistoryRequestsQuery,
 } from '@lib/types';
 import { localStore, sessionStore } from '@lib/storage';
-import { hasUserScope } from '@lib/storage/local';
+import { getStorageScope, hasUserScope } from '@lib/storage/local';
 import {
   appendElfaTurn,
   emptyElfaChat,
@@ -387,6 +387,7 @@ export async function handleElfaChat(
   message: string,
 ): Promise<MessageResponse<ElfaChatBlob>> {
   if (!hasUserScope()) return err('Not signed in');
+  const storageScope = getStorageScope();
 
   try {
     const stored = parseElfaChat(await localStore.get('elfaChat'));
@@ -405,7 +406,13 @@ export async function handleElfaChat(
       result.message,
       result.sessionId,
     );
-    await localStore.set('elfaChat', updated);
+    const currentScope = getStorageScope();
+    if (
+      currentScope.userId === storageScope.userId &&
+      currentScope.network === storageScope.network
+    ) {
+      await localStore.set('elfaChat', updated);
+    }
     return ok(updated);
   } catch (e: unknown) {
     return err(

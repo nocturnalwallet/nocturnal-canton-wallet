@@ -53,6 +53,13 @@ export function hasUserScope(): boolean {
   return _userId != null;
 }
 
+export function getStorageScope(): {
+  userId: string | null;
+  network: NetworkId;
+} {
+  return { userId: _userId, network: _networkPrefix };
+}
+
 function prefixKey(key: string): string {
   if (_userId && USER_SCOPED_KEYS.includes(key)) {
     return `${_networkPrefix}:${_userId}:${key}`;

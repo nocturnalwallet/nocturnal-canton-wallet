@@ -11,6 +11,7 @@ vi.mock('@lib/storage', () => ({
 
 vi.mock('@lib/storage/local', () => ({
   hasUserScope: vi.fn(),
+  getStorageScope: vi.fn(),
 }));
 
 vi.mock('../api-client', () => ({
@@ -22,7 +23,7 @@ vi.mock('./session.handler', () => ({
 }));
 
 import { localStore } from '@lib/storage';
-import { hasUserScope } from '@lib/storage/local';
+import { getStorageScope, hasUserScope } from '@lib/storage/local';
 import apiClient from '../api-client';
 import {
   handleClearElfaChat,
@@ -42,6 +43,10 @@ describe('Elfa chat background handlers', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(hasUserScope).mockReturnValue(true);
+    vi.mocked(getStorageScope).mockReturnValue({
+      userId: 'user-1',
+      network: 'devnet',
+    });
     vi.mocked(localStore.get).mockResolvedValue(storedChat);
   });
 
@@ -132,6 +137,44 @@ describe('Elfa chat background handlers', () => {
       { message: 'Hello' },
       { timeout: 65_000 },
     );
+  });
+
+  it('returns the response without persisting after the storage scope changes', async () => {
+    vi.spyOn(Date, 'now').mockReturnValueOnce(300);
+    vi.mocked(apiClient.post).mockImplementation(async () => {
+      vi.mocked(getStorageScope).mockReturnValue({
+        userId: 'user-2',
+        network: 'devnet',
+      });
+      return {
+        data: {
+          data: {
+            sessionId: 'session-1',
+            message: 'The scope changed while this answer was loading.',
+            creditsConsumed: 1,
+          },
+        },
+      };
+    });
+
+    const result = await handleElfaChat('What changed?');
+
+    expect(localStore.set).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      success: true,
+      data: {
+        sessionId: 'session-1',
+        messages: [
+          ...storedChat.messages,
+          { role: 'user', text: 'What changed?', at: 300 },
+          {
+            role: 'assistant',
+            text: 'The scope changed while this answer was loading.',
+            at: 300,
+          },
+        ],
+      },
+    });
   });
 
   it('returns 429 retry metadata without changing storage', async () => {
