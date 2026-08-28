@@ -24,6 +24,7 @@ export function ElfaChat() {
   });
   const [draft, setDraft] = useState('');
   const [pending, setPending] = useState(false);
+  const [clearing, setClearing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasAttemptedSend, setHasAttemptedSend] = useState(false);
   const transcriptRef = useRef<HTMLDivElement>(null);
@@ -53,8 +54,9 @@ export function ElfaChat() {
   }, [chat.messages, draft, pending, error]);
 
   const message = draft.trim();
+  const busy = pending || clearing;
   const canSend =
-    message.length > 0 && message.length <= MAX_MESSAGE_LENGTH && !pending;
+    message.length > 0 && message.length <= MAX_MESSAGE_LENGTH && !busy;
   const showOptimisticUser = hasAttemptedSend;
 
   const send = async () => {
@@ -80,9 +82,10 @@ export function ElfaChat() {
   };
 
   const clear = async () => {
-    if (pending) return;
+    if (busy) return;
 
     loadGenerationRef.current += 1;
+    setClearing(true);
     setError(null);
     try {
       await sendMessage<ElfaChatBlob>({ action: MSG.CLEAR_ELFA_CHAT });
@@ -91,6 +94,8 @@ export function ElfaChat() {
       setHasAttemptedSend(false);
     } catch (cause: unknown) {
       setError(errorMessage(cause));
+    } finally {
+      setClearing(false);
     }
   };
 
@@ -100,7 +105,7 @@ export function ElfaChat() {
         <button
           type="button"
           onClick={() => void clear()}
-          disabled={pending}
+          disabled={busy}
           className="bg-primary/10 text-primary hover:bg-primary/20 rounded-full px-3 py-1 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
         >
           New chat
@@ -155,7 +160,7 @@ export function ElfaChat() {
                 void send();
               }
             }}
-            disabled={pending}
+            disabled={busy}
             rows={2}
             maxLength={MAX_MESSAGE_LENGTH + 1}
             placeholder="Ask about the market…"
