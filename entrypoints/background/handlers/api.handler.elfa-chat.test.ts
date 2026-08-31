@@ -7,8 +7,8 @@ vi.mock('@canton-network/core-signing-lib', () => ({
 vi.mock('@lib/storage', () => ({
   localStore: { get: vi.fn(), set: vi.fn() },
   sessionStore: { get: vi.fn() },
-  hasUserScope: vi.fn(),
   getStorageScope: vi.fn(),
+  ensureUserScope: vi.fn(),
 }));
 
 vi.mock('../api-client', () => ({
@@ -19,7 +19,7 @@ vi.mock('./session.handler', () => ({
   getCachedPrivateKey: vi.fn(),
 }));
 
-import { getStorageScope, hasUserScope, localStore } from '@lib/storage';
+import { ensureUserScope, getStorageScope, localStore } from '@lib/storage';
 import apiClient from '../api-client';
 import {
   handleClearElfaChat,
@@ -38,7 +38,7 @@ const storedChat = {
 describe('Elfa chat background handlers', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(hasUserScope).mockReturnValue(true);
+    vi.mocked(ensureUserScope).mockResolvedValue(true);
     vi.mocked(getStorageScope).mockReturnValue({
       userId: 'user-1',
       network: 'devnet',
@@ -51,7 +51,7 @@ describe('Elfa chat background handlers', () => {
     ['send', () => handleElfaChat('What is trending?')],
     ['clear', () => handleClearElfaChat()],
   ])('rejects %s when no user scope is active', async (_operation, invoke) => {
-    vi.mocked(hasUserScope).mockReturnValue(false);
+    vi.mocked(ensureUserScope).mockResolvedValue(false);
 
     await expect(invoke()).resolves.toEqual({
       success: false,

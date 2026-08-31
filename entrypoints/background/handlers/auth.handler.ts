@@ -1,6 +1,6 @@
 import { ok, err } from '@lib/messaging';
 import type { MessageResponse, AuthStateData, GoogleAuthData } from '@lib/messaging';
-import { localStore, setUserScope } from '@lib/storage';
+import { localStore, setUserScope, whenStorageReady } from '@lib/storage';
 import { sessionStore } from '@lib/storage';
 import brand from '@brand/brand';
 import apiClient from '../api-client';
@@ -174,6 +174,7 @@ export async function handleGoogleAuth(): Promise<MessageResponse<GoogleAuthData
 
 export async function handleGetAuthState(): Promise<MessageResponse<AuthStateData>> {
   try {
+    await whenStorageReady();
     const token = await sessionStore.get('authToken');
     const user = await localStore.get('user'); // network-scoped
     const partyId = await sessionStore.get('partyId');

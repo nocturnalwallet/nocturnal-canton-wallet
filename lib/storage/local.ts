@@ -40,6 +40,21 @@ const USER_SCOPED_KEYS: readonly string[] = [
 
 let _networkPrefix: NetworkId = DEFAULT_NETWORK;
 let _userId: string | null = null;
+let storageReady: Promise<void> = Promise.resolve();
+
+/** Run background storage init; later `whenStorageReady()` awaits this task. */
+export function runStorageInit(task: () => Promise<void>): Promise<void> {
+  storageReady = Promise.resolve()
+    .then(task)
+    .catch((error: unknown) => {
+      console.error('Storage init failed', error);
+    });
+  return storageReady;
+}
+
+export function whenStorageReady(): Promise<void> {
+  return storageReady;
+}
 
 export function setNetworkPrefix(network: NetworkId): void {
   _networkPrefix = network;
@@ -51,6 +66,19 @@ export function setUserScope(userId: string | null): void {
 
 export function hasUserScope(): boolean {
   return _userId != null;
+}
+
+/**
+ * Wait for storage init, then restore `_userId` from the network-scoped user
+ * record if the in-memory flag was never set or was wiped by a startup race.
+ */
+export async function ensureUserScope(): Promise<boolean> {
+  await whenStorageReady();
+  if (_userId != null) return true;
+  const user = await localStore.get('user');
+  if (!user?.id) return false;
+  setUserScope(user.id);
+  return true;
 }
 
 export function getStorageScope(): {

@@ -4,6 +4,7 @@ vi.mock('@lib/storage', () => ({
   localStore: { get: vi.fn(), set: vi.fn() },
   sessionStore: { set: vi.fn(), setMany: vi.fn(), clear: vi.fn(), get: vi.fn() },
   setUserScope: vi.fn(),
+  whenStorageReady: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('../api-client', () => ({

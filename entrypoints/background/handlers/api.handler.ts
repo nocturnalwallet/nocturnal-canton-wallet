@@ -21,8 +21,8 @@ import type {
   GetHistoryRequestsQuery,
 } from '@lib/types';
 import {
+  ensureUserScope,
   getStorageScope,
-  hasUserScope,
   localStore,
   sessionStore,
 } from '@lib/storage';
@@ -332,7 +332,7 @@ export async function handleFetchElfaSmartStats(
 export async function handleGetElfaChat(): Promise<
   MessageResponse<ElfaChatBlob>
 > {
-  if (!hasUserScope()) return err('Not signed in');
+  if (!(await ensureUserScope())) return err('Not signed in');
 
   try {
     return ok(parseElfaChat(await localStore.get('elfaChat')));
@@ -391,7 +391,7 @@ function getElfaChatErrorExtras(error: unknown): {
 export async function handleElfaChat(
   message: string,
 ): Promise<MessageResponse<ElfaChatBlob>> {
-  if (!hasUserScope()) return err('Not signed in');
+  if (!(await ensureUserScope())) return err('Not signed in');
   const storageScope = getStorageScope();
   const transcriptGeneration = elfaChatTranscriptGeneration;
 
@@ -443,7 +443,7 @@ export async function handleElfaChat(
 export async function handleClearElfaChat(): Promise<
   MessageResponse<ElfaChatBlob>
 > {
-  if (!hasUserScope()) return err('Not signed in');
+  if (!(await ensureUserScope())) return err('Not signed in');
   elfaChatTranscriptGeneration += 1;
 
   try {

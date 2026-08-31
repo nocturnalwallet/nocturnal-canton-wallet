@@ -4,6 +4,9 @@ export {
   setUserScope,
   hasUserScope,
   getStorageScope,
+  ensureUserScope,
+  runStorageInit,
+  whenStorageReady,
   migrateUnprefixedData,
   migrateToUserScoped,
 } from './local';

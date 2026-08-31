@@ -4,7 +4,7 @@ import { MSG } from '@lib/messaging';
 import { ok, err } from '@lib/messaging/protocol';
 import type { MessageRequest } from '@lib/messaging/types';
 import { NETWORKS } from '@lib/network';
-import { networkStore, localStore, setNetworkPrefix, setUserScope, migrateUnprefixedData, migrateToUserScoped } from '@lib/storage';
+import { networkStore, localStore, setNetworkPrefix, setUserScope, migrateUnprefixedData, migrateToUserScoped, runStorageInit, whenStorageReady } from '@lib/storage';
 
 import {
   handleGoogleAuth,
@@ -79,8 +79,9 @@ import {
 export default defineBackground(() => {
   console.log(`${brand.logTag} Background service worker started`);
 
-  // Initialize network: migrate legacy data, set prefix & API URL, set user scope
-  (async () => {
+  // Initialize network: migrate legacy data, set prefix & API URL, set user scope.
+  // Handlers await whenStorageReady() so they never read `{DEFAULT}:user` first.
+  void runStorageInit(async () => {
     await migrateUnprefixedData();
     const network = await networkStore.get();
     setNetworkPrefix(network);
@@ -95,7 +96,7 @@ export default defineBackground(() => {
     if (user?.id) {
       setUserScope(user.id);
     }
-  })();
+  });
 
   // Set up auto-lock alarm listener
   setupAutoLock();
@@ -139,6 +140,7 @@ export default defineBackground(() => {
 });
 
 async function routeMessage(message: MessageRequest) {
+  await whenStorageReady();
   // Reset auto-lock timer on user activity (skip read-only state checks)
   const skipReset = [
     MSG.GET_AUTH_STATE,

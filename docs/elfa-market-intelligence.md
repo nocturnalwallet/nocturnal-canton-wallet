@@ -50,6 +50,10 @@ The shared parent keeps a "Powered by Elfa" footer beneath every sub-tab. Chat s
 
 The background service worker exclusively reads and writes the user-scoped transcript; the popup never imports or accesses `localStore`. `GET_ELFA_CHAT` loads the persisted thread, `ELFA_CHAT` sends one prompt and persists the completed user/assistant pair, and `CLEAR_ELFA_CHAT` starts a new thread.
 
+Chat handlers call `ensureUserScope()` instead of the raw in-memory `hasUserScope()` flag. MV3 service-worker restart can leave `_userId` unset (or `GET_AUTH_STATE` can wipe it by reading `devnet:user` before the localnet prefix is applied). `ensureUserScope` waits for `whenStorageReady()`, then restores `{network}:user`. If no stored user exists, the handler still returns `Not signed in` and does **not** write a network-only `elfaChat` key.
+
+The message router also awaits `whenStorageReady()` so every popup message, including `GET_AUTH_STATE`, sees the correct network prefix.
+
 Storage retains the newest **10 turns** (20 messages) and is capped at **64 KB**. Oldest complete pairs are removed first, so storage never contains an unpaired message. A single oversized assistant response is truncated to keep the current turn.
 
 ### Metric semantics (important)
@@ -65,7 +69,7 @@ These figures are a **trending-by-mentions signal** and intentionally **differ f
 Elfa's free tier is 1000 credits/month, so the tab is frugal:
 
 - Only the **active** sub-tab fetches (`enabled` on each hook).
-- Results are cached **5 minutes** (`staleTime`), `refetchOnWindowFocus: false`, `retry: false`.
+- Results are cached **5 minutes** (`staleTime`), `refetchOnWindowFocus: false`, `retry: false` in React Query. Transient Elfa network / 502 / 503 / 504 failures are retried **in the backend** (3 attempts, 200ms then 400ms) before the wallet sees `502 Failed to reach Elfa`. The popup does not retry Elfa calls itself.
 - The 24h/7d window is part of each query key, so switching windows caches independently (one fresh fetch per window per sub-tab).
 
 ## Files
@@ -78,8 +82,9 @@ Elfa's free tier is 1000 credits/month, so the tab is frugal:
 - `entrypoints/popup/pages/dashboard/ElfaSearch.tsx` — keyword search sub-tab
 - `entrypoints/popup/hooks/useElfa.ts` — `useElfaTrendingTokens` / `useElfaTokenNews` / `useElfaNarratives` / `useElfaTopMentions` / `useElfaKeywordMentions` / `useElfaSmartStats`
 - `entrypoints/popup/pages/dashboard/index.tsx` — registers the `market` tab in the bottom nav
-- [api.handler.ts](mdc:entrypoints/background/handlers/api.handler.ts) — `handleFetchElfa*` proxies plus background-owned Chat persistence
-- [background.ts](mdc:entrypoints/background.ts) — routes the Elfa fetch and Chat actions
+- [api.handler.ts](mdc:entrypoints/background/handlers/api.handler.ts) — `handleFetchElfa*` proxies plus background-owned Chat persistence (`ensureUserScope`)
+- [background.ts](mdc:entrypoints/background.ts) — routes the Elfa fetch and Chat actions; awaits `whenStorageReady()`
+- [local.ts](mdc:lib/storage/local.ts) — `runStorageInit` / `whenStorageReady` / `ensureUserScope`
 - [constants.ts](mdc:lib/messaging/constants.ts) — fetch actions plus `GET_ELFA_CHAT` / `ELFA_CHAT` / `CLEAR_ELFA_CHAT`
 - `lib/messaging/types.ts` — request variants + `ElfaTimeWindow`, `ElfaTrendingTokensData`, `ElfaTokenNewsData`, `ElfaNarrativesData`, `ElfaNarrative`, `ElfaMention`, `ElfaTopMentionsData`, `ElfaKeywordMentionsData`, `ElfaSmartStats`
 - `lib/constants.ts` — `queryKey.ELFA_*`

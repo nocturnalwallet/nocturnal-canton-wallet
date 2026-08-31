@@ -70,14 +70,14 @@ Insights → Chat (popup)  — React state only (draft / pending / error)
   → sendMessage CLEAR_ELFA_CHAT        → background wipes localStore
 ```
 
-The extension never calls `api.elfa.ai`. Existing GET `/elfa/*` routes stay unchanged. `localStore` prefix (`_networkPrefix`, `_userId`) is process-local and is set only in the background worker — therefore **all `elfaChat` I/O happens in background handlers**. If `userId` is unset, refuse to read/write (do not fall back to a network-only key).
+The extension never calls `api.elfa.ai`. Existing GET `/elfa/*` routes stay unchanged. `localStore` prefix (`_networkPrefix`, `_userId`) is process-local and is set only in the background worker — therefore **all `elfaChat` I/O happens in background handlers**. Chat handlers call `ensureUserScope()` (wait for storage init, restore from `{network}:user` if the in-memory flag was wiped). If there is still no user, refuse to read/write (do not fall back to a network-only key).
 
 ### 4.1 Backend units
 
 In `kairo-wallet-provider-backend`:
 
 - `src/modules/elfa/elfa.controller.ts` — `POST /elfa/chat` behind `JwtAuthGuard`. `@CurrentUser()` supplies `user.id`.
-- `src/modules/elfa/elfa.service.ts` — `postChat`. New private `post()` helper. Axios timeout **60s**.
+- `src/modules/elfa/elfa.service.ts` — `postChat`. Private `post()` / `get()` both go through `sendWithRetry` (3 attempts, 200ms then 400ms) for network errors and HTTP 502/503/504. Axios chat timeout **60s** is **not** retried.
 - `ElfaChatLimiter` — Redis Lua via new `RedisService.eval`.
 - DTO `{ message, sessionId? }` only. Extra properties → `400`.
 - `http-exception.filter.ts` — forward `retryAfterSeconds` into JSON and the `Retry-After` header.
@@ -100,7 +100,7 @@ One Lua script: deny user-over-cap **without** incrementing global; deny global-
 - [MarketIntelligence.tsx](mdc:entrypoints/popup/pages/dashboard/MarketIntelligence.tsx) — `{ id: 'chat', label: 'Chat' }`. No 24h/7d toggle on Chat.
 - New [ElfaChat.tsx](mdc:entrypoints/popup/pages/dashboard/ElfaChat.tsx) — React only. Loads via `GET_ELFA_CHAT`. Sends via `ELFA_CHAT` `{ message }`. Clears via `CLEAR_ELFA_CHAT`.
 - Add `elfaChat` to `USER_SCOPED_KEYS` and `LocalStorageSchema` in [local.ts](mdc:lib/storage/local.ts). Prefix `{network}:{userId}:elfaChat`.
-- Messaging: `MSG.ELFA_CHAT`, `MSG.GET_ELFA_CHAT`, `MSG.CLEAR_ELFA_CHAT` in [constants.ts](mdc:lib/messaging/constants.ts) / [types.ts](mdc:lib/messaging/types.ts); handlers in [api.handler.ts](mdc:entrypoints/background/handlers/api.handler.ts); cases in [background.ts](mdc:entrypoints/background.ts). Chat POST axios `timeout: 65_000`.
+- Messaging: `MSG.ELFA_CHAT`, `MSG.GET_ELFA_CHAT`, `MSG.CLEAR_ELFA_CHAT` in [constants.ts](mdc:lib/messaging/constants.ts) / [types.ts](mdc:lib/messaging/types.ts); handlers in [api.handler.ts](mdc:entrypoints/background/handlers/api.handler.ts); cases in [background.ts](mdc:entrypoints/background.ts). Chat POST axios `timeout: 65_000`. Handlers call `ensureUserScope()` (wait for `whenStorageReady()`, then restore `_userId` from `{network}:user` if the in-memory flag was wiped). The message router also awaits `whenStorageReady()` so `GET_AUTH_STATE` cannot look up `devnet:user` while the wallet is on `localnet`.
 - Structured errors (see §6).
 
 Schema (Zod), stored as **turns**:
@@ -154,7 +154,8 @@ Failed sends **do not** write `localStore`. Background persist runs only after a
 | No `ELFA_API_KEY` | `503` | Elfa market intelligence is not configured | — |
 | Elfa 401/403 | `502` | Chat isn’t available right now | — |
 | Elfa 429 | `429` | same limit copy; `retryAfterSeconds` from Elfa `Retry-After` if parseable, else 60 | `Retry-After` |
-| Other Elfa 4xx/5xx / timeout / malformed | `502` | Elfa returned an error / Failed to reach Elfa | — |
+| Transient Elfa network / 502 / 503 / 504 | (internal) | Backend retries up to 3 attempts (200ms, 400ms). Redis limiter is not re-consumed. | — |
+| Exhausted retries, other Elfa 4xx/5xx, timeout, malformed | `502` | Elfa returned an error / Failed to reach Elfa | — |
 | JWT missing/expired | `401` | Existing session handling | — |
 
 `MessageResponse` error branch:
@@ -188,12 +189,13 @@ No live Elfa calls in CI.
 
 - Forces `analysisType: "chat"` and `speed: "fast"`; extra body fields → `400`.
 - Elfa 429 → `429` with `retryAfterSeconds`; other Elfa non-2xx → `502`.
+- Shared GET/POST retries: network / 502 / 503 / 504 succeed on a later attempt; 401 / 403 / 429 / `ECONNABORTED` are not retried.
 - Lua: user at cap does not increment global; Redis eval throw → `503`.
 
 **Wallet** (vitest next to new files):
 
 - Cap helper: 11th turn drops oldest **pair**; never odd length; truncate oversized assistant.
-- Background refuses `elfaChat` I/O when user scope is unset.
+- Background refuses `elfaChat` I/O when `ensureUserScope()` is false (after waiting for storage init and restoring `_userId` from the stored user if the in-memory flag was wiped).
 - `handleElfaChat` POSTs `/elfa/chat`; maps 429 with `retryAfterSeconds`.
 
 **Manual:** Grow+ key; two-message thread; hourly cap under composer; close while Thinking then reopen — completed turn present if Elfa returned; New chat disabled during pending.
