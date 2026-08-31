@@ -18,22 +18,24 @@ import { IconCanton } from '@assets/icons/icon-canton';
 import { StateWrap, handleFromUrl, safeExternalUrl } from './elfa-shared';
 import { ElfaTokenDetail } from './ElfaTokenDetail';
 import { ElfaSearch } from './ElfaSearch';
+import { ElfaChat } from './ElfaChat';
 
-type View = 'tokens' | 'narratives' | 'search';
+type View = 'tokens' | 'narratives' | 'search' | 'chat';
 
 const VIEWS: { id: View; label: string }[] = [
   { id: 'tokens', label: 'Tokens' },
   { id: 'narratives', label: 'Narratives' },
   { id: 'search', label: 'Search' },
+  { id: 'chat', label: 'Chat' },
 ];
 
 const WINDOWS: ElfaTimeWindow[] = ['24h', '7d'];
 
 /**
- * Phase-1 Market Intelligence — renders Elfa's read-only data natively (no
- * iframe / widget). Data is proxied by the wallet-provider backend so the Elfa
- * key stays server-side. Only the active sub-tab fetches, to conserve the
- * free-tier credit budget. The 24h/7d window is shared across Tokens/News/Narratives.
+ * Renders Elfa market data and Chat natively (no iframe / widget). Requests
+ * are proxied by the wallet-provider backend so the Elfa key stays server-side.
+ * Only the active data sub-tab fetches, to conserve credits. The 24h/7d window
+ * is shared across Tokens and Narratives; Search and Chat have no window toggle.
  */
 export function MarketIntelligence() {
   const [view, setView] = useState<View>('tokens');
@@ -64,7 +66,7 @@ export function MarketIntelligence() {
         ))}
       </div>
 
-      <div className="flex-1 overflow-y-auto">
+      <div className={`min-h-0 flex-1 ${view === 'chat' ? 'overflow-hidden' : 'overflow-y-auto'}`}>
         {view === 'tokens' &&
           (drillToken ? (
             <ElfaTokenDetail token={drillToken} onBack={() => setDrillToken(null)} />
@@ -80,6 +82,7 @@ export function MarketIntelligence() {
           <NarrativesView window={window} onWindow={setWindow} active />
         )}
         {view === 'search' && <ElfaSearch />}
+        {view === 'chat' && <ElfaChat />}
       </div>
 
       <p className="text-muted-foreground border-border border-t px-3 py-1.5 text-center text-[10px]">

@@ -18,7 +18,7 @@ const brand: BrandConfig = {
     localnet: 'http://localhost:3008/',
     devnet: 'https://api-wallet-devnet.kairo.ag/',
     testnet: 'https://api-testnet.kairo.ag/',
-    mainnet: 'https://api-mpch-wallet-provider.thanhle.space/',
+    mainnet: 'https://nocturnal-wallet-provider-backend-mainnet.thanhle.space/',
   },
   welcomeBackgroundUrl: '/bg/skyline.jpg',
 };

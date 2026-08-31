@@ -12,6 +12,7 @@ import type {
   ElfaTopMentionsData,
   ElfaKeywordMentionsData,
   ElfaSmartStats,
+  ElfaChatBlob,
 } from '@lib/messaging';
 import type {
   PrepareTransferProps,
@@ -19,10 +20,22 @@ import type {
   GetIncomingRequestsQuery,
   GetHistoryRequestsQuery,
 } from '@lib/types';
-import { localStore, sessionStore } from '@lib/storage';
+import {
+  ensureUserScope,
+  getStorageScope,
+  localStore,
+  sessionStore,
+} from '@lib/storage';
+import {
+  appendElfaTurn,
+  emptyElfaChat,
+  parseElfaChat,
+} from '@lib/elfa-chat';
 import { getErrorMessage } from '@lib/api-error';
 import apiClient from '../api-client';
 import { getCachedPrivateKey } from './session.handler';
+
+let elfaChatTranscriptGeneration = 0;
 
 export async function handleFetchBalances(): Promise<
   MessageResponse<BalancesData>
@@ -313,5 +326,131 @@ export async function handleFetchElfaSmartStats(
     return ok(data.data);
   } catch (e: unknown) {
     return err(getErrorMessage(e, 'Failed to load account stats'));
+  }
+}
+
+export async function handleGetElfaChat(): Promise<
+  MessageResponse<ElfaChatBlob>
+> {
+  if (!(await ensureUserScope())) return err('Not signed in');
+
+  try {
+    return ok(parseElfaChat(await localStore.get('elfaChat')));
+  } catch (e: unknown) {
+    return err(getErrorMessage(e, 'Failed to load chat'));
+  }
+}
+
+function getElfaChatErrorExtras(error: unknown): {
+  status?: number;
+  retryAfterSeconds?: number;
+} {
+  if (!error || typeof error !== 'object' || !('response' in error)) {
+    return {};
+  }
+
+  const response = (
+    error as {
+      response?: {
+        status?: unknown;
+        data?: { retryAfterSeconds?: unknown };
+        headers?: Record<string, unknown> & {
+          get?: (name: string) => unknown;
+        };
+      };
+    }
+  ).response;
+  if (!response) return {};
+
+  const extras: { status?: number; retryAfterSeconds?: number } = {};
+  if (typeof response.status === 'number') {
+    extras.status = response.status;
+  }
+
+  const bodyDelay = response.data?.retryAfterSeconds;
+  if (typeof bodyDelay === 'number' && Number.isFinite(bodyDelay)) {
+    extras.retryAfterSeconds = bodyDelay;
+    return extras;
+  }
+
+  const headerDelay =
+    response.headers?.['retry-after'] ?? response.headers?.get?.('retry-after');
+  const parsedDelay =
+    typeof headerDelay === 'number'
+      ? headerDelay
+      : typeof headerDelay === 'string'
+        ? Number.parseInt(headerDelay, 10)
+        : Number.NaN;
+  if (Number.isFinite(parsedDelay)) {
+    extras.retryAfterSeconds = parsedDelay;
+  }
+
+  return extras;
+}
+
+export async function handleElfaChat(
+  message: string,
+): Promise<MessageResponse<ElfaChatBlob>> {
+  if (!(await ensureUserScope())) return err('Not signed in');
+  const storageScope = getStorageScope();
+  const transcriptGeneration = elfaChatTranscriptGeneration;
+
+  try {
+    const stored = parseElfaChat(await localStore.get('elfaChat'));
+    const body = stored.sessionId
+      ? { message, sessionId: stored.sessionId }
+      : { message };
+    const { data } = await apiClient.post(
+      '/elfa/chat',
+      body,
+      { timeout: 65_000 },
+    );
+    const result: unknown = data.data;
+    if (
+      !result ||
+      typeof result !== 'object' ||
+      !('message' in result) ||
+      typeof result.message !== 'string' ||
+      !('sessionId' in result) ||
+      typeof result.sessionId !== 'string' ||
+      result.sessionId.length === 0
+    ) {
+      return err('Chat returned an invalid response');
+    }
+    const updated = appendElfaTurn(
+      stored,
+      message,
+      result.message,
+      result.sessionId,
+    );
+    const currentScope = getStorageScope();
+    if (
+      elfaChatTranscriptGeneration === transcriptGeneration &&
+      currentScope.userId === storageScope.userId &&
+      currentScope.network === storageScope.network
+    ) {
+      await localStore.set('elfaChat', updated);
+    }
+    return ok(updated);
+  } catch (e: unknown) {
+    return err(
+      getErrorMessage(e, 'Failed to send chat message'),
+      getElfaChatErrorExtras(e),
+    );
+  }
+}
+
+export async function handleClearElfaChat(): Promise<
+  MessageResponse<ElfaChatBlob>
+> {
+  if (!(await ensureUserScope())) return err('Not signed in');
+  elfaChatTranscriptGeneration += 1;
+
+  try {
+    const empty = emptyElfaChat();
+    await localStore.set('elfaChat', empty);
+    return ok(empty);
+  } catch (e: unknown) {
+    return err(getErrorMessage(e, 'Failed to clear chat'));
   }
 }
