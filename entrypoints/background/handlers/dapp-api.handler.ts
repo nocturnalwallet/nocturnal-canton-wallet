@@ -35,7 +35,7 @@ import type {
 } from '@lib/dapp-api/gateway-types';
 import { sessionStore, localStore, networkStore } from '@lib/storage';
 import { NETWORKS, toCaip2NetworkId } from '@lib/network';
-import { getCachedPrivateKey, resetAutoLockTimer } from './session.handler';
+import { getCachedPrivateKey, resetAutoLockTimer, reconcileUnlockState } from './session.handler';
 import { APPROVAL_REQUIRED_METHODS, requestApproval } from './approval.handler';
 import {
   gatewayFacadeDappRpc,
@@ -70,6 +70,8 @@ interface DappAccount {
 
 /** Check wallet readiness: unlocked + has a partyId (= onboarded). */
 async function getWalletState() {
+  // Drop stale unlocked flags left after MV3 SW restart (key cache is gone).
+  await reconcileUnlockState();
   const unlocked = await sessionStore.get('unlocked');
   const partyId = await sessionStore.get('partyId');
   return { unlocked, partyId, isReady: unlocked && !!partyId };
@@ -104,8 +106,8 @@ export async function buildDappAccount(): Promise<DappAccount | null> {
     publicKey,
     namespace: namespace || '',
     // Wallet.networkId is a CAIP-2-compliant chain identifier per the spec
-    // schema at openrpc-dapp-api.json:874-877; we emit the converted form
-    // (e.g. `canton:devnet`), keeping the internal short ID for storage keys.
+    // schema at openrpc-dapp-api.json:874-877; we emit DA-canonical form
+    // (e.g. `canton:da-devnet`), keeping the internal short ID for storage keys.
     networkId: toCaip2NetworkId(networkId),
     signingProviderId: brand.providerId,
   };
@@ -237,7 +239,11 @@ async function handleSignMessage(params: unknown): Promise<{ signature: string }
 
   const privateKey = getCachedPrivateKey();
   if (!privateKey) {
-    throw new RpcError(RpcErrorCodes.UNAUTHORIZED, 'Private key not available — please unlock the wallet');
+    // Common after MV3 SW restart: session still says unlocked, key cache is gone.
+    throw new RpcError(
+      RpcErrorCodes.UNAUTHORIZED,
+      'Signing key not loaded — please unlock the wallet again',
+    );
   }
 
   // CIP-0103 canonical signMessage: Ed25519 over UTF-8(message) directly.
@@ -299,7 +305,10 @@ async function handleSignTransaction(params: unknown): Promise<{
 
   const privateKey = getCachedPrivateKey();
   if (!privateKey) {
-    throw new RpcError(RpcErrorCodes.UNAUTHORIZED, 'Private key not available — unlock wallet');
+    throw new RpcError(
+      RpcErrorCodes.UNAUTHORIZED,
+      'Signing key not loaded — please unlock the wallet again',
+    );
   }
 
   const signature = signTransactionHash(transactionHash, privateKey);
@@ -333,7 +342,12 @@ async function handlePrepareExecute(params: unknown): Promise<null> {
   if (!isReady || !partyId) throw new RpcError(RpcErrorCodes.UNAUTHORIZED, 'Wallet must be unlocked and onboarded');
 
   const privateKey = getCachedPrivateKey();
-  if (!privateKey) throw new RpcError(RpcErrorCodes.UNAUTHORIZED, 'Private key not available — unlock wallet');
+  if (!privateKey) {
+    throw new RpcError(
+      RpcErrorCodes.UNAUTHORIZED,
+      'Signing key not loaded — please unlock the wallet again',
+    );
+  }
 
   const typedParams = params as PrepareExecuteParams;
 
@@ -403,7 +417,12 @@ async function handlePrepareExecuteAndWait(params: unknown): Promise<PrepareExec
   if (!isReady || !partyId) throw new RpcError(RpcErrorCodes.UNAUTHORIZED, 'Wallet must be unlocked and onboarded');
 
   const privateKey = getCachedPrivateKey();
-  if (!privateKey) throw new RpcError(RpcErrorCodes.UNAUTHORIZED, 'Private key not available — unlock wallet');
+  if (!privateKey) {
+    throw new RpcError(
+      RpcErrorCodes.UNAUTHORIZED,
+      'Signing key not loaded — please unlock the wallet again',
+    );
+  }
 
   const typedParams = params as PrepareExecuteParams;
 

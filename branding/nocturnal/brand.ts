@@ -10,7 +10,7 @@ const brand: BrandConfig = {
   providerName: 'Nocturnal',
   partyHintDefault: 'nocturnal-wallet',
   logTag: '[Nocturnal]',
-  version: '0.3.0',
+  version: '0.3.1',
   manifestKey:
     'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAm+5/uaDpKxZpz4vZ+EwkLhbehAa+8OSwC28pacF6YoEveydmZo0g6GmRUIGZFf3BT1LcJlRhMu/EUsTZYWWy485HdxWI9MXJYWD4F+95wQCbze/qqvIWXSyNBAAfydB/4XllAiGttoEmefInRinjjRPrvADtAEEraUANS8M4C3xwYPMIG9OQWIn/BY/m4r5pcgzBEZ+vHXaFbcapFO36j7cLO/fXyST8pkyyUtorjAnDgkiyamo5Y3LpZcVvpA2xCZuOo9zfKLpT5UMQnYjuNhBYW+7oVBRwmvPiG1SVNRk+JQaQPsUeQplr+52s0NVl/5CQFeqgT41T+6iD2/4rwwIDAQAB',
   hostPermissions: ['https://*.thanhle.space/*'],
@@ -18,7 +18,7 @@ const brand: BrandConfig = {
     localnet: 'http://localhost:3008/',
     devnet: 'https://api-wallet-devnet.kairo.ag/',
     testnet: 'https://api-testnet.kairo.ag/',
-    mainnet: 'https://nocturnal-wallet-provider-backend-mainnet.thanhle.space/',
+    mainnet: 'https://api-mpch-wallet-provider.thanhle.space/',
   },
   welcomeBackgroundUrl: '/bg/skyline.jpg',
 };

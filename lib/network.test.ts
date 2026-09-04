@@ -46,4 +46,13 @@ describe('network build gating', () => {
       ),
     ).toBe('https://lighthouse.devnet.cantonloop.com/transactions/12206d0f93');
   });
+
+  it('toCaip2NetworkId emits DA-canonical CAIP-2 ids (PartyLayer-recognized)', async () => {
+    vi.resetModules();
+    const net = await import('./network');
+    expect(net.toCaip2NetworkId('mainnet')).toBe('canton:da-mainnet');
+    expect(net.toCaip2NetworkId('testnet')).toBe('canton:da-testnet');
+    expect(net.toCaip2NetworkId('devnet')).toBe('canton:da-devnet');
+    expect(net.toCaip2NetworkId('localnet')).toBe('canton:da-local');
+  });
 });

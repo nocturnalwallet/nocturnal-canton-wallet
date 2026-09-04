@@ -94,18 +94,27 @@ export const NETWORK_IDS: NetworkId[] = IS_MAINNET_ONLY_BUILD
   : ALL_NETWORK_IDS;
 
 /**
- * Convert an internal NetworkId to a CAIP-2-compliant identifier for the
- * CIP-0103 dApp API surface. The canonical Network schema mandates a CAIP-2
- * chain ID (the spec's own example is `canton:da-mainnet`, openrpc-dapp-api.json:791-816);
- * this function emits `canton:<id>` from our internal ids, e.g. `canton:mainnet` /
- * `canton:devnet`. Internal wallet code keeps the bare ID (`'localnet'`, `'devnet'`, ...) because it's
- * embedded in chrome.storage.local keys, React Query cache keys, popup state,
- * and the user-facing network picker — changing the internal form would force
- * a storage migration for every installed user. We convert only at the dApp
- * API boundary (handleGetActiveNetwork, handleStatus.network, buildDappAccount).
+ * Internal NetworkId → CIP-0103 / PartyLayer-recognized CAIP-2 chain IDs.
+ * Spec example is `canton:da-mainnet` (openrpc-dapp-api.json:791-816). SDKs such
+ * as PartyLayer only treat the `canton:da-*` forms as recognized; emitting
+ * `canton:mainnet` caused connect to discard the wallet network and fall back
+ * to the dApp Kit preferred network.
+ *
+ * Internal wallet code keeps the bare ID (`'localnet'`, `'devnet'`, ...) because
+ * it's embedded in chrome.storage.local keys, React Query cache keys, popup
+ * state, and the user-facing network picker — changing the internal form would
+ * force a storage migration. We convert only at the dApp API boundary
+ * (handleGetActiveNetwork, handleStatus.network, buildDappAccount).
  */
+const NETWORK_ID_TO_CAIP2: Record<NetworkId, string> = {
+  localnet: 'canton:da-local',
+  devnet: 'canton:da-devnet',
+  testnet: 'canton:da-testnet',
+  mainnet: 'canton:da-mainnet',
+};
+
 export function toCaip2NetworkId(id: NetworkId): string {
-  return `canton:${id}`;
+  return NETWORK_ID_TO_CAIP2[id];
 }
 
 /** Lighthouse explorer deep-link for a ledger update. */

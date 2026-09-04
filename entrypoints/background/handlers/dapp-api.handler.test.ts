@@ -25,7 +25,16 @@ vi.mock('@lib/network', () => ({
       faucetEnabled: true,
     },
   },
-  toCaip2NetworkId: (id: string) => `canton:${id}`,
+  // Mirrors lib/network.ts DA-canonical mapping used at the CIP-0103 boundary.
+  toCaip2NetworkId: (id: string) =>
+    (
+      {
+        localnet: 'canton:da-local',
+        devnet: 'canton:da-devnet',
+        testnet: 'canton:da-testnet',
+        mainnet: 'canton:da-mainnet',
+      } as Record<string, string>
+    )[id] ?? `canton:da-${id}`,
 }));
 
 vi.mock('../gateway-facade-client', () => ({
@@ -46,6 +55,7 @@ vi.mock('./approval.handler', () => ({
 vi.mock('./session.handler', () => ({
   getCachedPrivateKey: vi.fn(),
   resetAutoLockTimer: vi.fn(),
+  reconcileUnlockState: vi.fn(async () => {}),
 }));
 
 import { sessionStore, localStore } from '@lib/storage';
@@ -311,23 +321,23 @@ describe('Network shape conformance — CIP-0103', () => {
     expect(network).not.toHaveProperty('name');
   });
 
-  it('getActiveNetwork emits networkId in CAIP-2 form (canton:<network>)', async () => {
+  it('getActiveNetwork emits networkId in DA-canonical CAIP-2 form', async () => {
     const res = await handleDappApiRequest(dappReq('getActiveNetwork', {}));
     const { networkId } = unwrapResult<{ networkId: string }>(res);
-    expect(networkId).toBe('canton:localnet');
-    expect(networkId).toMatch(/^canton:/);
+    expect(networkId).toBe('canton:da-local');
+    expect(networkId).toMatch(/^canton:da-/);
   });
 
   it('status.network has same shape — { networkId, ledgerApi } in CAIP-2 form, no name', async () => {
     const res = await handleDappApiRequest(dappReq('status', {}));
     const status = unwrapResult<{ network: Record<string, unknown> }>(res);
     expect(Object.keys(status.network).sort()).toEqual(['ledgerApi', 'networkId']);
-    expect(status.network.networkId).toBe('canton:localnet');
+    expect(status.network.networkId).toBe('canton:da-local');
   });
 
   it('getPrimaryAccount emits Wallet.networkId in CAIP-2 form (openrpc-dapp-api.json:874-877)', async () => {
     const res = await handleDappApiRequest(dappReq('getPrimaryAccount', {}));
     const account = unwrapResult<{ networkId: string }>(res);
-    expect(account.networkId).toBe('canton:localnet');
+    expect(account.networkId).toBe('canton:da-local');
   });
 });
