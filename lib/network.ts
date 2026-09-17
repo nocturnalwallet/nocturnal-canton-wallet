@@ -79,19 +79,72 @@ export const IS_MAINNET_ONLY_BUILD =
 
 const ALL_NETWORK_IDS = Object.keys(NETWORKS) as NetworkId[];
 
-export const DEFAULT_NETWORK: NetworkId = IS_MAINNET_ONLY_BUILD
-  ? 'mainnet'
-  : 'devnet';
+/**
+ * Derive the set of networks a build exposes from the brand's optional
+ * `enabledNetworks` allowlist:
+ * - Mainnet-only build (`--mode mainnet`) → always `['mainnet']`, ignoring the
+ *   allowlist, so the production/store build can never widen itself.
+ * - No allowlist (brand omits `enabledNetworks`) → all networks (dev default).
+ * - Allowlist set → exactly that list, validated: it must be non-empty and
+ *   contain only known network ids (fail fast at module load, mirroring the
+ *   missing-apiBaseUrl guard in `buildNetworks`).
+ *
+ * `NETWORKS` itself always keeps every entry so lookups by id
+ * (`NETWORKS[id]`) stay total even when a network is not exposed.
+ */
+export function resolveEnabledNetworkIds(
+  enabled: NetworkId[] | undefined,
+  allIds: NetworkId[],
+  mainnetOnly: boolean,
+): NetworkId[] {
+  if (mainnetOnly) return ['mainnet'];
+  if (enabled === undefined) return allIds;
+  if (enabled.length === 0) {
+    throw new Error('Brand enabledNetworks must not be empty when set');
+  }
+  for (const id of enabled) {
+    if (!allIds.includes(id)) {
+      throw new Error(
+        `Brand enabledNetworks contains unknown network "${id}"`,
+      );
+    }
+  }
+  return enabled;
+}
+
+/**
+ * Pick the landing network for a build:
+ * - Mainnet-only build → `'mainnet'`.
+ * - No allowlist → `'devnet'` (preserves the historical dev default).
+ * - Allowlist set → `'mainnet'` if it is exposed, else the first exposed
+ *   network (so brands can control the fallback via list order).
+ */
+export function resolveDefaultNetwork(
+  enabled: NetworkId[] | undefined,
+  ids: NetworkId[],
+  mainnetOnly: boolean,
+): NetworkId {
+  if (mainnetOnly) return 'mainnet';
+  if (enabled === undefined) return 'devnet';
+  return ids.includes('mainnet') ? 'mainnet' : ids[0];
+}
 
 /**
  * Networks exposed to the UI picker and accepted by the network-switch handler.
- * In a Mainnet-only production build this is `['mainnet']`; otherwise all
- * networks. `NETWORKS` itself always keeps every entry so lookups by id
- * (`NETWORKS[id]`) stay total.
+ * In a Mainnet-only production build this is `['mainnet']`; otherwise the
+ * brand's `enabledNetworks` allowlist, or all networks when the brand omits it.
  */
-export const NETWORK_IDS: NetworkId[] = IS_MAINNET_ONLY_BUILD
-  ? ['mainnet']
-  : ALL_NETWORK_IDS;
+export const NETWORK_IDS: NetworkId[] = resolveEnabledNetworkIds(
+  brand.enabledNetworks,
+  ALL_NETWORK_IDS,
+  IS_MAINNET_ONLY_BUILD,
+);
+
+export const DEFAULT_NETWORK: NetworkId = resolveDefaultNetwork(
+  brand.enabledNetworks,
+  NETWORK_IDS,
+  IS_MAINNET_ONLY_BUILD,
+);
 
 /**
  * Internal NetworkId → CIP-0103 / PartyLayer-recognized CAIP-2 chain IDs.

@@ -26,6 +26,14 @@ export interface BrandConfig {
   hostPermissions: string[];
   /** Per-network apiBaseUrl overrides merged into lib/network.ts */
   networkApiBaseUrls: Partial<Record<BrandNetworkId, string>>;
+  /**
+   * Networks this brand exposes in the picker / network-switch handler.
+   * Omit to expose every network (dev default). A `--mode mainnet` build
+   * always narrows to `['mainnet']` regardless of this value. When set,
+   * the landing network prefers `mainnet` if present, else the first entry.
+   * Order the list with the intended fallback default first.
+   */
+  enabledNetworks?: BrandNetworkId[];
   /** Optional Welcome backdrop under the brand publicDir, e.g. '/bg/skyline.jpg' */
   welcomeBackgroundUrl?: string;
 }
