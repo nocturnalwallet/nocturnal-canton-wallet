@@ -12,6 +12,7 @@ import { localStore, sessionStore } from '@lib/storage';
 import { getEncryptionProvider } from '../encryption';
 import apiClient from '../api-client';
 import { setCachedPrivateKey, getCachedPrivateKey } from './session.handler';
+import { signHashWithPassword } from '../signing/sign-with-password';
 
 interface PreparedExternalParty {
   partyId: string;
@@ -203,18 +204,20 @@ export async function handleExportPrivateKey(
 
 /**
  * Register transfer preapproval via dapp-core.
- * Flow: prepare → sign locally → submit (same pattern as faucet).
+ * Flow: prepare → sign on demand with the supplied password → submit (same
+ * pattern as faucet / other password-on-demand signing flows).
+ *
+ * `password` defaults to '' so this remains callable with zero arguments
+ * from `handleMaybeAutoRegisterPreapproval` (the silent auto-register path,
+ * owned by a separate task) without a type error; signing will simply fail
+ * fast via `signHashWithPassword` when no real password is available.
  */
-export async function handleRegisterTransferPreapproval(): Promise<
-  MessageResponse<{ success: boolean }>
-> {
+export async function handleRegisterTransferPreapproval(
+  password: string = '',
+): Promise<MessageResponse<{ success: boolean }>> {
   try {
     const partyId = await sessionStore.get('partyId');
     if (!partyId) return err('No party ID');
-
-    // Use cached private key (preferred) or fail — user must be unlocked
-    const privateKey = getCachedPrivateKey();
-    if (!privateKey) return err('Private key not available — please unlock the wallet');
 
     // Step 1: Prepare via dapp-core
     const { data: prepareRes } = await apiClient.post(
@@ -226,8 +229,13 @@ export async function handleRegisterTransferPreapproval(): Promise<
       return err('Transfer preapproval prepare returned no transaction hash');
     }
 
-    // Step 2: Sign locally
-    const signature = signTransactionHash(prepared.preparedTransactionHash, privateKey);
+    // Step 2: Sign on demand — decrypts the key with the supplied password,
+    // never touches the in-memory cached key.
+    const { signature } = await signHashWithPassword(
+      password,
+      partyId,
+      prepared.preparedTransactionHash,
+    );
 
     // Step 3: Submit signed transaction to dapp-core
     await apiClient.post('/wallet/transfer-preapproval/submit', {

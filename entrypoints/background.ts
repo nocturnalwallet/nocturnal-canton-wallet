@@ -205,7 +205,7 @@ async function routeMessage(message: MessageRequest) {
 
     // Transfer pre-approval
     case MSG.REGISTER_TRANSFER_PREAPPROVAL:
-      return handleRegisterTransferPreapproval();
+      return handleRegisterTransferPreapproval(message.payload.password);
     case MSG.GET_PREAPPROVAL_STATUS:
       return handleGetPreapprovalStatus();
     case MSG.MAYBE_AUTO_REGISTER_PREAPPROVAL:

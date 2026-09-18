@@ -26,6 +26,9 @@ vi.mock('@canton-network/core-signing-lib', () => ({
   getPublicKeyFromPrivate: vi.fn(() => 'PUB'),
   createKeyPair: vi.fn(),
 }));
+vi.mock('../signing/sign-with-password', () => ({
+  signHashWithPassword: vi.fn(async () => ({ signature: 'SIG', publicKey: 'PUB' })),
+}));
 
 import { localStore, sessionStore } from '@lib/storage';
 import {
@@ -35,6 +38,7 @@ import {
 } from './keystore.handler';
 import apiClient from '../api-client';
 import { getCachedPrivateKey } from './session.handler';
+import { signHashWithPassword } from '../signing/sign-with-password';
 
 describe('handleResetKeystoreForRecovery', () => {
   beforeEach(() => {
@@ -186,17 +190,52 @@ describe('handleRegisterTransferPreapproval', () => {
     vi.mocked(apiClient.post).mockReset();
     vi.mocked(getCachedPrivateKey).mockReset();
     vi.mocked(localStore.set).mockReset();
+    vi.mocked(signHashWithPassword).mockReset();
+    vi.mocked(signHashWithPassword).mockResolvedValue({ signature: 'SIG', publicKey: 'PUB' });
     clearPreapprovalCache();
   });
 
-  it('persists the durable preapprovalRegistered marker on successful submit', async () => {
+  it('signs the preapproval with the supplied password', async () => {
     vi.mocked(sessionStore.get).mockImplementation(async (k: any) => (k === 'partyId' ? 'p::1' : null));
-    vi.mocked(getCachedPrivateKey).mockReturnValue('PRIV');
     vi.mocked(apiClient.post)
       .mockResolvedValueOnce({ data: { data: { preparedTransaction: 'TX', preparedTransactionHash: 'H', commandId: 'C' } } } as any) // prepare
       .mockResolvedValueOnce({ data: {} } as any); // submit
 
-    const res = await handleRegisterTransferPreapproval();
+    const res = await handleRegisterTransferPreapproval('typed-pw');
+
+    expect(vi.mocked(signHashWithPassword)).toHaveBeenCalledWith('typed-pw', expect.any(String), expect.any(String));
+    expect(res.success).toBe(true);
+  });
+
+  it('does NOT use the cached private key — signs via signHashWithPassword only', async () => {
+    vi.mocked(sessionStore.get).mockImplementation(async (k: any) => (k === 'partyId' ? 'p::1' : null));
+    vi.mocked(apiClient.post)
+      .mockResolvedValueOnce({ data: { data: { preparedTransaction: 'TX', preparedTransactionHash: 'H', commandId: 'C' } } } as any)
+      .mockResolvedValueOnce({ data: {} } as any);
+
+    await handleRegisterTransferPreapproval('typed-pw');
+
+    expect(getCachedPrivateKey).not.toHaveBeenCalled();
+  });
+
+  it('defaults the password to an empty string when called with no arguments (back-compat with the auto-register call site)', async () => {
+    vi.mocked(sessionStore.get).mockImplementation(async (k: any) => (k === 'partyId' ? 'p::1' : null));
+    vi.mocked(apiClient.post)
+      .mockResolvedValueOnce({ data: { data: { preparedTransaction: 'TX', preparedTransactionHash: 'H', commandId: 'C' } } } as any)
+      .mockResolvedValueOnce({ data: {} } as any);
+
+    await handleRegisterTransferPreapproval();
+
+    expect(vi.mocked(signHashWithPassword)).toHaveBeenCalledWith('', 'p::1', 'H');
+  });
+
+  it('persists the durable preapprovalRegistered marker on successful submit', async () => {
+    vi.mocked(sessionStore.get).mockImplementation(async (k: any) => (k === 'partyId' ? 'p::1' : null));
+    vi.mocked(apiClient.post)
+      .mockResolvedValueOnce({ data: { data: { preparedTransaction: 'TX', preparedTransactionHash: 'H', commandId: 'C' } } } as any) // prepare
+      .mockResolvedValueOnce({ data: {} } as any); // submit
+
+    const res = await handleRegisterTransferPreapproval('pw1');
 
     expect(res.success).toBe(true);
     expect(localStore.set).toHaveBeenCalledWith('preapprovalRegistered', true);
@@ -204,13 +243,12 @@ describe('handleRegisterTransferPreapproval', () => {
 
   it('returns success and caches registration when durable marker persistence fails after submit', async () => {
     vi.mocked(sessionStore.get).mockImplementation(async (k: any) => (k === 'partyId' ? 'p::1' : null));
-    vi.mocked(getCachedPrivateKey).mockReturnValue('PRIV');
     vi.mocked(apiClient.post)
       .mockResolvedValueOnce({ data: { data: { preparedTransaction: 'TX', preparedTransactionHash: 'H', commandId: 'C' } } } as any)
       .mockResolvedValueOnce({ data: {} } as any);
     vi.mocked(localStore.set).mockRejectedValueOnce(new Error('storage write failed'));
 
-    const res = await handleRegisterTransferPreapproval();
+    const res = await handleRegisterTransferPreapproval('pw1');
     const status = await handleGetPreapprovalStatus();
 
     expect(res).toEqual({ success: true, data: { success: true } });

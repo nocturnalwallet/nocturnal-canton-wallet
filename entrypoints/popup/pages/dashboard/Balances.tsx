@@ -28,6 +28,7 @@ export function Balances() {
   const { data: preapprovalData, isLoading: preapprovalLoading } = usePreapprovalStatus();
   const registerPreapproval = useRegisterPreapproval();
   const [preapprovalError, setPreapprovalError] = useState('');
+  const [preapprovalPassword, setPreapprovalPassword] = useState('');
   const [showSuccess, setShowSuccess] = useState(false);
   const [selectedTokenId, setSelectedTokenId] = useState<string | null>(null);
 
@@ -40,9 +41,11 @@ export function Balances() {
   }, [autoRegister]);
 
   const handleRegisterPreapproval = async () => {
+    if (!preapprovalPassword) return;
     setPreapprovalError('');
     try {
-      await registerPreapproval.mutateAsync();
+      await registerPreapproval.mutateAsync(preapprovalPassword);
+      setPreapprovalPassword('');
       setShowSuccess(true);
     } catch (e: unknown) {
       setPreapprovalError(e instanceof Error ? e.message : 'Registration failed');
@@ -102,6 +105,14 @@ export function Balances() {
           <p className="text-muted-foreground mb-2 text-xs">
             Register transfer pre-approval to enable receiving Canton Coin transfers.
           </p>
+          <input
+            type="password"
+            value={preapprovalPassword}
+            onChange={(e) => setPreapprovalPassword(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleRegisterPreapproval()}
+            className="bg-background text-foreground mb-2 w-full rounded-lg px-3 py-2 text-sm outline-none"
+            placeholder="Enter password to sign"
+          />
           {preapprovalError && (
             <div className="mb-2 flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2">
               <p className="text-sm text-red-400">{preapprovalError}</p>
@@ -109,7 +120,7 @@ export function Balances() {
           )}
           <button
             onClick={handleRegisterPreapproval}
-            disabled={registerPreapproval.isPending}
+            disabled={!preapprovalPassword || registerPreapproval.isPending}
             className="bg-primary text-primary-foreground w-full rounded-lg py-1.5 text-xs font-medium transition-opacity disabled:opacity-50"
           >
             {registerPreapproval.isPending ? (

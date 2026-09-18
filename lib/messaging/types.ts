@@ -56,7 +56,10 @@ export type MessageRequest =
   | { action: typeof MSG.DELETE_KEYSTORE }
   | { action: typeof MSG.RESET_KEYSTORE_FOR_RECOVERY }
   // Transfer pre-approval
-  | { action: typeof MSG.REGISTER_TRANSFER_PREAPPROVAL }
+  | {
+      action: typeof MSG.REGISTER_TRANSFER_PREAPPROVAL;
+      payload: { password: string };
+    }
   | { action: typeof MSG.GET_PREAPPROVAL_STATUS }
   | { action: typeof MSG.MAYBE_AUTO_REGISTER_PREAPPROVAL }
   // Signing

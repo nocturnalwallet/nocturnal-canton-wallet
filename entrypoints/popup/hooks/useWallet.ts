@@ -77,9 +77,10 @@ export function useRegisterPreapproval() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: () =>
+    mutationFn: (password: string) =>
       sendMessage<{ success: boolean }>({
         action: MSG.REGISTER_TRANSFER_PREAPPROVAL,
+        payload: { password },
       }),
     onSuccess: () => {
       // Invalidate so the next query hits the background handler, which
