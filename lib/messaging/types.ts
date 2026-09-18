@@ -27,6 +27,7 @@ export type MessageRequest =
   | { action: typeof MSG.UNLOCK; payload: { password: string } }
   | { action: typeof MSG.LOCK }
   | { action: typeof MSG.GET_LOCK_STATE }
+  | { action: typeof MSG.VERIFY_PASSWORD; payload: { password: string } }
   // Network
   | { action: typeof MSG.GET_NETWORK }
   | { action: typeof MSG.SWITCH_NETWORK; payload: { network: NetworkId } }
@@ -180,6 +181,10 @@ export interface GoogleAuthData {
 
 export interface LockStateData {
   unlocked: boolean;
+}
+
+export interface VerifyPasswordData {
+  valid: boolean;
 }
 
 export interface KeyPairData {

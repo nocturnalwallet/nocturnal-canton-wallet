@@ -17,12 +17,14 @@ vi.mock('@lib/constants', () => ({
   AUTO_LOCK_MINUTES: 15,
 }));
 
-import { sessionStore } from '@lib/storage';
+import { sessionStore, localStore } from '@lib/storage';
+import { getEncryptionProvider } from '../encryption';
 import {
   setCachedPrivateKey,
   getCachedPrivateKey,
   reconcileUnlockState,
   handleGetLockState,
+  handleVerifyPassword,
 } from './session.handler';
 
 describe('reconcileUnlockState', () => {
@@ -79,5 +81,30 @@ describe('handleGetLockState', () => {
     expect(res.success).toBe(true);
     if (res.success) expect(res.data.unlocked).toBe(false);
     expect(getCachedPrivateKey()).toBeNull();
+  });
+});
+
+describe('handleVerifyPassword', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('returns valid:true for a correct password without touching session state', async () => {
+    vi.mocked(localStore.get).mockResolvedValue({ backend: 'webcrypto' } as never);
+    vi.mocked(getEncryptionProvider).mockResolvedValue({ verifyPassword: vi.fn(async () => true) } as never);
+    const res = await handleVerifyPassword('pw');
+    expect(res.success && res.data.valid).toBe(true);
+    expect(sessionStore.set).not.toHaveBeenCalled();
+  });
+
+  it('returns valid:false for a wrong password', async () => {
+    vi.mocked(localStore.get).mockResolvedValue({ backend: 'webcrypto' } as never);
+    vi.mocked(getEncryptionProvider).mockResolvedValue({ verifyPassword: vi.fn(async () => false) } as never);
+    const res = await handleVerifyPassword('bad');
+    expect(res.success && res.data.valid).toBe(false);
+  });
+
+  it('returns valid:false when no keystore exists', async () => {
+    vi.mocked(localStore.get).mockResolvedValue(undefined as never);
+    const res = await handleVerifyPassword('pw');
+    expect(res.success && res.data.valid).toBe(false);
   });
 });

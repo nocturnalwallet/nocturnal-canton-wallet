@@ -91,3 +91,17 @@ export async function handleGetLockState(): Promise<MessageResponse<LockStateDat
   const unlocked = await sessionStore.get('unlocked');
   return ok({ unlocked });
 }
+
+/**
+ * Verify-only password check. Does NOT cache the private key and does NOT
+ * touch the `unlocked` session flag — used by flows (e.g. dApp approval)
+ * that need to confirm the password without unlocking the wallet.
+ */
+export async function handleVerifyPassword(
+  password: string,
+): Promise<MessageResponse<{ valid: boolean }>> {
+  const keystore = await localStore.get('keystore');
+  if (!keystore) return ok({ valid: false });
+  const provider = await getEncryptionProvider();
+  return ok({ valid: await provider.verifyPassword(keystore, password) });
+}

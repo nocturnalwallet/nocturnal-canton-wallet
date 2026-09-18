@@ -18,6 +18,7 @@ import {
   handleUnlock,
   handleLock,
   handleGetLockState,
+  handleVerifyPassword,
   reconcileUnlockState,
 } from './background/handlers/session.handler';
 import {
@@ -153,6 +154,7 @@ async function routeMessage(message: MessageRequest) {
     MSG.GET_NETWORK,
     MSG.GET_ELFA_CHAT,
     MSG.GET_DAPP_APPROVAL,
+    MSG.VERIFY_PASSWORD,
   ];
   if (!skipReset.includes(message.action as (typeof skipReset)[number])) {
     resetAutoLockTimer();
@@ -182,6 +184,8 @@ async function routeMessage(message: MessageRequest) {
       return handleLock();
     case MSG.GET_LOCK_STATE:
       return handleGetLockState();
+    case MSG.VERIFY_PASSWORD:
+      return handleVerifyPassword(message.payload.password);
 
     // Keystore
     case MSG.CREATE_KEYPAIR:
