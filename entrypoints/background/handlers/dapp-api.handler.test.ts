@@ -54,7 +54,6 @@ vi.mock('./approval.handler', () => ({
 
 vi.mock('./session.handler', () => ({
   resetAutoLockTimer: vi.fn(),
-  reconcileUnlockState: vi.fn(async () => {}),
 }));
 
 vi.mock('../signing/sign-with-password', () => ({

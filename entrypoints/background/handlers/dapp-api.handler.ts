@@ -34,7 +34,7 @@ import type {
 } from '@lib/dapp-api/gateway-types';
 import { sessionStore, localStore, networkStore } from '@lib/storage';
 import { NETWORKS, toCaip2NetworkId } from '@lib/network';
-import { resetAutoLockTimer, reconcileUnlockState } from './session.handler';
+import { resetAutoLockTimer } from './session.handler';
 import { APPROVAL_REQUIRED_METHODS, requestApproval } from './approval.handler';
 import { signHashWithPassword, signMessageWithPassword } from '../signing/sign-with-password';
 import {
@@ -70,8 +70,6 @@ interface DappAccount {
 
 /** Check wallet readiness: unlocked + has a partyId (= onboarded). */
 async function getWalletState() {
-  // Drop stale unlocked flags left after MV3 SW restart (key cache is gone).
-  await reconcileUnlockState();
   const unlocked = await sessionStore.get('unlocked');
   const partyId = await sessionStore.get('partyId');
   return { unlocked, partyId, isReady: unlocked && !!partyId };

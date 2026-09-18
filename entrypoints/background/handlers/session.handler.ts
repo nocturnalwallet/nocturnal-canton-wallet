@@ -17,27 +17,6 @@ export function getCachedPrivateKey(): string | null {
   return _cachedPrivateKey;
 }
 
-/**
- * chrome.storage.session keeps `unlocked: true` across MV3 service-worker
- * restarts, but `_cachedPrivateKey` lives only in RAM and is lost when the SW
- * dies. Without reconciliation the popup still shows the dashboard while
- * CIP-0103 signMessage / prepareExecute fail with "Private key not available".
- *
- * Call on SW startup and before reporting lock state so the UI forces a real
- * unlock (and repopulates the cache) whenever the signing key is missing.
- */
-export async function reconcileUnlockState(): Promise<void> {
-  const unlocked = await sessionStore.get('unlocked');
-  if (unlocked && !_cachedPrivateKey) {
-    await sessionStore.set('unlocked', false);
-    try {
-      await chrome.alarms.clear(ALARM_NAME);
-    } catch {
-      // alarms may be unavailable in unit tests
-    }
-  }
-}
-
 export function setupAutoLock(): void {
   chrome.alarms.onAlarm.addListener(async (alarm) => {
     if (alarm.name === ALARM_NAME) {
@@ -87,9 +66,7 @@ export async function handleLock(): Promise<MessageResponse<LockStateData>> {
 }
 
 export async function handleGetLockState(): Promise<MessageResponse<LockStateData>> {
-  await reconcileUnlockState();
-  const unlocked = await sessionStore.get('unlocked');
-  return ok({ unlocked });
+  return ok({ unlocked: await sessionStore.get('unlocked') });
 }
 
 /**

@@ -19,7 +19,6 @@ import {
   handleLock,
   handleGetLockState,
   handleVerifyPassword,
-  reconcileUnlockState,
 } from './background/handlers/session.handler';
 import {
   handleCreateKeypair,
@@ -102,10 +101,6 @@ export default defineBackground(() => {
 
   // Set up auto-lock alarm listener
   setupAutoLock();
-
-  // MV3 SW restarts drop the in-memory signing key while chrome.storage.session
-  // may still say unlocked — force a re-lock so the UI and CIP-0103 signing agree.
-  void whenStorageReady().then(() => reconcileUnlockState());
 
   // Set up event broadcaster for dApp API (statusChanged, accountsChanged)
   setupEventBroadcaster();
