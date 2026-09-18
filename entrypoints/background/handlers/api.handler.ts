@@ -1,4 +1,3 @@
-import { signTransactionHash } from '@canton-network/core-signing-lib';
 import { ok, err } from '@lib/messaging';
 import type {
   MessageResponse,
@@ -33,7 +32,7 @@ import {
 } from '@lib/elfa-chat';
 import { getErrorMessage } from '@lib/api-error';
 import apiClient from '../api-client';
-import { getCachedPrivateKey } from './session.handler';
+import { signHashWithPassword } from '../signing/sign-with-password';
 
 let elfaChatTranscriptGeneration = 0;
 
@@ -207,16 +206,6 @@ export async function handleRequestFaucet(
     const partyId = await sessionStore.get('partyId');
     if (!partyId) return err('No party ID');
 
-    // Use cached private key (preferred) or decrypt from keystore
-    let privateKey = getCachedPrivateKey();
-    if (!privateKey) {
-      const keystore = await localStore.get('keystore');
-      if (!keystore) return err('No keystore found');
-      const { getEncryptionProvider } = await import('../encryption');
-      const provider = await getEncryptionProvider();
-      privateKey = await provider.decryptKey(keystore, password);
-    }
-
     // Step 1: Call dapp-core to prepare the DevNet Tap
     const { data: prepareRes } = await apiClient.post(
       '/external-party/devnet-tap/prepare',
@@ -227,8 +216,14 @@ export async function handleRequestFaucet(
       return err('Faucet prepare returned no transaction hash');
     }
 
-    // Step 2: Sign locally
-    const signature = signTransactionHash(prepared.preparedTransactionHash, privateKey);
+    // Step 2: Sign locally with the typed password. This always decrypts
+    // with the password the user just typed — no cached-key fallback — so a
+    // wrong password fails the faucet request instead of silently succeeding.
+    const { signature } = await signHashWithPassword(
+      password,
+      partyId,
+      prepared.preparedTransactionHash,
+    );
 
     // Step 3: Submit signed transaction to dapp-core
     await apiClient.post('/external-party/devnet-tap/submit', {
