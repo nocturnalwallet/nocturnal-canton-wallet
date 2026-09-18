@@ -20,14 +20,21 @@ vi.mock('@lib/storage', () => ({
 }));
 
 vi.mock('../api-client', () => ({ default: { get: vi.fn(), post: vi.fn() } }));
-vi.mock('./session.handler', () => ({ getCachedPrivateKey: vi.fn(), setCachedPrivateKey: vi.fn() }));
+vi.mock('./session.handler', () => ({
+  getAutoRegisterKey: vi.fn(),
+  clearAutoRegisterKey: vi.fn(),
+  maybeCacheAutoRegisterKey: vi.fn(),
+}));
 vi.mock('@canton-network/core-signing-lib', () => ({
   signTransactionHash: vi.fn(() => 'SIG'),
   getPublicKeyFromPrivate: vi.fn(() => 'PUB'),
   createKeyPair: vi.fn(),
 }));
+vi.mock('../encryption', () => ({
+  getEncryptionProvider: vi.fn(),
+}));
 vi.mock('../signing/sign-with-password', () => ({
-  signHashWithPassword: vi.fn(async () => ({ signature: 'SIG', publicKey: 'PUB' })),
+  signHashWithKey: vi.fn(async () => ({ signature: 'SIG', publicKey: 'PUB' })),
 }));
 
 import { localStore, sessionStore } from '@lib/storage';
@@ -37,8 +44,9 @@ import {
   clearPreapprovalCache,
 } from './keystore.handler';
 import apiClient from '../api-client';
-import { getCachedPrivateKey } from './session.handler';
-import { signHashWithPassword } from '../signing/sign-with-password';
+import { getAutoRegisterKey, clearAutoRegisterKey } from './session.handler';
+import { getEncryptionProvider } from '../encryption';
+import { signHashWithKey } from '../signing/sign-with-password';
 
 describe('handleResetKeystoreForRecovery', () => {
   beforeEach(() => {
@@ -110,7 +118,10 @@ describe('handleMaybeAutoRegisterPreapproval', () => {
     vi.mocked(sessionStore.get).mockReset();
     vi.mocked(apiClient.get).mockReset();
     vi.mocked(apiClient.post).mockReset();
-    vi.mocked(getCachedPrivateKey).mockReset();
+    vi.mocked(getAutoRegisterKey).mockReset();
+    vi.mocked(clearAutoRegisterKey).mockReset();
+    vi.mocked(signHashWithKey).mockReset();
+    vi.mocked(signHashWithKey).mockResolvedValue({ signature: 'SIG', publicKey: 'PUB' });
     vi.mocked(localStore.get).mockReset();
     vi.mocked(localStore.get).mockResolvedValue(false); // durable marker off by default
     clearPreapprovalCache(); // reset the 30-min in-memory status cache between tests
@@ -119,7 +130,7 @@ describe('handleMaybeAutoRegisterPreapproval', () => {
   it('does nothing when the rollout flag is off', async () => {
     vi.mocked(sessionStore.get).mockImplementation(async (k: any) =>
       k === 'shouldAutoRegisterPreapproval' ? false : k === 'partyId' ? 'p::1' : null);
-    vi.mocked(getCachedPrivateKey).mockReturnValue('PRIV');
+    vi.mocked(getAutoRegisterKey).mockReturnValue('PRIV');
 
     const res = await handleMaybeAutoRegisterPreapproval();
 
@@ -127,10 +138,10 @@ describe('handleMaybeAutoRegisterPreapproval', () => {
     expect(apiClient.post).not.toHaveBeenCalled();
   });
 
-  it('skips (locked) when the private key is not cached', async () => {
+  it('skips (locked) when the scoped auto-register key is not cached', async () => {
     vi.mocked(sessionStore.get).mockImplementation(async (k: any) =>
       k === 'shouldAutoRegisterPreapproval' ? true : k === 'partyId' ? 'p::1' : null);
-    vi.mocked(getCachedPrivateKey).mockReturnValue(null);
+    vi.mocked(getAutoRegisterKey).mockReturnValue(null);
 
     const res = await handleMaybeAutoRegisterPreapproval();
 
@@ -139,22 +150,23 @@ describe('handleMaybeAutoRegisterPreapproval', () => {
     expect(apiClient.post).not.toHaveBeenCalled();
   });
 
-  it('skips when a preapproval already exists (idempotent)', async () => {
+  it('skips when a preapproval already exists (idempotent) and clears the scoped key', async () => {
     vi.mocked(sessionStore.get).mockImplementation(async (k: any) =>
       k === 'shouldAutoRegisterPreapproval' ? true : k === 'partyId' ? 'p::1' : null);
-    vi.mocked(getCachedPrivateKey).mockReturnValue('PRIV');
+    vi.mocked(getAutoRegisterKey).mockReturnValue('PRIV');
     vi.mocked(apiClient.get).mockResolvedValue({ data: { data: { exists: true } } } as any); // status
 
     const res = await handleMaybeAutoRegisterPreapproval();
 
     expect(res.success && res.data).toEqual({ attempted: false, registered: false, reason: 'already-registered' });
     expect(apiClient.post).not.toHaveBeenCalled(); // never prepared/submitted
+    expect(clearAutoRegisterKey).toHaveBeenCalled();
   });
 
-  it('registers when enabled, unlocked, and no preapproval yet', async () => {
+  it('registers via the scoped raw key when enabled, unlocked, and no preapproval yet', async () => {
     vi.mocked(sessionStore.get).mockImplementation(async (k: any) =>
       k === 'shouldAutoRegisterPreapproval' ? true : k === 'partyId' ? 'p::1' : null);
-    vi.mocked(getCachedPrivateKey).mockReturnValue('PRIV');
+    vi.mocked(getAutoRegisterKey).mockReturnValue('PRIV');
     vi.mocked(apiClient.get).mockResolvedValue({ data: { data: { exists: false } } } as any); // status
     vi.mocked(apiClient.post)
       .mockResolvedValueOnce({ data: { data: { preparedTransaction: 'TX', preparedTransactionHash: 'H', commandId: 'C' } } } as any) // prepare
@@ -163,17 +175,20 @@ describe('handleMaybeAutoRegisterPreapproval', () => {
     const res = await handleMaybeAutoRegisterPreapproval();
 
     expect(res.success && res.data).toEqual({ attempted: true, registered: true });
+    // Signs the prepared hash with the scoped RAW key (not a password).
+    expect(vi.mocked(signHashWithKey)).toHaveBeenCalledWith('PRIV', 'p::1', 'H');
     expect(apiClient.post).toHaveBeenCalledWith('/wallet/transfer-preapproval/prepare', { partyId: 'p::1' });
     expect(apiClient.post).toHaveBeenCalledWith(
       '/wallet/transfer-preapproval/submit',
       expect.objectContaining({ partyId: 'p::1', signature: 'SIG', commandId: 'C' }),
     );
+    expect(clearAutoRegisterKey).toHaveBeenCalled(); // scoped key consumed on success
   });
 
   it('skips (durable) when a prior registration was recorded, without a status check', async () => {
     vi.mocked(sessionStore.get).mockImplementation(async (k: any) =>
       k === 'shouldAutoRegisterPreapproval' ? true : k === 'partyId' ? 'p::1' : null);
-    vi.mocked(getCachedPrivateKey).mockReturnValue('PRIV');
+    vi.mocked(getAutoRegisterKey).mockReturnValue('PRIV');
     vi.mocked(localStore.get).mockResolvedValue(true); // durable marker set
 
     const res = await handleMaybeAutoRegisterPreapproval();
@@ -185,17 +200,23 @@ describe('handleMaybeAutoRegisterPreapproval', () => {
 });
 
 describe('handleRegisterTransferPreapproval', () => {
+  const decryptKey = vi.fn(async () => 'DECRYPTED_KEY');
+
   beforeEach(() => {
     vi.mocked(sessionStore.get).mockReset();
     vi.mocked(apiClient.post).mockReset();
-    vi.mocked(getCachedPrivateKey).mockReset();
+    vi.mocked(getAutoRegisterKey).mockReset();
     vi.mocked(localStore.set).mockReset();
-    vi.mocked(signHashWithPassword).mockReset();
-    vi.mocked(signHashWithPassword).mockResolvedValue({ signature: 'SIG', publicKey: 'PUB' });
+    vi.mocked(localStore.get).mockReset();
+    vi.mocked(localStore.get).mockResolvedValue({ backend: 'webcrypto' } as any); // keystore present
+    decryptKey.mockClear();
+    vi.mocked(getEncryptionProvider).mockResolvedValue({ decryptKey } as never);
+    vi.mocked(signHashWithKey).mockReset();
+    vi.mocked(signHashWithKey).mockResolvedValue({ signature: 'SIG', publicKey: 'PUB' });
     clearPreapprovalCache();
   });
 
-  it('signs the preapproval with the supplied password', async () => {
+  it('decrypts with the supplied password and signs the prepared hash via the raw-key path', async () => {
     vi.mocked(sessionStore.get).mockImplementation(async (k: any) => (k === 'partyId' ? 'p::1' : null));
     vi.mocked(apiClient.post)
       .mockResolvedValueOnce({ data: { data: { preparedTransaction: 'TX', preparedTransactionHash: 'H', commandId: 'C' } } } as any) // prepare
@@ -203,11 +224,12 @@ describe('handleRegisterTransferPreapproval', () => {
 
     const res = await handleRegisterTransferPreapproval('typed-pw');
 
-    expect(vi.mocked(signHashWithPassword)).toHaveBeenCalledWith('typed-pw', expect.any(String), expect.any(String));
+    expect(decryptKey).toHaveBeenCalledWith(expect.anything(), 'typed-pw');
+    expect(vi.mocked(signHashWithKey)).toHaveBeenCalledWith('DECRYPTED_KEY', 'p::1', 'H');
     expect(res.success).toBe(true);
   });
 
-  it('does NOT use the cached private key — signs via signHashWithPassword only', async () => {
+  it('does NOT consult the auto-register key — manual signing goes through the password', async () => {
     vi.mocked(sessionStore.get).mockImplementation(async (k: any) => (k === 'partyId' ? 'p::1' : null));
     vi.mocked(apiClient.post)
       .mockResolvedValueOnce({ data: { data: { preparedTransaction: 'TX', preparedTransactionHash: 'H', commandId: 'C' } } } as any)
@@ -215,18 +237,7 @@ describe('handleRegisterTransferPreapproval', () => {
 
     await handleRegisterTransferPreapproval('typed-pw');
 
-    expect(getCachedPrivateKey).not.toHaveBeenCalled();
-  });
-
-  it('defaults the password to an empty string when called with no arguments (back-compat with the auto-register call site)', async () => {
-    vi.mocked(sessionStore.get).mockImplementation(async (k: any) => (k === 'partyId' ? 'p::1' : null));
-    vi.mocked(apiClient.post)
-      .mockResolvedValueOnce({ data: { data: { preparedTransaction: 'TX', preparedTransactionHash: 'H', commandId: 'C' } } } as any)
-      .mockResolvedValueOnce({ data: {} } as any);
-
-    await handleRegisterTransferPreapproval();
-
-    expect(vi.mocked(signHashWithPassword)).toHaveBeenCalledWith('', 'p::1', 'H');
+    expect(getAutoRegisterKey).not.toHaveBeenCalled();
   });
 
   it('persists the durable preapprovalRegistered marker on successful submit', async () => {

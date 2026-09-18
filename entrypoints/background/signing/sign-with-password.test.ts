@@ -10,7 +10,7 @@ vi.mock('../encryption', () => ({
 
 import { localStore } from '@lib/storage';
 import { getEncryptionProvider } from '../encryption';
-import { signHashWithPassword } from './sign-with-password';
+import { signHashWithPassword, signHashWithKey } from './sign-with-password';
 
 const kp = createKeyPair(); // { privateKey, publicKey } base64
 
@@ -41,4 +41,19 @@ it('throws when no keystore is present', async () => {
 it('throws on a partyId whose fingerprint does not match the key', async () => {
   const bogus = 'hint::1220deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef';
   await expect(signHashWithPassword('pw', bogus, btoa('x'))).rejects.toThrow(/fingerprint/i);
+});
+
+it('signHashWithKey signs with a raw key without decrypting (partyId undefined)', async () => {
+  const hash = btoa('raw-key-hash');
+  const res = await signHashWithKey(kp.privateKey, undefined, hash);
+  expect(res.signature).toBe(signTransactionHash(hash, kp.privateKey));
+  expect(res.publicKey).toBe(kp.publicKey);
+  // Raw-key path must never touch the keystore/encryption provider.
+  expect(localStore.get).not.toHaveBeenCalled();
+  expect(getEncryptionProvider).not.toHaveBeenCalled();
+});
+
+it('signHashWithKey throws on a partyId whose fingerprint does not match the raw key', async () => {
+  const bogus = 'hint::1220deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef';
+  await expect(signHashWithKey(kp.privateKey, bogus, btoa('x'))).rejects.toThrow(/fingerprint/i);
 });

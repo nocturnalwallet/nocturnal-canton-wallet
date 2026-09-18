@@ -11,7 +11,7 @@ vi.mock('../api-client', () => ({
   default: { get: vi.fn(), post: vi.fn() },
 }));
 
-vi.mock('./session.handler', () => ({ setCachedPrivateKey: vi.fn() }));
+vi.mock('./session.handler', () => ({ clearAutoRegisterKey: vi.fn() }));
 vi.mock('./keystore.handler', () => ({ clearPreapprovalCache: vi.fn() }));
 
 // chrome global stub

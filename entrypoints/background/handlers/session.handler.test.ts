@@ -19,7 +19,39 @@ vi.mock('@lib/constants', () => ({
 
 import { sessionStore, localStore } from '@lib/storage';
 import { getEncryptionProvider } from '../encryption';
-import { handleGetLockState, handleVerifyPassword } from './session.handler';
+import {
+  handleGetLockState,
+  handleVerifyPassword,
+  maybeCacheAutoRegisterKey,
+  getAutoRegisterKey,
+  clearAutoRegisterKey,
+} from './session.handler';
+
+describe('scoped auto-register key', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    clearAutoRegisterKey();
+  });
+
+  it('caches the key only when auto-register is pending', async () => {
+    vi.mocked(sessionStore.get).mockResolvedValue(true as never); // shouldAutoRegisterPreapproval
+    await maybeCacheAutoRegisterKey('sk');
+    expect(getAutoRegisterKey()).toBe('sk');
+  });
+
+  it('does not cache when auto-register is not pending', async () => {
+    vi.mocked(sessionStore.get).mockResolvedValue(false as never);
+    await maybeCacheAutoRegisterKey('sk');
+    expect(getAutoRegisterKey()).toBeNull();
+  });
+
+  it('clearAutoRegisterKey empties it', async () => {
+    vi.mocked(sessionStore.get).mockResolvedValue(true as never);
+    await maybeCacheAutoRegisterKey('sk');
+    clearAutoRegisterKey();
+    expect(getAutoRegisterKey()).toBeNull();
+  });
+});
 
 describe('handleGetLockState', () => {
   beforeEach(() => vi.clearAllMocks());

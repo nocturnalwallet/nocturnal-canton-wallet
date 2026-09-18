@@ -33,10 +33,26 @@ export async function verifyKeyFingerprint(
 }
 
 /**
- * Decrypt the private key with the user's password, derive the public key,
- * verify the key fingerprint against `expectedPartyId` (when provided), and
- * sign the prepared transaction hash. The decrypted key is never returned or
- * persisted — it lives only in this call's local scope.
+ * Derive the public key from a raw private key, verify the key fingerprint
+ * against `expectedPartyId` (when provided), and sign the prepared transaction
+ * hash. The single signing path shared by both the password flow (which
+ * decrypts first) and the silent auto-register flow (which holds a scoped
+ * RAM-only key). The key is never returned or persisted beyond this call.
+ */
+export async function signHashWithKey(
+  privateKey: string,
+  expectedPartyId: string | undefined,
+  preparedTransactionHash: string,
+): Promise<{ signature: string; publicKey: string }> {
+  const publicKey = getPublicKeyFromPrivate(privateKey);
+  if (expectedPartyId) await verifyKeyFingerprint(publicKey, expectedPartyId);
+  return { signature: signTransactionHash(preparedTransactionHash, privateKey), publicKey };
+}
+
+/**
+ * Decrypt the private key with the user's password, then sign via
+ * {@link signHashWithKey}. The decrypted key is never returned or persisted —
+ * it lives only in this call's local scope.
  */
 export async function signHashWithPassword(
   password: string,
@@ -44,9 +60,7 @@ export async function signHashWithPassword(
   preparedTransactionHash: string,
 ): Promise<{ signature: string; publicKey: string }> {
   const privateKey = await decrypt(password);
-  const publicKey = getPublicKeyFromPrivate(privateKey);
-  if (expectedPartyId) await verifyKeyFingerprint(publicKey, expectedPartyId);
-  return { signature: signTransactionHash(preparedTransactionHash, privateKey), publicKey };
+  return signHashWithKey(privateKey, expectedPartyId, preparedTransactionHash);
 }
 
 /**

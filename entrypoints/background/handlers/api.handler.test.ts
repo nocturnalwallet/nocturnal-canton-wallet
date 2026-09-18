@@ -11,10 +11,6 @@ vi.mock('../api-client', () => ({
   default: { get: vi.fn(), post: vi.fn() },
 }));
 
-vi.mock('./session.handler', () => ({
-  getCachedPrivateKey: vi.fn(),
-}));
-
 vi.mock('../signing/sign-with-password', () => ({
   signHashWithPassword: vi.fn(async () => ({ signature: 'FAUCET_SIG', publicKey: 'PUB' })),
 }));
@@ -83,12 +79,6 @@ describe('handleRequestFaucet', () => {
 
     expect(res).toEqual({ success: false, error: 'Incorrect password' });
     expect(apiClient.post).toHaveBeenCalledTimes(1); // prepare only, no submit
-  });
-
-  it('does not use a cached private key', async () => {
-    await handleRequestFaucet('typed-pw', '100');
-    const { getCachedPrivateKey } = await import('./session.handler');
-    expect(getCachedPrivateKey).not.toHaveBeenCalled();
   });
 
   it('returns an error when there is no party ID', async () => {
