@@ -22,7 +22,7 @@ export interface BrandConfig {
   version: string;
   /** Chrome extension public key (pins extension ID / OAuth redirect) */
   manifestKey: string;
-  /** Extra host_permissions beyond shared Google / *.kairo.ag / localhost */
+  /** Extra host_permissions beyond shared Google / localhost (e.g. the brand's backend domain) */
   hostPermissions: string[];
   /** Per-network apiBaseUrl overrides merged into lib/network.ts */
   networkApiBaseUrls: Partial<Record<BrandNetworkId, string>>;
