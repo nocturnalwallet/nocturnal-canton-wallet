@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import nacl from 'tweetnacl';
 import naclUtil from 'tweetnacl-util';
-import { createKeyPair } from '@canton-network/core-signing-lib';
+import { createKeyPair, signMessage, signTransactionHash } from '@canton-network/core-signing-lib';
 
 // Stub chrome.* so the handler module can import without exploding under Node.
 (globalThis as { chrome?: unknown }).chrome = {
@@ -47,19 +47,24 @@ vi.mock('../gateway-facade-client', () => ({
 }));
 
 vi.mock('./approval.handler', () => ({
-  APPROVAL_REQUIRED_METHODS: new Set<string>(),
-  // Default: auto-approve. Individual tests can override.
-  requestApproval: vi.fn(async () => true),
+  APPROVAL_REQUIRED_METHODS: new Set(['connect', 'signMessage', 'signTransaction']),
+  // Default: auto-approve with a password. Individual tests can override.
+  requestApproval: vi.fn(async () => ({ approved: true, password: 'pw' })),
 }));
 
 vi.mock('./session.handler', () => ({
-  getCachedPrivateKey: vi.fn(),
   resetAutoLockTimer: vi.fn(),
   reconcileUnlockState: vi.fn(async () => {}),
 }));
 
+vi.mock('../signing/sign-with-password', () => ({
+  signMessageWithPassword: vi.fn(),
+  signHashWithPassword: vi.fn(),
+  verifyKeyFingerprint: vi.fn(async () => {}),
+}));
+
 import { sessionStore, localStore } from '@lib/storage';
-import { getCachedPrivateKey } from './session.handler';
+import { signMessageWithPassword, signHashWithPassword } from '../signing/sign-with-password';
 import { gatewayFacadeDappRpc, gatewayFacadeUserRpc } from '../gateway-facade-client';
 import { handleDappApiRequest } from './dapp-api.handler';
 import { WalletEvent } from '@lib/dapp-api/types';
@@ -95,7 +100,19 @@ function unwrapError(res: SpliceMessage): { code: number; message: string } {
 }
 
 function setupUnlockedWallet(publicKey: string, privateKey: string) {
-  vi.mocked(getCachedPrivateKey).mockReturnValue(privateKey);
+  // Sign with the real crypto lib against the test's own keypair, so
+  // signature-verification assertions (nacl.sign.detached.verify) still
+  // exercise real Ed25519 signing rather than a canned stub.
+  vi.mocked(signMessageWithPassword).mockImplementation(async (_password: string, message: string) => ({
+    signature: signMessage(message, privateKey),
+    publicKey,
+  }));
+  vi.mocked(signHashWithPassword).mockImplementation(
+    async (_password: string, _partyId: string | undefined, hash: string) => ({
+      signature: signTransactionHash(hash, privateKey),
+      publicKey,
+    }),
+  );
   vi.mocked(sessionStore.get).mockImplementation(async (key: string) => {
     if (key === 'partyId') return TEST_PARTY_ID;
     if (key === 'partyStatus') return 'SUCCESSFULLY';
@@ -154,6 +171,24 @@ describe('handleSignMessage — Ed25519 signature over UTF-8(message)', () => {
   it('rejects missing or non-string message parameter', async () => {
     expect(unwrapError(await handleDappApiRequest(dappReq('signMessage', {}))).message).toMatch(/message/i);
     expect(unwrapError(await handleDappApiRequest(dappReq('signMessage', { message: 123 }))).message).toMatch(/message/i);
+  });
+});
+
+describe('handleSignMessage — password-on-demand signing', () => {
+  const { publicKey, privateKey } = createKeyPair();
+
+  beforeEach(() => {
+    setupUnlockedWallet(publicKey, privateKey);
+  });
+
+  it('signMessage decrypts with the approval password and returns the signature', async () => {
+    vi.mocked(signMessageWithPassword).mockResolvedValueOnce({ signature: 'SIG_MSG', publicKey: 'PUB' });
+    vi.mocked(sessionStore.get).mockImplementation(async (k) =>
+      k === 'unlocked' ? true : k === 'partyId' ? TEST_PARTY_ID : (undefined as never));
+    const res = await handleDappApiRequest(dappReq('signMessage', { message: 'hello' }), 'https://dapp');
+    expect(vi.mocked(signMessageWithPassword)).toHaveBeenCalledWith('pw', 'hello');
+    const result = unwrapResult<{ signature: string }>(res);
+    expect(result.signature).toBe('SIG_MSG');
   });
 });
 
