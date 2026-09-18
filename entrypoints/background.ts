@@ -270,7 +270,7 @@ case MSG.FETCH_ABOUT_ME:
       return details ? ok(details) : err('Approval request not found');
     }
     case MSG.DAPP_APPROVAL_RESULT: {
-      resolveApproval(message.payload.requestId, message.payload.approved);
+      resolveApproval(message.payload.requestId, message.payload.approved, message.payload.password);
       return ok(null);
     }
 

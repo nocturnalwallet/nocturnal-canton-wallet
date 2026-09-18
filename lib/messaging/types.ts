@@ -141,7 +141,10 @@ export type MessageRequest =
   | { action: typeof MSG.CLEAR_ELFA_CHAT }
   // dApp approval flow
   | { action: typeof MSG.GET_DAPP_APPROVAL; payload: { requestId: string } }
-  | { action: typeof MSG.DAPP_APPROVAL_RESULT; payload: { requestId: string; approved: boolean } };
+  | {
+      action: typeof MSG.DAPP_APPROVAL_RESULT;
+      payload: { requestId: string; approved: boolean; password?: string };
+    };
 
 // ── Response types ──
 
