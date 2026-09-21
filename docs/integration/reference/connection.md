@@ -1,0 +1,173 @@
+# Connection
+
+Methods for establishing and inspecting the wallet ↔ dApp connection state.
+
+## `connect`
+
+Request a connection to the wallet. Triggers the approval popup on first call. Subsequent calls in the same browser session return the current state without re-prompting.
+
+### Params
+
+None.
+
+### Returns
+
+```ts
+ConnectResult = {
+  isConnected: boolean;        // true iff wallet is unlocked AND has a partyId
+  reason?: string;             // 'OK' | 'Wallet is locked' | 'No party onboarded' | ...
+  isNetworkConnected: boolean; // true iff the active network's backend responded
+  networkReason?: string;
+}
+```
+
+Spec required: `isConnected`, `isNetworkConnected`. Nocturnal always populates `reason` and `networkReason` for additional context, but spec-validating consumers should treat them as optional.
+
+### Errors
+
+- `4001 USER_REJECTED` — user declined the approval popup.
+
+### Example
+
+```ts
+import { connect } from '@canton-network/dapp-sdk';
+
+const result = await connect();
+if (!result.isConnected) {
+  alert(`Wallet not ready: ${result.reason ?? 'unknown'}`);
+}
+```
+
+## `disconnect`
+
+Acknowledges the dApp's intent to disconnect. Currently a no-op in Nocturnal — the wallet doesn't track per-dApp connection state. Safe to call on logout.
+
+### Params
+
+None.
+
+### Returns
+
+`null`.
+
+### Example
+
+```ts
+import { disconnect } from '@canton-network/dapp-sdk';
+
+await disconnect();
+```
+
+## `isConnected`
+
+Same return shape as `connect` but never triggers an approval popup. Use for polling / health checks.
+
+### Params
+
+None.
+
+### Returns
+
+`ConnectResult` (same shape as `connect`).
+
+### Example
+
+```ts
+import { isConnected } from '@canton-network/dapp-sdk';
+
+const { isConnected: ok } = await isConnected();
+```
+
+## `status`
+
+Richer health check than `isConnected`. Returns provider metadata, connection state, active network, and session info in one call.
+
+### Params
+
+None.
+
+### Returns
+
+```ts
+StatusEvent = {
+  provider: {
+    id: string;          // 'nocturnal'
+    version: string;     // matches manifest version
+    providerType: 'browser' | 'desktop' | 'mobile' | 'remote';  // 'browser' for Nocturnal
+  };
+  connection: ConnectResult;  // same shape as connect()
+  network?: Network;          // optional per spec; Nocturnal emits when configured
+  session?: Session;          // optional per spec; Nocturnal emits when signed in
+}
+
+Session = {
+  accessToken: string;  // bearer token from the wallet's OAuth session
+  userId: string;       // Stable user identifier from the OAuth session
+}
+```
+
+Notes:
+- `provider.id` is `'nocturnal'`. `provider.version` matches the extension manifest. `provider.providerType` is `'browser'`.
+- `status.session` follows the spec's `Session` shape (`accessToken` + `userId`) and is omitted entirely if the user isn't signed in. **It does not echo `partyId`** — use `listAccounts()` or `getPrimaryAccount` for party-level identity.
+- `status.network` follows the spec's `Network` shape (`networkId` + optional `ledgerApi`/`accessToken`) and is omitted entirely if no network is configured.
+
+### Errors
+
+None.
+
+### Example
+
+```ts
+import { status } from '@canton-network/dapp-sdk';
+
+const s = await status();
+console.log(`Connected to ${s.network?.networkId ?? '(no network)'}`);
+if (s.session) {
+  console.log(`Authenticated as user ${s.session.userId}`);
+}
+```
+
+This is the recommended method to call on window focus / page resume to detect changes (network switch, lock state) without a popup.
+
+## `getActiveNetwork`
+
+Returns just the active network. Useful when you don't need the rest of `status`.
+
+### Params
+
+None.
+
+### Returns
+
+```ts
+Network = {
+  networkId: string;   // CAIP-2-compliant chain ID, e.g. 'canton:da-local', 'canton:da-devnet'
+  ledgerApi?: string;  // Backend base URL
+  accessToken?: string;// Optional bearer token; Nocturnal never emits this field
+}
+```
+
+`additionalProperties: false`. The shape contains exactly these three fields; strict OpenRPC validators reject any extras.
+
+### Errors
+
+None.
+
+### Example
+
+```ts
+import { getConnectedProvider } from '@canton-network/dapp-sdk';
+
+const provider = getConnectedProvider();
+if (!provider) throw new Error('Not connected');
+const { networkId, ledgerApi } = await provider.request({ method: 'getActiveNetwork' });
+console.log(`On ${networkId} via ${ledgerApi}`);
+```
+
+### Notes
+
+- `networkId` is in [CAIP-2](https://chainagnostic.org/CAIPs/caip-2) form. Nocturnal emits the DA-canonical `canton:da-*` values — `'canton:da-local'`, `'canton:da-devnet'`, `'canton:da-testnet'`, `'canton:da-mainnet'` — which are the forms SDKs such as PartyLayer recognize (the bare `canton:mainnet` form is discarded by the dApp Kit). Which of these a given build can emit depends on the brand's enabled-network allowlist: the default Nocturnal build exposes Devnet and Mainnet, and a Mainnet-only production build emits only `'canton:da-mainnet'`.
+- The user can change the active network via the Nocturnal popup at any time. dApps that hold per-network state should re-fetch this on focus, on `statusChanged` events (see [extensions](../extensions/nocturnal-vs-cip-0103.md)), or before each significant operation.
+- There is no `setNetwork` method. Network selection is wallet-driven only.
+- For an EVM-style chain ID analog, treat `networkId` as the equivalent of `eth_chainId`'s return — both serve to disambiguate which chain a wallet is signing against.
+- `getActiveNetwork` isn't exposed as a top-level SDK helper (yet); reach it through `getConnectedProvider().request({ method: 'getActiveNetwork' })`. Most dApps can read the same information from `status().network`.

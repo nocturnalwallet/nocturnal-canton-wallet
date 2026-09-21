@@ -1,0 +1,19 @@
+# GitBook Site Git Sync configuration.
+# This site lives under docs/integration/ in the wallet repository. A single
+# SUMMARY.md spans the root pages (README.md, quickstart.md) and all
+# subdirectories (concepts, reference, guides, extensions, appendix), so it
+# maps to one GitBook space rooted at docs/integration. The
+# Concepts/Reference/Guides/Extensions/Appendix groupings live inside that
+# space's SUMMARY.md as page groups.
+$schema: https://api.gitbook.com/gitbook-docs.yaml
+version: 1
+site:
+  title: Nocturnal Wallet — dApp Integration
+  structure:
+    - type: space
+      key: space-dapp-integration
+      title: Nocturnal Wallet — dApp Integration
+      path: dapp-integration
+      default: true
+      content:
+        directory: /docs/integration

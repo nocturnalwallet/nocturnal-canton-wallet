@@ -1,0 +1,194 @@
+# Prepare and execute
+
+The transaction submission methods. These are the primary way dApps submit anything to the Canton ledger through Nocturnal. All three route through the wallet's connected backend, which mediates access to the underlying Canton ledger and enforces CIP-0103 allowlists on what can be submitted. For specifics of the backend Nocturnal ships against, see [appendix/nocturnal-backend.md](../appendix/nocturnal-backend.md).
+
+## `prepareExecute`
+
+Full transaction lifecycle: dApp submits a command, backend prepares a Canton transaction, user approves and enters their password in the approval popup, wallet decrypts the key on demand and signs locally, backend executes on the ledger. Returns `null` per CIP-0103 — use [`prepareExecuteAndWait`](#prepareexecuteandwait) if you want the execute result.
+
+### Params
+
+```ts
+PrepareExecuteParams = {
+  commands: JsCommands;                          // Canton JSON Ledger API commands (see below) — required
+  commandId?: string;                            // optional — client-supplied command id, echoed in events
+  actAs?: string[];                              // optional — extra parties to act as; defaults to the primary party
+  readAs?: string[];                             // optional — extra parties granted read access
+  disclosedContracts?: DisclosedContract[];      // optional — explicitly disclosed contracts (e.g. a Token Standard factory)
+  synchronizerId?: string;                       // optional — target synchronizer; auto-selected if omitted
+  packageIdSelectionPreference?: string[];       // optional — package-id preference for name/interface resolution
+}
+
+type DisclosedContract = {
+  templateId?: string;
+  contractId?: string;
+  createdEventBlob: string;                      // required
+  synchronizerId?: string;
+};
+```
+
+`commands` (`JsCommands`) is the **Canton JSON Ledger API command payload**: an array of command objects, each a tagged union — `{ CreateCommand: { templateId, createArguments } }` or `{ ExerciseCommand: { templateId, contractId, choice, choiceArgument } }` — exactly as accepted by the ledger's `/v2/interactive-submission/prepare`. The SDK types it loosely (`{ [key: string]: any }`) and the wallet forwards it to the backend verbatim.
+
+The backend enforces a strict `(templateId, choice)` allowlist — commands outside the allowlist return `-32003 TRANSACTION_REJECTED`. The default allowlist covers the Token Standard transfer + allocation flows; see [appendix/nocturnal-backend.md](../appendix/nocturnal-backend.md#token-standard-command-templates) for the full table. See the [send-tokens guide](../guides/send-tokens.md) for a concrete example.
+
+### Returns
+
+`null`.
+
+Per the canonical CIP-0103 OpenRPC schema, `prepareExecute`'s result is `Null`. dApps that need transaction completion details should call `prepareExecuteAndWait` instead.
+
+(Conceptually the spec also defines `txChanged` lifecycle events as a side-channel for `pending → signed → executed/failed` updates. Nocturnal doesn't emit these yet — see [extensions](../extensions/nocturnal-vs-cip-0103.md) for status.)
+
+### Errors
+
+- `4001 USER_REJECTED` — user declined the approval popup. Nocturnal also cleans up the pending command on the backend.
+- `4100 UNAUTHORIZED` — wallet is locked or no party is onboarded.
+- `-32002 RESOURCE_UNAVAILABLE` — backend is not configured for the active network.
+- `-32003 TRANSACTION_REJECTED` — backend's Token Standard allowlist rejected the command, or the prepared transaction failed validation.
+- `-32603 INTERNAL_ERROR` — backend returned an unexpected response, or the prepare reply didn't carry the identifiers Nocturnal needs for the user-API follow-ups.
+- Other backend errors with their original codes (`-32000` to `-32005`) and messages are forwarded verbatim.
+
+### Example
+
+```ts
+import { prepareExecute } from '@canton-network/dapp-sdk';
+
+// Each entry in `commands` is a Canton JSON Ledger API command — a tagged
+// union ({ CreateCommand } or { ExerciseCommand }). This creates a Ping contract.
+await prepareExecute({
+  actAs: ['alice::1220abc...def0'],
+  commands: [
+    {
+      CreateCommand: {
+        templateId: '#AdminWorkflows:Canton.Internal.Ping:Ping',
+        createArguments: {
+          id: 'ping-1',
+          initiator: 'alice::1220abc...def0',
+          responder: 'alice::1220abc...def0',
+        },
+      },
+    },
+  ],
+});
+console.log('Transaction submitted'); // we don't get back the result; call prepareExecuteAndWait for that
+```
+
+## `prepareExecuteAndWait`
+
+Same flow as `prepareExecute`, but returns the typed execute result wrapped in a CIP-0103 `TxChangedExecutedEvent`. Use this when you need access to the canonical `updateId` and `completionOffset`.
+
+### Params
+
+Same as `prepareExecute`.
+
+### Returns
+
+```ts
+PrepareExecuteAndWaitResult = {
+  tx: {
+    status: 'executed';
+    commandId: string;
+    payload: {
+      updateId: string;        // Canton ledger transaction ID
+      completionOffset: number;// Ledger offset where the transaction landed
+    };
+  };
+}
+```
+
+The outer `tx` wrapper matches the spec's `TxChangedExecutedEvent`. Don't strip it — strict-schema consumers of `@canton-network/dapp-sdk`'s `PrepareExecuteAndWaitResult` type expect the wrap.
+
+### Errors
+
+Same as `prepareExecute`.
+
+### Example
+
+```ts
+import { prepareExecuteAndWait } from '@canton-network/dapp-sdk';
+
+const result = await prepareExecuteAndWait({
+  commands: [/* ... */],
+});
+
+console.log(`Transaction ${result.tx.commandId} executed`);
+console.log(`Ledger updateId: ${result.tx.payload.updateId}`);
+console.log(`Completion offset: ${result.tx.payload.completionOffset}`);
+```
+
+### Notes
+
+- `commandId` is the backend-assigned identifier extracted from the prepare-step response. Stable across the prepare/sign/execute lifecycle.
+- `updateId` is the Canton ledger transaction ID. Pass it to `ledgerApi` or your own Canton tooling to read the resulting events.
+- `completionOffset` is the ledger offset where the transaction landed. Useful for resuming a stream of updates from this point forward.
+
+## `ledgerApi`
+
+Allowlisted proxy to a small subset of the Canton Ledger API, mediated by the wallet's backend. Used for read-only ledger queries. No approval popup — these are pull-style data fetches, not state changes.
+
+**The backend enforces a strict allowlist on `(resource, requestMethod)` pairs.** Requests for anything outside the allowlist return `-32004 METHOD_NOT_SUPPORTED`. The CIP-0103 spec defines the method signature; the actual allowlist is a deployment decision of the backend Nocturnal ships against.
+
+### Params
+
+```ts
+LedgerApiParams = {
+  requestMethod: 'get' | 'post' | 'put' | 'delete';
+  resource: string;        // path relative to the Canton Ledger API base
+  body?: Record<string, unknown> | string;  // JSON object or stringified JSON
+  query?: Record<string, string>;
+  path?: Record<string, string>;
+}
+```
+
+`requestMethod` is normalized to lowercase. `body` is normalized to an object (legacy callers passing stringified JSON are accepted).
+
+> **Nocturnal limitation.** The CIP-0103 contract defines `query` and `path` (and allows `patch` as a `requestMethod`), but Nocturnal's proxy currently forwards **only** `requestMethod`, `resource`, and `body` — `query`/`path` are ignored and `patch` is not accepted. Encode any query string or path parameters directly into `resource`, and put request data in `body`.
+
+### Returns
+
+The backend's response payload. Shape depends entirely on the resource queried.
+
+### Errors
+
+- `4100 UNAUTHORIZED` — wallet is locked.
+- `-32002 RESOURCE_UNAVAILABLE` — backend not configured for the active network, or the requested resource requires permissions the wallet user doesn't have (e.g., reading active contracts of a party they don't own).
+- `-32001 RESOURCE_NOT_FOUND` — Canton Ledger API returned 404 for the resource.
+- `-32004 METHOD_NOT_SUPPORTED` — the `(resource, requestMethod)` pair isn't in the backend's allowlist.
+- Forwarded ledger errors with their original codes.
+
+### What the allowlist looks like in practice
+
+The reference backend that Nocturnal ships against currently allows three resources:
+
+| Resource | Allowed methods | Notes |
+|---|---|---|
+| `/v2/version` | `GET` | Ledger API version metadata. |
+| `/v2/state/ledger-end` | `GET` | Most recent ledger offset. |
+| `/v2/state/active-contracts` | `POST` | Body must include `filter.filtersByParty` naming only parties the wallet user owns. `filtersForAnyParty` is rejected. |
+
+Other resources return `-32004 METHOD_NOT_SUPPORTED`. See [appendix/nocturnal-backend.md](../appendix/nocturnal-backend.md#ledgerapi-resource-allowlist) for the up-to-date list.
+
+### Example
+
+Read an update by ID — note this is **not** currently in the default allowlist; the example illustrates the shape but would return `-32004` against the reference backend until the resource is whitelisted:
+
+```ts
+import { ledgerApi } from '@canton-network/dapp-sdk';
+
+// Currently allowed: active contracts for a party the wallet user owns.
+const account = await listAccounts().then((accs) => accs[0]);
+const result = await ledgerApi({
+  requestMethod: 'post',
+  resource: '/v2/state/active-contracts',
+  body: {
+    filter: { filtersByParty: { [account.partyId]: {} } },
+    verbose: true,
+  },
+});
+```
+
+### Notes
+
+- This is the escape hatch for read-only Canton ledger queries that CIP-0103 doesn't otherwise expose. The backend's allowlist may grow over time as new resources are vetted; check the appendix or your deployment's docs for the current scope.
+- All requests are mediated by the backend, which strips/transforms requests against its allowlist before reaching the underlying Canton Ledger API. The dApp does not authenticate itself; the wallet's session is what the backend sees.
+- Restrictions on what counts as "your party" (for party-filtered resources) live on the backend side.
