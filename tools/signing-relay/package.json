@@ -1,5 +1,5 @@
 {
-  "name": "@ginkgo/signing-relay",
+  "name": "@nocturnal/signing-relay",
   "version": "0.1.0",
   "private": true,
   "description": "Signing relay that bridges Wallet Gateway (Blockdaemon driver) to Ginkgo browser extension via Socket.io",

@@ -4,23 +4,21 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-This repo is a **multi-brand Canton Network wallet browser extension** (Chrome MV3 / Firefox MV2) built with [WXT](https://wxt.dev), React 19, TypeScript, and Tailwind CSS 4. It implements the CIP-0103 dApp API and manages keys, balances, transfers, and offers.
+This repo is the **Nocturnal Canton Network wallet browser extension** (Chrome MV3 / Firefox MV2) built with [WXT](https://wxt.dev), React 19, TypeScript, and Tailwind CSS 4. It implements the CIP-0103 dApp API and manages keys, balances, transfers, and offers.
 
-Brands (`ginkgo`, `nocturnal`, …) live under [`branding/`](branding/README.md) and are selected at build time with `VITE_BRAND`. Core code imports the active pack via the `@brand` alias.
+The single brand pack (`nocturnal`) lives under [`branding/`](branding/README.md), selected at build time with `VITE_BRAND=nocturnal` (the default). Core code imports the active pack via the `@brand` alias — kept pluggable so a new brand pack could be added later.
 
 ## Commands
 
 ```bash
 yarn install --ignore-engines   # --ignore-engines needed: a transitive dep declares node>=22
-yarn dev                        # Ginkgo Chrome hot reload (opens browser, popup is 400x600)
-yarn dev:nocturnal              # Nocturnal Chrome hot reload
-yarn dev:firefox                # Firefox with hot reload (Ginkgo)
-yarn build                      # Ginkgo Chrome → build/ginkgo-chrome-mv3
-yarn build:nocturnal            # Nocturnal Chrome → build/nocturnal-chrome-mv3
-yarn build:prod                 # Ginkgo Mainnet-only
-yarn build:prod:nocturnal       # Nocturnal Mainnet-only
-yarn build:all-brands           # All four Chrome brand × mainnet variants
-yarn build:all                  # Ginkgo Chrome + Firefox
+yarn dev                        # Nocturnal Chrome hot reload (opens browser, popup is 400x600)
+yarn dev:firefox                # Nocturnal Firefox with hot reload
+yarn build                      # Nocturnal Chrome → build/nocturnal-chrome-mv3
+yarn build:prod                 # Nocturnal Mainnet-only → build/nocturnal-chrome-mv3-mainnet
+yarn build:firefox              # Nocturnal Firefox
+yarn build:all                  # Nocturnal Chrome + Firefox
+yarn zip                        # Package the Chrome build
 yarn lint                       # eslint .
 yarn typecheck                  # tsc --noEmit
 yarn test                       # vitest run (all tests)
@@ -29,7 +27,7 @@ yarn test path/to/file.test.ts  # run a single test file
 yarn test -t "name substring"   # run tests matching a name
 ```
 
-Tests run in a `node` environment (`globals: false`, so import `describe/it/expect/vi` from `vitest` explicitly). Tests live next to the code they cover (`*.test.ts`). After dependency changes, `postinstall` runs `wxt prepare` to regenerate `.wxt/` types. Default vitest brand is `ginkgo` (`@brand` → `branding/ginkgo`).
+Tests run in a `node` environment (`globals: false`, so import `describe/it/expect/vi` from `vitest` explicitly). Tests live next to the code they cover (`*.test.ts`). After dependency changes, `postinstall` runs `wxt prepare` to regenerate `.wxt/` types. The `@brand` alias resolves to `branding/nocturnal`.
 
 ## Architecture
 
@@ -49,7 +47,7 @@ The extension has three runtime contexts that communicate by message passing —
 A single dapp-core backend at `NETWORKS[network].apiBaseUrl` serves both surfaces:
 
 - REST endpoints (`api-client.ts`, Axios) for balances/transfers/offers/auth/onboarding/faucet.
-- JSON-RPC 2.0 facade (`gateway-facade-client.ts`, `fetch`-based) at `/api/v0/dapp` and `/api/v0/user`, **authenticated with the same backend Bearer token** from `sessionStore.authToken` — no in-extension JWT minting, no signing relay. On a 401 the facade refreshes the token once (`refreshAuthTokenOnce`) and retries. See `docs/superpowers/specs/2026-06-09-ginkgo-cip-0103-facade-migration-design.md`.
+- JSON-RPC 2.0 facade (`gateway-facade-client.ts`, `fetch`-based) at `/api/v0/dapp` and `/api/v0/user`, **authenticated with the same backend Bearer token** from `sessionStore.authToken` — no in-extension JWT minting, no signing relay. On a 401 the facade refreshes the token once (`refreshAuthTokenOnce`) and retries.
 
 This replaced an earlier dual-backend design (separate Wallet Gateway + Socket.io signing relay with self-signed JWTs). `tools/signing-relay/` and `lib/dapp-api/gateway-types.ts` are leftovers from that design — kept in-tree for reference but **not part of the extension build**.
 

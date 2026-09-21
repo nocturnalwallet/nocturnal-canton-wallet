@@ -3,7 +3,7 @@
  * Core code imports the active pack via the `@brand` Vite alias.
  */
 
-export type BrandId = 'ginkgo' | 'nocturnal';
+export type BrandId = 'nocturnal';
 
 export type BrandNetworkId = 'localnet' | 'devnet' | 'testnet' | 'mainnet';
 

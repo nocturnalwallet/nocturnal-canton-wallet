@@ -1,6 +1,6 @@
-# Canton Wallet Extension (multi-brand)
+# Nocturnal Canton Wallet Extension
 
-A universal browser extension wallet for the **Canton Network**, with pluggable brand packs (`ginkgo`, `nocturnal`, …). Supports CIP-0103 dApp connectivity, token management, transfers, offer approvals, and activity history — backed by a single **dapp-core** backend that exposes both a **REST API** (wallet operations) and a **CIP-0103 JSON-RPC facade** (dApp transactions), all authenticated with one backend Bearer token.
+A browser extension wallet for the **Canton Network** (Nocturnal brand). Supports CIP-0103 dApp connectivity, token management, transfers, offer approvals, and activity history — backed by a single **dapp-core** backend that exposes both a **REST API** (wallet operations) and a **CIP-0103 JSON-RPC facade** (dApp transactions), all authenticated with one backend Bearer token.
 
 Built with [WXT](https://wxt.dev), React 19, TypeScript, and Tailwind CSS 4. See [`branding/README.md`](branding/README.md) for how brands work and how to add a new one.
 
@@ -47,12 +47,10 @@ yarn install --ignore-engines
 
 ```bash
 cp .env.example .env
-cp branding/ginkgo/.env.example branding/ginkgo/.env
-# optional second brand:
 cp branding/nocturnal/.env.example branding/nocturnal/.env
 ```
 
-Fill Google OAuth into **each brand's** `.env` (not the root `.env`). Root `.env` holds shared non-secret build defaults (encryption, auto-lock). See [branding/README.md](branding/README.md).
+Fill Google OAuth into the **brand pack's** `.env` (`branding/nocturnal/.env`), not the root `.env`. Root `.env` holds shared non-secret build defaults (encryption, auto-lock). See [branding/README.md](branding/README.md).
 
 ### Google OAuth Setup
 
@@ -73,9 +71,8 @@ The extension uses `chrome.identity.launchWebAuthFlow()` to sign in with Google.
 ### Development
 
 ```bash
-yarn dev              # Ginkgo Chrome with hot reload
-yarn dev:nocturnal    # Nocturnal Chrome with hot reload
-yarn dev:firefox      # Firefox with hot reload (Ginkgo)
+yarn dev              # Nocturnal Chrome with hot reload
+yarn dev:firefox      # Nocturnal Firefox with hot reload
 ```
 
 WXT opens a browser with the extension loaded. The popup is at 400 x 600px.
@@ -83,16 +80,13 @@ WXT opens a browser with the extension loaded. The popup is at 400 x 600px.
 ### Build
 
 ```bash
-yarn build                    # Ginkgo → build/ginkgo-chrome-mv3
-yarn build:nocturnal          # Nocturnal → build/nocturnal-chrome-mv3
-yarn build:prod               # Ginkgo Mainnet-only → …-mainnet
-yarn build:prod:nocturnal     # Nocturnal Mainnet-only
-yarn build:all-brands         # All four Chrome variants
-yarn build:firefox            # Ginkgo Firefox
-yarn build:all                # Ginkgo Chrome + Firefox
+yarn build                    # Nocturnal → build/nocturnal-chrome-mv3
+yarn build:prod               # Nocturnal Mainnet-only → …-mainnet
+yarn build:firefox            # Nocturnal Firefox
+yarn build:all                # Nocturnal Chrome + Firefox
 ```
 
-Brand selection is via `VITE_BRAND` (independent of WXT `--mode mainnet`). Details: [`branding/README.md`](branding/README.md).
+Mainnet-only builds use WXT `--mode mainnet` (`build:prod`). Brand config lives in the `nocturnal` pack; details: [`branding/README.md`](branding/README.md).
 ### Test
 
 ```bash
@@ -121,7 +115,7 @@ yarn zip:firefox    # Firefox .zip
 
 ### System Overview
 
-Ginkgo talks to a **single dapp-core backend per network**, which exposes two surfaces over the same base URL and the same Bearer token:
+Nocturnal talks to a **single dapp-core backend per network**, which exposes two surfaces over the same base URL and the same Bearer token:
 
 - **REST API** — Authentication, token balances, offer management, transfers (prepare/sign/submit), faucet, party onboarding, and activity history. The popup UI drives all wallet operations through these endpoints, with local signing in the background service worker.
 - **CIP-0103 JSON-RPC facade** (`/api/v0/dapp` and `/api/v0/user`) — CIP-0103 dApp API operations (`prepareExecute`, `prepareExecuteAndWait`, `ledgerApi`). External dApps reach the Canton Ledger through this facade, mediated by the extension.
@@ -144,7 +138,7 @@ Ginkgo talks to a **single dapp-core backend per network**, which exposes two su
                           +-----------+-----------+
                                       | Bearer token (one token for both surfaces)
      +--------------------------------+----------------------+
-     |                  GINKGO EXTENSION                      |
+     |                 NOCTURNAL EXTENSION                    |
      |                                                        |
      |  +-------------+    chrome.runtime     +------------+  |
      |  | Popup (UI)  | <----- messages ----> | Background |  |
@@ -232,7 +226,7 @@ The extension implements the Canton CIP-0103 standard for dApp-wallet communicat
 | `prepareExecute` | Implemented | Full tx lifecycle via facade (result is `Null` per spec) |
 | `prepareExecuteAndWait` | Implemented | Same, returns the execution result |
 | `ledgerApi` | Implemented | Proxy to the backend Ledger API |
-| `signTransaction` | Implemented | **Ginkgo extension, NOT in CIP-0103** — signs a raw base64 hash; prefer `prepareExecute` for new dApps |
+| `signTransaction` | Implemented | **Nocturnal extension, NOT in CIP-0103** — signs a raw base64 hash; prefer `prepareExecute` for new dApps |
 
 ### prepareExecute Flow
 
@@ -295,14 +289,14 @@ Controlled by `VITE_ENCRYPTION_BACKEND`:
 
 ## Network Configuration
 
-The wallet supports four networks, selectable at runtime via a dropdown in the dashboard header. Shared metadata (labels, explorers, faucet flags) lives in `lib/network.ts`. Per-network **`apiBaseUrl` values come from the active brand pack** (`branding/<id>/brand.ts` → `networkApiBaseUrls`), then merge into `NETWORKS`.
+The wallet supports four networks, selectable at runtime via a dropdown in the dashboard header. Shared metadata (labels, explorers, faucet flags) lives in `lib/network.ts`. Per-network **`apiBaseUrl` values come from the brand pack** (`branding/nocturnal/brand.ts` → `networkApiBaseUrls`), then merge into `NETWORKS`. The picker exposes only the networks in the brand's `enabledNetworks` (Nocturnal: Devnet + Mainnet, defaulting to Mainnet).
 
-| Network | Label | apiBaseUrl (Ginkgo) | apiBaseUrl (Nocturnal) | Explorer | Faucet |
-| --- | --- | --- | --- | --- | --- |
-| Localnet | Local Devnet | `http://localhost:3003/` | same | lighthouse.devnet.cantonloop.com | Yes |
-| Devnet (default) | Devnet | `https://api-wallet-devnet.kairo.ag/` | same | lighthouse.devnet.cantonloop.com | Yes |
-| Testnet | Testnet | `https://api-testnet.kairo.ag/` | same | lighthouse.testnet.cantonloop.com | No |
-| Mainnet | Mainnet | `https://api.kairo.ag/` | `https://api-mpch-wallet-provider.thanhle.space/` | lighthouse.cantonloop.com | No |
+| Network | Label | apiBaseUrl (Nocturnal) | Explorer | Faucet |
+| --- | --- | --- | --- | --- |
+| Localnet | Local Devnet | `http://localhost:3008/` | lighthouse.devnet.cantonloop.com | Yes |
+| Devnet | Devnet | `https://api-mpch-wallet-provider-devnet.thanhle.space/` | lighthouse.devnet.cantonloop.com | Yes |
+| Testnet | Testnet | _(not enabled for Nocturnal)_ | lighthouse.testnet.cantonloop.com | No |
+| Mainnet (default) | Mainnet | `https://api-mpch-wallet-provider.thanhle.space/` | lighthouse.cantonloop.com | No |
 
 Internal code keeps the bare network ID (`'devnet'`, ...) because it's embedded in storage keys, React Query cache keys, and popup state. It is converted to a CAIP-2 chain ID (`canton:devnet`) only at the CIP-0103 dApp API boundary, via `toCaip2NetworkId()`.
 
@@ -320,21 +314,21 @@ Copy `.env.example` to `.env` and fill in values:
 | `VITE_SALT_ROUNDS` | `10` | bcrypt salt rounds (cryptojs backend only) |
 | `VITE_AUTO_LOCK_MINUTES` | `15` | Auto-lock timeout in minutes |
 
-Per-brand (gitignored `branding/<id>/.env`):
+Brand pack OAuth (gitignored `branding/nocturnal/.env`):
 
 | Variable | Description |
 | --- | --- |
-| `VITE_GOOGLE_CLIENT_ID` | Google OAuth client ID for that brand's extension ID / redirect URI |
+| `VITE_GOOGLE_CLIENT_ID` | Google OAuth client ID for the extension ID / redirect URI |
 | `VITE_GOOGLE_CLIENT_SECRET` | Google OAuth client secret (Web application client) |
 
-> **Note:** Backend URLs come from the selected network **and** the active brand pack (`networkApiBaseUrls`). Party hint comes from `branding/<id>/brand.ts`. Brand selection is via `VITE_BRAND` in yarn scripts (see [branding/README.md](branding/README.md)).
+> **Note:** Backend URLs come from the selected network via the brand pack (`branding/nocturnal/brand.ts` → `networkApiBaseUrls`). Party hint also comes from `branding/nocturnal/brand.ts` (see [branding/README.md](branding/README.md)).
 
 ---
 
 ## Project Structure
 
 ```text
-ginkgo/
+nocturnal-wallet/
 |-- wxt.config.ts                 # WXT config: brand resolve, manifest, Vite aliases
 |-- tsconfig.json                 # TypeScript config with path aliases
 |-- vitest.config.ts              # Vitest config (node env) + path aliases
@@ -342,9 +336,8 @@ ginkgo/
 |-- package.json
 |-- .env.example
 |
-|-- branding/                     # Brand packs (see branding/README.md)
-|   |-- ginkgo/                   # theme, icons, brand.ts, public/
-|   |-- nocturnal/
+|-- branding/                     # Brand pack (see branding/README.md)
+|   |-- nocturnal/                # theme, icons, brand.ts, public/
 |   '-- README.md
 |
 |-- assets/icons/                 # Shared SVG icon components (Canton, CBTC, USDCx, etc.)
@@ -634,7 +627,7 @@ Configured in `wxt.config.ts` (Vite) and `vitest.config.ts`:
 | `@lib/` | `lib/` |
 | `@components/` | `components/` |
 | `@assets/` | `assets/` |
-| `@brand/` | `branding/<VITE_BRAND>/` (build-time; typecheck defaults to `ginkgo`) |
+| `@brand/` | `branding/nocturnal/` |
 
 ---
 
@@ -660,16 +653,12 @@ Configured in `wxt.config.ts` (Vite) and `vitest.config.ts`:
 
 | Command | Description |
 | --- | --- |
-| `yarn dev` | Ginkgo Chrome hot reload |
-| `yarn dev:nocturnal` | Nocturnal Chrome hot reload |
-| `yarn dev:firefox` | Ginkgo Firefox hot reload |
-| `yarn build` | Ginkgo Chrome → `build/ginkgo-chrome-mv3` |
-| `yarn build:nocturnal` | Nocturnal Chrome → `build/nocturnal-chrome-mv3` |
-| `yarn build:prod` | Ginkgo Mainnet-only |
-| `yarn build:prod:nocturnal` | Nocturnal Mainnet-only |
-| `yarn build:all-brands` | All four Chrome brand × mainnet variants |
-| `yarn build:firefox` | Ginkgo Firefox production build |
-| `yarn build:all` | Ginkgo Chrome + Firefox |
+| `yarn dev` | Nocturnal Chrome hot reload |
+| `yarn dev:firefox` | Nocturnal Firefox hot reload |
+| `yarn build` | Nocturnal Chrome → `build/nocturnal-chrome-mv3` |
+| `yarn build:prod` | Nocturnal Mainnet-only |
+| `yarn build:firefox` | Nocturnal Firefox production build |
+| `yarn build:all` | Nocturnal Chrome + Firefox |
 | `yarn zip` | Package Chrome extension as .zip |
 | `yarn zip:firefox` | Package Firefox extension as .zip |
 | `yarn test` | Run all tests once (Vitest) |

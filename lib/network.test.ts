@@ -14,7 +14,7 @@ describe('network build gating', () => {
     vi.resetModules();
   });
 
-  it('default build exposes the active brand allowlist (ginkgo: devnet + mainnet, mainnet default)', async () => {
+  it('default build exposes the active brand allowlist (nocturnal: devnet + mainnet, mainnet default)', async () => {
     vi.resetModules();
     const net = await import('./network');
     expect(net.IS_MAINNET_ONLY_BUILD).toBe(false);
@@ -139,20 +139,6 @@ describe('brand enabledNetworks integration', () => {
     );
     expect(ids).toEqual(['devnet', 'mainnet']);
     expect(resolveDefaultNetwork(nocturnal.enabledNetworks, ids, false)).toBe(
-      'mainnet',
-    );
-  });
-
-  it('ginkgo preview exposes devnet + mainnet, defaulting to mainnet', () => {
-    const ginkgo = resolveBrand('ginkgo');
-    expect(ginkgo.enabledNetworks).toEqual(['devnet', 'mainnet']);
-    const ids = resolveEnabledNetworkIds(
-      ginkgo.enabledNetworks,
-      ['localnet', 'devnet', 'testnet', 'mainnet'],
-      false,
-    );
-    expect(ids).toEqual(['devnet', 'mainnet']);
-    expect(resolveDefaultNetwork(ginkgo.enabledNetworks, ids, false)).toBe(
       'mainnet',
     );
   });

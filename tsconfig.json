@@ -10,7 +10,7 @@
       "@lib/*": ["./lib/*"],
       "@components/*": ["./components/*"],
       "@assets/*": ["./assets/*"],
-      "@brand/*": ["./branding/ginkgo/*"]
+      "@brand/*": ["./branding/nocturnal/*"]
     }
   },
   "include": [

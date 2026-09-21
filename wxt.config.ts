@@ -18,7 +18,7 @@ const sharedHostPermissions = [
 export default defineConfig({
   modules: ['@wxt-dev/module-react'],
   outDir: 'build',
-  // Brand-prefixed artifacts + WXT mode suffix, e.g. build/ginkgo-chrome-mv3,
+  // Brand-prefixed artifacts + WXT mode suffix, e.g. build/nocturnal-chrome-mv3,
   // build/nocturnal-chrome-mv3-mainnet (--mode mainnet), …-dev (dev).
   outDirTemplate: `${brand.id}-{{browser}}-mv{{manifestVersion}}{{modeSuffix}}`,
   // Brand-owned toolbar icons / fonts / backgrounds (no shared public/icon leakage).

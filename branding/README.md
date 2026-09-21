@@ -3,17 +3,16 @@
 Each subdirectory under `branding/` is a self-contained wallet skin + identity pack.
 The core extension (`entrypoints/`, `lib/`, shared `styles/`) stays brand-agnostic and
 imports the **active** pack through the Vite/WXT alias `@brand` → `branding/<VITE_BRAND>/`.
+There is currently one pack, `nocturnal`, and it is the default; the mechanism is kept
+pluggable so another brand pack can be added later.
 
-## Selecting a brand
+## Building
 
 ```bash
-yarn dev                 # VITE_BRAND=ginkgo (default)
-yarn dev:nocturnal       # VITE_BRAND=nocturnal
-yarn build               # → build/ginkgo-chrome-mv3
-yarn build:nocturnal     # → build/nocturnal-chrome-mv3
-yarn build:prod          # Ginkgo Mainnet-only (--mode mainnet)
-yarn build:prod:nocturnal
-yarn build:all-brands    # all four Chrome variants
+yarn dev                 # VITE_BRAND=nocturnal (default)
+yarn build               # → build/nocturnal-chrome-mv3
+yarn build:prod          # Nocturnal Mainnet-only (--mode mainnet)
+yarn build:all           # Nocturnal Chrome + Firefox
 ```
 
 `VITE_BRAND` is independent of WXT `--mode`. Mode stays reserved for Mainnet-only
@@ -39,9 +38,8 @@ branding/<id>/
 OAuth credentials must **not** live in the root `.env` — that would bake one client into every `VITE_BRAND` build. Instead:
 
 ```bash
-cp branding/ginkgo/.env.example branding/ginkgo/.env
 cp branding/nocturnal/.env.example branding/nocturnal/.env
-# edit each .env with that brand's Google Web-application client
+# edit .env with the brand's Google Web-application client
 ```
 
 `wxt.config.ts` loads `branding/<active>/.env` and injects those values (empty if missing), so root `.env` cannot leak OAuth into the wrong brand.
@@ -51,7 +49,7 @@ Shared contract: [`types.ts`](types.ts). Resolver used by `wxt.config.ts` / vite
 
 ## Adding a brand (e.g. `fox`)
 
-1. Copy `branding/ginkgo/` → `branding/fox/`.
+1. Copy `branding/nocturnal/` → `branding/fox/`.
 2. Fill `brand.ts` (new `manifestKey` / Chrome extension ID + OAuth redirect).
 3. Drop icons/fonts/theme; implement `icon-logo.tsx`.
 4. Add `'fox'` to `BrandId` in `types.ts` and to `BRANDS` / `BRAND_IDS` in `resolve.ts`.
@@ -64,8 +62,7 @@ This folder shape is intentionally the same as future packages:
 
 ```
 packages/core/             # brand-agnostic extension
-packages/brand-ginkgo/     # today's branding/ginkgo
-packages/brand-nocturnal/
+packages/brand-nocturnal/  # today's branding/nocturnal
 apps/extension/            # thin WXT app wiring brand + core
 ```
 

@@ -2,7 +2,7 @@ import { defineConfig } from 'vitest/config';
 import path from 'node:path';
 import { resolveBrandId } from './branding/resolve';
 
-const brandId = resolveBrandId(process.env.VITE_BRAND ?? 'ginkgo');
+const brandId = resolveBrandId(process.env.VITE_BRAND ?? 'nocturnal');
 const brandRoot = path.resolve(__dirname, 'branding', brandId);
 
 export default defineConfig({
