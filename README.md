@@ -18,9 +18,9 @@ Built with [WXT](https://wxt.dev), React 19, TypeScript, and Tailwind CSS 4. See
 - **Transfers** — Dual-path: Amulet (transfer-preapproval) and CBTC/USDCx (token-standard), with per-token balance display and MAX button
 - **Offers** — Incoming (approve/reject), Outgoing (withdraw), and History tabs — all via the `/transfer-offer/*` prepare/sign/submit flow, with per-network block-explorer links
 - **Smart onboarding** — Detects returning users (existing public key on backend) and routes to key import instead of generation. New users allocate a Canton party via the backend's `external-party/onboarding` prepare/submit flow with local signing
-- **Auto-register pre-approval** — When the backend advertises `shouldAutoRegisterPreapproval` on `/auth/me` (a server-side rollout switch), the extension silently registers the user's Amulet transfer pre-approval on dashboard mount using the in-memory cached key — no password prompt. Default-off, idempotent (skipped if one already exists), and best-effort (never blocks onboarding or the dashboard)
-- **Auto-lock** — Configurable timer (default 15 min) using `chrome.alarms`
-- **In-memory key caching** — Private key cached in the background service worker during an unlocked session for passwordless CIP-0103 signing
+- **Auto-register pre-approval** — When the backend advertises `shouldAutoRegisterPreapproval` on `/auth/me` (a server-side rollout switch), the extension silently registers the user's Amulet transfer pre-approval on dashboard mount using a narrowly-scoped in-memory key retained only for this unattended flow (no password prompt), cleared once the pre-approval is confirmed. Default-off, idempotent (skipped if one already exists), and best-effort (never blocks onboarding or the dashboard)
+- **Auto-lock** — Inactivity timer (default 15 min) using `chrome.alarms`; re-lock fires only on timeout or explicit lock/logout/network-switch
+- **Password-on-demand signing** — The private key is decrypted for a single signing operation and immediately discarded; it is never cached for general reuse. dApp signing collects the password in the approval popup (verify-on-approve)
 - **Dual encryption** — Web Crypto API (PBKDF2 + AES-256-GCM) or CryptoJS AES, selectable at build time
 - **Key export** — Base64 or Hex format toggle on options page
 - **MetaMask-style approval popups** — Sensitive dApp requests require explicit user approval
@@ -193,8 +193,8 @@ The extension uses dapp-core's REST endpoints for **all popup-driven wallet oper
 
 ```text
 1. Popup requests prepare via background -> backend returns preparedTransaction + hash
-2. Popup sends password to background (or background uses the cached key)
-3. Background decrypts private key
+2. Popup sends the user's password to background
+3. Background decrypts the private key for this one signing op (then drops it)
 4. Background signs preparedTransactionHash locally
 5. Background submits {preparedTransaction, signature} to backend -> Canton Ledger
 ```
@@ -245,7 +245,7 @@ The extension implements the Canton CIP-0103 standard for dApp-wallet communicat
 5. IF rejected: facade User API deleteTransaction(transactionId) -> return USER_REJECTED
 6. IF approved:
      facade User API getTransaction(transactionId) -> { preparedTransactionHash }
-     Sign hash locally with the cached private key
+     Sign hash locally with the key decrypted from the approval-supplied password
      facade User API execute(transactionId, signature, signedBy, partyId)
 7. Extension returns result to dApp (Null for prepareExecute; { tx } for prepareExecuteAndWait)
 ```
@@ -262,9 +262,9 @@ The extension implements the Canton CIP-0103 standard for dApp-wallet communicat
                 v
 +--------------------------------------+
 |     BACKGROUND SERVICE WORKER        |  Holds encrypted key in chrome.storage.local.
-|  Decrypts key only when signing.     |  Signs transaction hashes.
+|  Decrypts key per signing op only.   |  Signs transaction hashes, then drops the key.
 |  Makes all API calls (REST+facade).  |  Manages the auth token.
-|  Auto-locks after timeout.           |  Caches decrypted key in memory while unlocked.
+|  Auto-locks after inactivity.        |  No general key cache; scoped key only for auto-register.
 |  Handles CIP-0103 dApp API requests. |
 +--------------------------------------+
 ```
@@ -364,7 +364,7 @@ ginkgo/
 |   |   |   |-- keystore.handler.ts    # Key gen, import, encrypt, store, onboarding, pre-approval
 |   |   |   |-- network.handler.ts     # Get/switch network, update REST + facade clients
 |   |   |   |-- api.handler.ts         # Proxied REST calls (balances, offers, etc.)
-|   |   |   |-- session.handler.ts     # Lock/unlock, auto-lock, in-memory key cache
+|   |   |   |-- session.handler.ts     # Lock/unlock, inactivity auto-lock, scoped auto-register key
 |   |   |   |-- approval.handler.ts    # MetaMask-style approval popups
 |   |   |   '-- event-broadcaster.ts   # Push statusChanged/accountsChanged to dApps
 |   |   '-- encryption/
@@ -501,7 +501,7 @@ dApp calls prepareExecute(commands) via window.postMessage
        (4) IF rejected: facade User API deleteTransaction(transactionId) -> error
        (5) IF approved:
            facade User API getTransaction(transactionId) -> { preparedTransactionHash }
-           Sign hash locally with cached private key
+           Sign hash locally with the key decrypted from the approval-popup password
            facade User API execute(transactionId, signature, signedBy, partyId)
   -> Result returned to dApp via postMessage
 ```
@@ -526,9 +526,9 @@ Transfer pre-approval is required to receive Amulet transfers. It is registered 
 **Silent auto-registration (rollout-flag gated):** Registration can also happen automatically, without the user clicking the banner button. `GET /auth/me` carries a boolean `shouldAutoRegisterPreapproval` at the **top level** of its response `data` (a sibling of `party`, not nested under it) — a **server-side rollout switch** (sourced from the backend's `AUTO_REGISTER_PREAPPROVAL_ON_ONBOARD` env). Because it's config-derived and party-independent, it's present even on a brand-new user's first login when `party` is `null`. `handleGoogleAuth` persists it into `sessionStore` (default `false` when the field is absent, so older backends and disabled rollouts change nothing). On dashboard mount, `Balances.tsx` fires `MAYBE_AUTO_REGISTER_PREAPPROVAL` once. The background handler `handleMaybeAutoRegisterPreapproval` then:
 
 1. **Default-off** — returns `disabled` immediately if the flag is `false` (no network calls).
-2. **Silent only** — requires the in-memory cached key (`getCachedPrivateKey()`, populated at unlock/onboarding); if the wallet is locked it returns `locked` and skips — it **never** prompts for a password.
-3. **Idempotent** — calls `GET_PREAPPROVAL_STATUS` first; if a pre-approval already exists it returns `already-registered` and does nothing.
-4. **Registers** — otherwise it reuses the same `REGISTER_TRANSFER_PREAPPROVAL` prepare → sign → submit flow described above.
+2. **Silent only** — requires the scoped RAM-only auto-register key (`getAutoRegisterKey()`), which is populated at unlock/onboarding **only when this rollout flag is pending** (`maybeCacheAutoRegisterKey`) and cleared on lock/logout/network-switch and once the preapproval is confirmed. If it is absent (wallet locked, or flag not pending) it returns `locked` and skips — it **never** prompts for a password. Every other signing flow is password-on-demand; this scoped key exists solely because auto-register runs unattended.
+3. **Idempotent** — calls `GET_PREAPPROVAL_STATUS` first; if a pre-approval already exists it returns `already-registered`, clears the scoped key, and does nothing further.
+4. **Registers** — otherwise it signs the prepared hash with the scoped key (via `signHashWithKey`, the raw-key twin of the manual path's `signHashWithPassword`) through the shared prepare → sign → submit body, then clears the scoped key.
 
 The handler is **best-effort**: it always resolves with `{ attempted, registered, reason? }` and never throws, so a failure never blocks the dashboard. The banner is suppressed while auto-registration is in flight to avoid a flash. This reuses the existing manual registration handler and is unrelated to the Amulet token-transfer `PREPARE`/`SIGN_AND_SUBMIT_TRANSFER_PREAPPROVAL` flow (which does prompt for a password).
 
@@ -551,7 +551,7 @@ Outgoing offer -> Withdraw:
 ```text
 Token detail -> Tap Faucet:
   (1) POST /external-party/devnet-tap/prepare -> { hash, preparedTx }
-  (2) Sign hash locally (use cached key or decrypt with password)
+  (2) Sign hash locally by decrypting with the entered password (wrong password fails)
   (3) POST /external-party/devnet-tap/submit -> Canton Ledger
 ```
 
@@ -584,11 +584,11 @@ Defined in `lib/constants.ts` (`SUPPORTED_TOKENS`). All three use Daml's `Numeri
 ## Security Notes
 
 - **Key isolation**: Private keys exist only in the background service worker. The popup never has access.
-- **In-memory key caching**: During an unlocked session, the decrypted private key is cached in the service worker's memory for passwordless signing (CIP-0103 and REST flows). The cache is cleared on lock/logout.
+- **Password-on-demand signing**: The decrypted private key is never cached for general reuse — it exists only transiently in the service worker during a single sign call (via `sign-with-password.ts`) and the reference is dropped immediately. Popup and REST flows send the password per signing op; dApp signing collects it in the approval popup (verify-on-approve). The sole exception is a narrowly-scoped in-memory key used only for silent auto-register of transfer pre-approval, cleared on lock/logout/network-switch/auto-lock and once the pre-approval is confirmed.
 - **Single auth token**: Both the REST API and the CIP-0103 facade authenticate with the same backend Bearer token (Google OAuth JWT in `chrome.storage.session`). The extension mints no JWTs of its own. On a `401`, the facade refreshes the token once and retries.
 - **Key fingerprint verification**: Before signing, the handler verifies that the private key's Canton fingerprint (`0x1220 || SHA256(int32_be(12) || pubkey)`) matches the partyId's namespace to prevent signing with a mismatched key.
 - **Auto-clear**: Exported private keys are automatically cleared from UI state after 30 seconds.
-- **Auto-lock**: Wallet locks after a configurable timeout (default 15 min). Session data and cached keys are wiped.
+- **Auto-lock**: Wallet locks after a configurable **inactivity** timeout (default 15 min) — the only re-lock triggers are the timeout and explicit lock/logout/network-switch. Session data and the scoped auto-register key are wiped.
 - **No localStorage**: Auth tokens use `chrome.storage.session` (memory-only, cleared on browser close).
 - **Per-user isolation**: Keystores are scoped by `{network}:{userId}:keystore`, preventing data leaks between accounts or networks.
 - **dApp approval**: Sensitive CIP-0103 methods require explicit user approval via a popup window. Rejected `prepareExecute` transactions are cleaned up via the facade's `deleteTransaction` to avoid orphaned pending state.

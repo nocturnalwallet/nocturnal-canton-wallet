@@ -27,6 +27,7 @@ export type MessageRequest =
   | { action: typeof MSG.UNLOCK; payload: { password: string } }
   | { action: typeof MSG.LOCK }
   | { action: typeof MSG.GET_LOCK_STATE }
+  | { action: typeof MSG.VERIFY_PASSWORD; payload: { password: string } }
   // Network
   | { action: typeof MSG.GET_NETWORK }
   | { action: typeof MSG.SWITCH_NETWORK; payload: { network: NetworkId } }
@@ -55,7 +56,10 @@ export type MessageRequest =
   | { action: typeof MSG.DELETE_KEYSTORE }
   | { action: typeof MSG.RESET_KEYSTORE_FOR_RECOVERY }
   // Transfer pre-approval
-  | { action: typeof MSG.REGISTER_TRANSFER_PREAPPROVAL }
+  | {
+      action: typeof MSG.REGISTER_TRANSFER_PREAPPROVAL;
+      payload: { password: string };
+    }
   | { action: typeof MSG.GET_PREAPPROVAL_STATUS }
   | { action: typeof MSG.MAYBE_AUTO_REGISTER_PREAPPROVAL }
   // Signing
@@ -140,7 +144,10 @@ export type MessageRequest =
   | { action: typeof MSG.CLEAR_ELFA_CHAT }
   // dApp approval flow
   | { action: typeof MSG.GET_DAPP_APPROVAL; payload: { requestId: string } }
-  | { action: typeof MSG.DAPP_APPROVAL_RESULT; payload: { requestId: string; approved: boolean } };
+  | {
+      action: typeof MSG.DAPP_APPROVAL_RESULT;
+      payload: { requestId: string; approved: boolean; password?: string };
+    };
 
 // ── Response types ──
 
@@ -180,6 +187,10 @@ export interface GoogleAuthData {
 
 export interface LockStateData {
   unlocked: boolean;
+}
+
+export interface VerifyPasswordData {
+  valid: boolean;
 }
 
 export interface KeyPairData {

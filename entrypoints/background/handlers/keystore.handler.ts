@@ -11,7 +11,12 @@ import type {
 import { localStore, sessionStore } from '@lib/storage';
 import { getEncryptionProvider } from '../encryption';
 import apiClient from '../api-client';
-import { setCachedPrivateKey, getCachedPrivateKey } from './session.handler';
+import {
+  getAutoRegisterKey,
+  clearAutoRegisterKey,
+  maybeCacheAutoRegisterKey,
+} from './session.handler';
+import { signHashWithKey } from '../signing/sign-with-password';
 
 interface PreparedExternalParty {
   partyId: string;
@@ -131,8 +136,9 @@ export async function handleCompleteOnboarding(payload: {
     bundle.walletKey = publicKey;
     await localStore.set('keystore', bundle);
 
-    // 2. Cache private key in memory (needed for transaction signing)
-    setCachedPrivateKey(privateKey);
+    // 2. Populate the scoped RAM key ONLY when a silent auto-register is
+    //    pending (no-op otherwise) — signing is password-on-demand everywhere else.
+    await maybeCacheAutoRegisterKey(privateKey);
 
     // Only run onboarding if the user is new (not already registered on the backend)
     const partyStatus = await sessionStore.get('partyStatus');
@@ -202,20 +208,17 @@ export async function handleExportPrivateKey(
 }
 
 /**
- * Register transfer preapproval via dapp-core.
- * Flow: prepare → sign locally → submit (same pattern as faucet).
+ * Shared prepare → sign → submit body for transfer-preapproval registration.
+ * Both the manual (password-decrypted key) and silent auto-register (scoped
+ * RAM key) paths funnel through here; they differ ONLY in how they obtain the
+ * raw private key. The key is used to sign the prepared hash via
+ * `signHashWithKey` and is never persisted here.
  */
-export async function handleRegisterTransferPreapproval(): Promise<
-  MessageResponse<{ success: boolean }>
-> {
+async function registerPreapprovalWithKey(
+  partyId: string,
+  privateKey: string,
+): Promise<MessageResponse<{ success: boolean }>> {
   try {
-    const partyId = await sessionStore.get('partyId');
-    if (!partyId) return err('No party ID');
-
-    // Use cached private key (preferred) or fail — user must be unlocked
-    const privateKey = getCachedPrivateKey();
-    if (!privateKey) return err('Private key not available — please unlock the wallet');
-
     // Step 1: Prepare via dapp-core
     const { data: prepareRes } = await apiClient.post(
       '/wallet/transfer-preapproval/prepare',
@@ -226,8 +229,13 @@ export async function handleRegisterTransferPreapproval(): Promise<
       return err('Transfer preapproval prepare returned no transaction hash');
     }
 
-    // Step 2: Sign locally
-    const signature = signTransactionHash(prepared.preparedTransactionHash, privateKey);
+    // Step 2: Sign the prepared hash with the raw key (verifies the key
+    // fingerprint against partyId before signing).
+    const { signature } = await signHashWithKey(
+      privateKey,
+      partyId,
+      prepared.preparedTransactionHash,
+    );
 
     // Step 3: Submit signed transaction to dapp-core
     await apiClient.post('/wallet/transfer-preapproval/submit', {
@@ -249,6 +257,30 @@ export async function handleRegisterTransferPreapproval(): Promise<
     }
     markPreapprovalRegistered();
     return ok({ success: true });
+  } catch (e: unknown) {
+    return err(e instanceof Error ? e.message : 'Transfer preapproval registration failed');
+  }
+}
+
+/**
+ * Register transfer preapproval via dapp-core (manual path).
+ * Flow: decrypt the keystore on demand with the supplied password →
+ * prepare → sign → submit. The decrypted key is used only to sign and is
+ * never persisted or cached.
+ */
+export async function handleRegisterTransferPreapproval(
+  password: string,
+): Promise<MessageResponse<{ success: boolean }>> {
+  try {
+    const partyId = await sessionStore.get('partyId');
+    if (!partyId) return err('No party ID');
+
+    const keystore = await localStore.get('keystore');
+    if (!keystore) return err('No keystore found');
+    const provider = await getEncryptionProvider();
+    const privateKey = await provider.decryptKey(keystore, password);
+
+    return await registerPreapprovalWithKey(partyId, privateKey);
   } catch (e: unknown) {
     return err(e instanceof Error ? e.message : 'Transfer preapproval registration failed');
   }
@@ -309,8 +341,10 @@ export async function handleMaybeAutoRegisterPreapproval(): Promise<
       return ok({ attempted: false, registered: false, reason: 'disabled' });
     }
 
-    // Silent path only: requires the in-memory key cached at unlock/onboarding.
-    if (!getCachedPrivateKey()) {
+    // Silent path only: requires the scoped RAM key cached at unlock/onboarding.
+    // (This flow runs unattended, so it can never prompt for a password.)
+    const key = getAutoRegisterKey();
+    if (!key) {
       return ok({ attempted: false, registered: false, reason: 'locked' });
     }
 
@@ -325,11 +359,20 @@ export async function handleMaybeAutoRegisterPreapproval(): Promise<
     // Idempotent: never register if the party already has an active preapproval.
     const status = await handleGetPreapprovalStatus();
     if (status.success && status.data.hasPreapproval) {
+      // Confirmed on-ledger — the scoped key has served its purpose; drop it.
+      clearAutoRegisterKey();
       return ok({ attempted: false, registered: false, reason: 'already-registered' });
     }
 
-    const res = await handleRegisterTransferPreapproval();
-    if (res.success) return ok({ attempted: true, registered: true });
+    const partyId = await sessionStore.get('partyId');
+    if (!partyId) return ok({ attempted: true, registered: false, reason: 'No party ID' });
+
+    const res = await registerPreapprovalWithKey(partyId, key);
+    if (res.success) {
+      // Registration confirmed — the scoped key has served its purpose; drop it.
+      clearAutoRegisterKey();
+      return ok({ attempted: true, registered: true });
+    }
     return ok({ attempted: true, registered: false, reason: res.error });
   } catch (e: unknown) {
     // Best-effort: never throw out of the auto path.

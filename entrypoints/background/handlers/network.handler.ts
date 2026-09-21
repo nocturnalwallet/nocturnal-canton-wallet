@@ -4,7 +4,7 @@ import { NETWORKS, NETWORK_IDS, type NetworkId } from '@lib/network';
 import { networkStore, sessionStore, setNetworkPrefix, setUserScope } from '@lib/storage';
 import { setApiBaseUrl } from '../api-client';
 import { setGatewayFacadeBaseUrl } from '../gateway-facade-client';
-import { setCachedPrivateKey } from './session.handler';
+import { clearAutoRegisterKey } from './session.handler';
 import { clearPreapprovalCache } from './keystore.handler';
 
 export async function handleGetNetwork(): Promise<MessageResponse<NetworkData>> {
@@ -20,8 +20,8 @@ export async function handleSwitchNetwork(
   network: NetworkId,
 ): Promise<MessageResponse<NetworkData>> {
   try {
-    // Clear cached private key and preapproval cache
-    setCachedPrivateKey(null);
+    // Clear the scoped auto-register key and preapproval cache
+    clearAutoRegisterKey();
     clearPreapprovalCache();
 
     if (!NETWORK_IDS.includes(network)) {

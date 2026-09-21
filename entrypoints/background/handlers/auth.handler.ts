@@ -4,7 +4,7 @@ import { localStore, setUserScope, whenStorageReady } from '@lib/storage';
 import { sessionStore } from '@lib/storage';
 import brand from '@brand/brand';
 import apiClient from '../api-client';
-import { setCachedPrivateKey } from './session.handler';
+import { clearAutoRegisterKey } from './session.handler';
 import { clearPreapprovalCache } from './keystore.handler';
 
 // --- PKCE helpers ---
@@ -216,8 +216,8 @@ export async function handleRefreshToken(): Promise<MessageResponse<{ token: str
 
 export async function handleLogout(): Promise<MessageResponse<void>> {
   try {
-    // Clear cached private key, preapproval cache, and auto-lock alarm
-    setCachedPrivateKey(null);
+    // Clear the scoped auto-register key, preapproval cache, and auto-lock alarm
+    clearAutoRegisterKey();
     clearPreapprovalCache();
     chrome.alarms.clear('auto-lock');
 

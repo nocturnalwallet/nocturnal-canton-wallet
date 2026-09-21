@@ -17,67 +17,74 @@ vi.mock('@lib/constants', () => ({
   AUTO_LOCK_MINUTES: 15,
 }));
 
-import { sessionStore } from '@lib/storage';
+import { sessionStore, localStore } from '@lib/storage';
+import { getEncryptionProvider } from '../encryption';
 import {
-  setCachedPrivateKey,
-  getCachedPrivateKey,
-  reconcileUnlockState,
   handleGetLockState,
+  handleVerifyPassword,
+  maybeCacheAutoRegisterKey,
+  getAutoRegisterKey,
+  clearAutoRegisterKey,
 } from './session.handler';
 
-describe('reconcileUnlockState', () => {
+describe('scoped auto-register key', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    setCachedPrivateKey(null);
+    clearAutoRegisterKey();
   });
 
-  it('clears stale unlocked flag when private key cache is empty (SW restart)', async () => {
-    vi.mocked(sessionStore.get).mockResolvedValue(true);
-
-    await reconcileUnlockState();
-
-    expect(sessionStore.set).toHaveBeenCalledWith('unlocked', false);
-    expect(chrome.alarms.clear).toHaveBeenCalledWith('auto-lock');
+  it('caches the key only when auto-register is pending', async () => {
+    vi.mocked(sessionStore.get).mockResolvedValue(true as never); // shouldAutoRegisterPreapproval
+    await maybeCacheAutoRegisterKey('sk');
+    expect(getAutoRegisterKey()).toBe('sk');
   });
 
-  it('leaves unlocked alone when the private key is still cached', async () => {
-    setCachedPrivateKey('cached-sk');
-    vi.mocked(sessionStore.get).mockResolvedValue(true);
-
-    await reconcileUnlockState();
-
-    expect(sessionStore.set).not.toHaveBeenCalled();
+  it('does not cache when auto-register is not pending', async () => {
+    vi.mocked(sessionStore.get).mockResolvedValue(false as never);
+    await maybeCacheAutoRegisterKey('sk');
+    expect(getAutoRegisterKey()).toBeNull();
   });
 
-  it('is a no-op when already locked', async () => {
-    vi.mocked(sessionStore.get).mockResolvedValue(false);
-
-    await reconcileUnlockState();
-
-    expect(sessionStore.set).not.toHaveBeenCalled();
+  it('clearAutoRegisterKey empties it', async () => {
+    vi.mocked(sessionStore.get).mockResolvedValue(true as never);
+    await maybeCacheAutoRegisterKey('sk');
+    clearAutoRegisterKey();
+    expect(getAutoRegisterKey()).toBeNull();
   });
 });
 
 describe('handleGetLockState', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    setCachedPrivateKey(null);
+  beforeEach(() => vi.clearAllMocks());
+
+  it('reports the stored unlocked flag without side effects (survives SW restart)', async () => {
+    vi.mocked(sessionStore.get).mockResolvedValue(true); // unlocked persisted, RAM key gone
+    const res = await handleGetLockState();
+    expect(res.success && res.data.unlocked).toBe(true);
+    expect(sessionStore.set).not.toHaveBeenCalled(); // no forced re-lock
+  });
+});
+
+describe('handleVerifyPassword', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('returns valid:true for a correct password without touching session state', async () => {
+    vi.mocked(localStore.get).mockResolvedValue({ backend: 'webcrypto' } as never);
+    vi.mocked(getEncryptionProvider).mockResolvedValue({ verifyPassword: vi.fn(async () => true) } as never);
+    const res = await handleVerifyPassword('pw');
+    expect(res.success && res.data.valid).toBe(true);
+    expect(sessionStore.set).not.toHaveBeenCalled();
   });
 
-  it('reports locked after reconciling a stale unlocked session', async () => {
-    let unlockedFlag = true;
-    vi.mocked(sessionStore.get).mockImplementation(async (key) => {
-      if (key === 'unlocked') return unlockedFlag;
-      return undefined as never;
-    });
-    vi.mocked(sessionStore.set).mockImplementation(async (key, value) => {
-      if (key === 'unlocked') unlockedFlag = value as boolean;
-    });
+  it('returns valid:false for a wrong password', async () => {
+    vi.mocked(localStore.get).mockResolvedValue({ backend: 'webcrypto' } as never);
+    vi.mocked(getEncryptionProvider).mockResolvedValue({ verifyPassword: vi.fn(async () => false) } as never);
+    const res = await handleVerifyPassword('bad');
+    expect(res.success && res.data.valid).toBe(false);
+  });
 
-    const res = await handleGetLockState();
-
-    expect(res.success).toBe(true);
-    if (res.success) expect(res.data.unlocked).toBe(false);
-    expect(getCachedPrivateKey()).toBeNull();
+  it('returns valid:false when no keystore exists', async () => {
+    vi.mocked(localStore.get).mockResolvedValue(undefined as never);
+    const res = await handleVerifyPassword('pw');
+    expect(res.success && res.data.valid).toBe(false);
   });
 });

@@ -15,10 +15,6 @@ vi.mock('../api-client', () => ({
   default: { get: vi.fn(), post: vi.fn() },
 }));
 
-vi.mock('./session.handler', () => ({
-  getCachedPrivateKey: vi.fn(),
-}));
-
 import { ensureUserScope, getStorageScope, localStore } from '@lib/storage';
 import apiClient from '../api-client';
 import {

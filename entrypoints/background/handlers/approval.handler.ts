@@ -16,7 +16,7 @@ export const APPROVAL_REQUIRED_METHODS = new Set([
 
 interface PendingApproval {
   data: DappApprovalData;
-  resolve: (approved: boolean) => void;
+  resolve: (result: { approved: boolean; password?: string }) => void;
   windowId?: number;
 }
 
@@ -30,11 +30,11 @@ export async function requestApproval(
   method: string,
   origin: string,
   params?: unknown,
-): Promise<boolean> {
+): Promise<{ approved: boolean; password?: string }> {
   const requestId = crypto.randomUUID();
   const data: DappApprovalData = { requestId, method, origin, params };
 
-  return new Promise<boolean>((resolve) => {
+  return new Promise((resolve) => {
     pendingApprovals.set(requestId, { data, resolve });
 
     const popupUrl = chrome.runtime.getURL(
@@ -51,7 +51,7 @@ export async function requestApproval(
       .catch(() => {
         // Failed to open window — reject
         pendingApprovals.delete(requestId);
-        resolve(false);
+        resolve({ approved: false });
       });
   });
 }
@@ -68,12 +68,12 @@ export function getApprovalDetails(requestId: string): DappApprovalData | null {
 /**
  * Resolve a pending approval (called when user clicks Approve/Reject in popup).
  */
-export function resolveApproval(requestId: string, approved: boolean): void {
+export function resolveApproval(requestId: string, approved: boolean, password?: string): void {
   const pending = pendingApprovals.get(requestId);
   if (!pending) return;
 
   pendingApprovals.delete(requestId);
-  pending.resolve(approved);
+  pending.resolve({ approved, password });
 }
 
 /**
@@ -85,7 +85,7 @@ export function setupApprovalWindowListener(): void {
     for (const [requestId, pending] of pendingApprovals) {
       if (pending.windowId === windowId) {
         pendingApprovals.delete(requestId);
-        pending.resolve(false);
+        pending.resolve({ approved: false });
       }
     }
   });

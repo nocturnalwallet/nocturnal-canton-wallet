@@ -18,7 +18,7 @@ import {
   handleUnlock,
   handleLock,
   handleGetLockState,
-  reconcileUnlockState,
+  handleVerifyPassword,
 } from './background/handlers/session.handler';
 import {
   handleCreateKeypair,
@@ -102,10 +102,6 @@ export default defineBackground(() => {
   // Set up auto-lock alarm listener
   setupAutoLock();
 
-  // MV3 SW restarts drop the in-memory signing key while chrome.storage.session
-  // may still say unlocked — force a re-lock so the UI and CIP-0103 signing agree.
-  void whenStorageReady().then(() => reconcileUnlockState());
-
   // Set up event broadcaster for dApp API (statusChanged, accountsChanged)
   setupEventBroadcaster();
 
@@ -153,6 +149,7 @@ async function routeMessage(message: MessageRequest) {
     MSG.GET_NETWORK,
     MSG.GET_ELFA_CHAT,
     MSG.GET_DAPP_APPROVAL,
+    MSG.VERIFY_PASSWORD,
   ];
   if (!skipReset.includes(message.action as (typeof skipReset)[number])) {
     resetAutoLockTimer();
@@ -182,6 +179,8 @@ async function routeMessage(message: MessageRequest) {
       return handleLock();
     case MSG.GET_LOCK_STATE:
       return handleGetLockState();
+    case MSG.VERIFY_PASSWORD:
+      return handleVerifyPassword(message.payload.password);
 
     // Keystore
     case MSG.CREATE_KEYPAIR:
@@ -201,7 +200,7 @@ async function routeMessage(message: MessageRequest) {
 
     // Transfer pre-approval
     case MSG.REGISTER_TRANSFER_PREAPPROVAL:
-      return handleRegisterTransferPreapproval();
+      return handleRegisterTransferPreapproval(message.payload.password);
     case MSG.GET_PREAPPROVAL_STATUS:
       return handleGetPreapprovalStatus();
     case MSG.MAYBE_AUTO_REGISTER_PREAPPROVAL:
@@ -266,7 +265,7 @@ case MSG.FETCH_ABOUT_ME:
       return details ? ok(details) : err('Approval request not found');
     }
     case MSG.DAPP_APPROVAL_RESULT: {
-      resolveApproval(message.payload.requestId, message.payload.approved);
+      resolveApproval(message.payload.requestId, message.payload.approved, message.payload.password);
       return ok(null);
     }
 
