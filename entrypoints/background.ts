@@ -1,9 +1,10 @@
 import { defineBackground } from 'wxt/utils/define-background';
+import brand from '@brand/brand';
 import { MSG } from '@lib/messaging';
 import { ok, err } from '@lib/messaging/protocol';
 import type { MessageRequest } from '@lib/messaging/types';
 import { NETWORKS } from '@lib/network';
-import { networkStore, localStore, setNetworkPrefix, setUserScope, migrateUnprefixedData, migrateToUserScoped } from '@lib/storage';
+import { networkStore, localStore, setNetworkPrefix, setUserScope, migrateUnprefixedData, migrateToUserScoped, runStorageInit, whenStorageReady } from '@lib/storage';
 
 import {
   handleGoogleAuth,
@@ -17,6 +18,7 @@ import {
   handleUnlock,
   handleLock,
   handleGetLockState,
+  handleVerifyPassword,
 } from './background/handlers/session.handler';
 import {
   handleCreateKeypair,
@@ -28,6 +30,7 @@ import {
   handleResetKeystoreForRecovery,
   handleRegisterTransferPreapproval,
   handleGetPreapprovalStatus,
+  handleMaybeAutoRegisterPreapproval,
 } from './background/handlers/keystore.handler';
 import {
   handleSignAndSubmitTransferPreapproval,
@@ -49,6 +52,14 @@ import {
   handleFetchAboutMe,
   handleRequestFaucet,
   handlePrepareWithdraw,
+  handleFetchElfaTrendingTokens,
+  handleFetchElfaNarratives,
+  handleFetchElfaTopMentions,
+  handleFetchElfaKeywordMentions,
+  handleFetchElfaSmartStats,
+  handleGetElfaChat,
+  handleElfaChat,
+  handleClearElfaChat,
 } from './background/handlers/api.handler';
 import {
   handleGetNetwork,
@@ -67,10 +78,11 @@ import {
 } from './background/handlers/approval.handler';
 
 export default defineBackground(() => {
-  console.log('[Nocturnal] Background service worker started');
+  console.log(`${brand.logTag} Background service worker started`);
 
-  // Initialize network: migrate legacy data, set prefix & API URL, set user scope
-  (async () => {
+  // Initialize network: migrate legacy data, set prefix & API URL, set user scope.
+  // Handlers await whenStorageReady() so they never read `{DEFAULT}:user` first.
+  void runStorageInit(async () => {
     await migrateUnprefixedData();
     const network = await networkStore.get();
     setNetworkPrefix(network);
@@ -85,7 +97,7 @@ export default defineBackground(() => {
     if (user?.id) {
       setUserScope(user.id);
     }
-  })();
+  });
 
   // Set up auto-lock alarm listener
   setupAutoLock();
@@ -129,8 +141,16 @@ export default defineBackground(() => {
 });
 
 async function routeMessage(message: MessageRequest) {
+  await whenStorageReady();
   // Reset auto-lock timer on user activity (skip read-only state checks)
-  const skipReset = [MSG.GET_AUTH_STATE, MSG.GET_LOCK_STATE, MSG.GET_NETWORK, MSG.GET_DAPP_APPROVAL];
+  const skipReset = [
+    MSG.GET_AUTH_STATE,
+    MSG.GET_LOCK_STATE,
+    MSG.GET_NETWORK,
+    MSG.GET_ELFA_CHAT,
+    MSG.GET_DAPP_APPROVAL,
+    MSG.VERIFY_PASSWORD,
+  ];
   if (!skipReset.includes(message.action as (typeof skipReset)[number])) {
     resetAutoLockTimer();
   }
@@ -159,6 +179,8 @@ async function routeMessage(message: MessageRequest) {
       return handleLock();
     case MSG.GET_LOCK_STATE:
       return handleGetLockState();
+    case MSG.VERIFY_PASSWORD:
+      return handleVerifyPassword(message.payload.password);
 
     // Keystore
     case MSG.CREATE_KEYPAIR:
@@ -178,9 +200,11 @@ async function routeMessage(message: MessageRequest) {
 
     // Transfer pre-approval
     case MSG.REGISTER_TRANSFER_PREAPPROVAL:
-      return handleRegisterTransferPreapproval();
+      return handleRegisterTransferPreapproval(message.payload.password);
     case MSG.GET_PREAPPROVAL_STATUS:
       return handleGetPreapprovalStatus();
+    case MSG.MAYBE_AUTO_REGISTER_PREAPPROVAL:
+      return handleMaybeAutoRegisterPreapproval();
 
     // Signing
     case MSG.SIGN_AND_SUBMIT_TRANSFER_PREAPPROVAL:
@@ -218,6 +242,22 @@ case MSG.FETCH_ABOUT_ME:
       return handleFetchAboutMe();
     case MSG.REQUEST_FAUCET:
       return handleRequestFaucet(message.payload.password, message.payload.amount);
+    case MSG.FETCH_ELFA_TRENDING_TOKENS:
+      return handleFetchElfaTrendingTokens(message.payload.window);
+    case MSG.FETCH_ELFA_NARRATIVES:
+      return handleFetchElfaNarratives(message.payload.window);
+    case MSG.FETCH_ELFA_TOP_MENTIONS:
+      return handleFetchElfaTopMentions(message.payload.ticker);
+    case MSG.FETCH_ELFA_KEYWORD_MENTIONS:
+      return handleFetchElfaKeywordMentions(message.payload.keywords);
+    case MSG.FETCH_ELFA_SMART_STATS:
+      return handleFetchElfaSmartStats(message.payload.username);
+    case MSG.GET_ELFA_CHAT:
+      return handleGetElfaChat();
+    case MSG.ELFA_CHAT:
+      return handleElfaChat(message.payload.message);
+    case MSG.CLEAR_ELFA_CHAT:
+      return handleClearElfaChat();
 
     // dApp approval flow
     case MSG.GET_DAPP_APPROVAL: {
@@ -225,7 +265,7 @@ case MSG.FETCH_ABOUT_ME:
       return details ? ok(details) : err('Approval request not found');
     }
     case MSG.DAPP_APPROVAL_RESULT: {
-      resolveApproval(message.payload.requestId, message.payload.approved);
+      resolveApproval(message.payload.requestId, message.payload.approved, message.payload.password);
       return ok(null);
     }
 

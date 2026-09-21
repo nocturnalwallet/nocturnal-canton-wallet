@@ -1,32 +1,40 @@
 import { defineConfig } from 'wxt';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { resolveBrand, resolveBrandId } from './branding/resolve';
+import { loadBrandOauthEnv } from './branding/load-env';
+
+const rootDir = path.dirname(fileURLToPath(import.meta.url));
+const brandId = resolveBrandId();
+const brand = resolveBrand(brandId);
+const brandRoot = path.resolve(rootDir, 'branding', brandId);
+const brandOauth = loadBrandOauthEnv(brandRoot);
+
+const sharedHostPermissions = [
+  'https://accounts.google.com/*',
+  'http://localhost/*',
+];
 
 export default defineConfig({
   modules: ['@wxt-dev/module-react'],
   outDir: 'build',
-  // Prefix build artifacts with the wallet name and keep WXT's mode suffix,
-  // e.g. build/nocturnal-chrome-mv3 (prod), build/nocturnal-chrome-mv3-mainnet
-  // (--mode mainnet), build/nocturnal-chrome-mv3-dev (dev).
-  outDirTemplate: 'nocturnal-{{browser}}-mv{{manifestVersion}}{{modeSuffix}}',
+  // Brand-prefixed artifacts + WXT mode suffix, e.g. build/nocturnal-chrome-mv3,
+  // build/nocturnal-chrome-mv3-mainnet (--mode mainnet), …-dev (dev).
+  outDirTemplate: `${brand.id}-{{browser}}-mv{{manifestVersion}}{{modeSuffix}}`,
+  // Brand-owned toolbar icons / fonts / backgrounds (no shared public/icon leakage).
+  publicDir: path.join('branding', brandId, 'public'),
   manifest: {
-    name: 'Nocturnal',
-    description: 'Nocturnal — Canton Network wallet browser extension with CIP-0103 dApp API support',
-    version: '0.1.1',
-    // Stable key pins the Nocturnal extension ID so the OAuth redirect URI stays consistent.
+    name: brand.displayName,
+    description: brand.description,
+    version: brand.version,
+    // Stable key pins the extension ID so the OAuth redirect URI stays consistent.
     // The redirect URI will be: https://<extension-id>.chromiumapp.org/
     // Register this URI in Google Cloud Console → OAuth 2.0 Client → Authorized redirect URIs.
-    key: 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAm+5/uaDpKxZpz4vZ+EwkLhbehAa+8OSwC28pacF6YoEveydmZo0g6GmRUIGZFf3BT1LcJlRhMu/EUsTZYWWy485HdxWI9MXJYWD4F+95wQCbze/qqvIWXSyNBAAfydB/4XllAiGttoEmefInRinjjRPrvADtAEEraUANS8M4C3xwYPMIG9OQWIn/BY/m4r5pcgzBEZ+vHXaFbcapFO36j7cLO/fXyST8pkyyUtorjAnDgkiyamo5Y3LpZcVvpA2xCZuOo9zfKLpT5UMQnYjuNhBYW+7oVBRwmvPiG1SVNRk+JQaQPsUeQplr+52s0NVl/5CQFeqgT41T+6iD2/4rwwIDAQAB',
+    key: brand.manifestKey,
     permissions: ['storage', 'identity', 'alarms'],
-    host_permissions: [
-      'https://accounts.google.com/*',
-      'https://*.kairo.ag/*',
-      // Mainnet gateway (see NETWORKS.mainnet in lib/network.ts). Declared so
-      // the manifest matches actual egress and MV3 doesn't CORS-block it.
-      'https://*.thanhle.space/*',
-      'http://localhost/*',
-    ],
+    host_permissions: [...sharedHostPermissions, ...brand.hostPermissions],
     // Make the extension icon fetchable by dApp pages so multi-wallet pickers
-    // can render Nocturnal's icon from the canton:announceProvider event's
+    // can render the brand icon from the canton:announceProvider event's
     // `detail.icon` URL. Without this, Chrome rewrites the URL to
     // chrome-extension://invalid/ and the picker shows a broken image.
     web_accessible_resources: [
@@ -35,12 +43,30 @@ export default defineConfig({
   },
   imports: false,
   vite: () => ({
+    build: {
+      // Drop <link rel="modulepreload"> tags: in an MV3 popup Chrome discards the
+      // preloaded chunk as a "cross-world extension resource mismatch" and refetches
+      // it anyway. Disabling preload removes the warning at negligible cost.
+      modulePreload: false,
+    },
+    define: {
+      // Expose brand id for any runtime checks; primary selection is the @brand alias.
+      'import.meta.env.VITE_BRAND': JSON.stringify(brandId),
+      // Brand-pack OAuth always wins over root `.env` (empty if unset — no cross-brand leak).
+      'import.meta.env.VITE_GOOGLE_CLIENT_ID': JSON.stringify(
+        brandOauth.VITE_GOOGLE_CLIENT_ID,
+      ),
+      'import.meta.env.VITE_GOOGLE_CLIENT_SECRET': JSON.stringify(
+        brandOauth.VITE_GOOGLE_CLIENT_SECRET,
+      ),
+    },
     resolve: {
       alias: {
-        '@': path.resolve(__dirname),
-        '@lib': path.resolve(__dirname, 'lib'),
-        '@components': path.resolve(__dirname, 'components'),
-        '@assets': path.resolve(__dirname, 'assets'),
+        '@': rootDir,
+        '@lib': path.resolve(rootDir, 'lib'),
+        '@components': path.resolve(rootDir, 'components'),
+        '@assets': path.resolve(rootDir, 'assets'),
+        '@brand': brandRoot,
       },
     },
   }),

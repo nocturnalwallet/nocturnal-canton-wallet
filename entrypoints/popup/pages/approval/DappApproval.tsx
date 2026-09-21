@@ -17,11 +17,15 @@ const METHOD_LABELS: Record<string, { label: string; icon: typeof ShieldCheckIco
   'signTransaction (Gateway)': { label: 'Sign for Gateway', icon: PenLineIcon },
 };
 
+const SIGNING_METHODS = new Set(['signMessage', 'signTransaction', 'prepareExecute', 'prepareExecuteAndWait']);
+
 export function DappApproval({ requestId }: Props) {
   const [details, setDetails] = useState<DappApprovalData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [password, setPassword] = useState('');
+  const [pwError, setPwError] = useState('');
 
   useEffect(() => {
     sendMessage<DappApprovalData>({
@@ -38,12 +42,25 @@ export function DappApproval({ requestId }: Props) {
       });
   }, [requestId]);
 
+  const needsPassword = details ? SIGNING_METHODS.has(details.method) : false;
+
   const handleResult = async (approved: boolean) => {
     setSubmitting(true);
     try {
+      if (approved && needsPassword) {
+        const res = await sendMessage<{ valid: boolean }>({
+          action: MSG.VERIFY_PASSWORD,
+          payload: { password },
+        });
+        if (!res?.valid) {
+          setPwError('Invalid password');
+          setSubmitting(false);
+          return; // keep window open
+        }
+      }
       await sendMessage({
         action: MSG.DAPP_APPROVAL_RESULT,
-        payload: { requestId, approved },
+        payload: { requestId, approved, password: approved && needsPassword ? password : undefined },
       });
     } catch {
       // Background will handle cleanup
@@ -123,13 +140,30 @@ export function DappApproval({ requestId }: Props) {
             </div>
           );
         })()}
+
+        {/* Password (signing methods only) */}
+        {needsPassword && (
+          <div className="w-full">
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => {
+                setPassword(e.target.value);
+                setPwError('');
+              }}
+              placeholder="Password to sign"
+              className="bg-secondary text-foreground w-full rounded-lg px-4 py-3 text-sm"
+            />
+            {pwError && <p className="text-destructive mt-1 text-xs">{pwError}</p>}
+          </div>
+        )}
       </div>
 
       {/* Actions — always pinned to bottom */}
       <div className="border-border shrink-0 space-y-2 border-t px-4 pt-3 pb-5">
         <button
           onClick={() => handleResult(true)}
-          disabled={submitting}
+          disabled={submitting || (needsPassword && !password)}
           className="bg-primary text-primary-foreground w-full rounded-xl py-3 font-medium transition-opacity disabled:opacity-40"
         >
           {submitting ? (

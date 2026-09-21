@@ -1,12 +1,15 @@
 import type { NetworkId } from '../network';
 import { DEFAULT_NETWORK } from '../network';
-import type { KeystoreData, SettingsData, StoredUser } from './schemas';
+import type { ElfaChatBlob, KeystoreData, SettingsData, StoredUser } from './schemas';
 
 export interface LocalStorageSchema {
   keystore: KeystoreData | null;
   user: StoredUser | null;
   settings: SettingsData;
   onboardingComplete: boolean;
+  /** Durable "this account already registered its transfer pre-approval" marker. */
+  preapprovalRegistered: boolean;
+  elfaChat: ElfaChatBlob | null;
 }
 
 const DEFAULTS: LocalStorageSchema = {
@@ -14,6 +17,8 @@ const DEFAULTS: LocalStorageSchema = {
   user: null,
   settings: { autoLockMinutes: 15 },
   onboardingComplete: false,
+  preapprovalRegistered: false,
+  elfaChat: null,
 };
 
 const LOCAL_KEYS: (keyof LocalStorageSchema)[] = [
@@ -21,13 +26,35 @@ const LOCAL_KEYS: (keyof LocalStorageSchema)[] = [
   'user',
   'settings',
   'onboardingComplete',
+  'preapprovalRegistered',
+  'elfaChat',
 ];
 
 /** Keys that are scoped per-user (require userId in prefix). */
-const USER_SCOPED_KEYS: readonly string[] = ['keystore', 'onboardingComplete'];
+const USER_SCOPED_KEYS: readonly string[] = [
+  'keystore',
+  'onboardingComplete',
+  'preapprovalRegistered',
+  'elfaChat',
+];
 
 let _networkPrefix: NetworkId = DEFAULT_NETWORK;
 let _userId: string | null = null;
+let storageReady: Promise<void> = Promise.resolve();
+
+/** Run background storage init; later `whenStorageReady()` awaits this task. */
+export function runStorageInit(task: () => Promise<void>): Promise<void> {
+  storageReady = Promise.resolve()
+    .then(task)
+    .catch((error: unknown) => {
+      console.error('Storage init failed', error);
+    });
+  return storageReady;
+}
+
+export function whenStorageReady(): Promise<void> {
+  return storageReady;
+}
 
 export function setNetworkPrefix(network: NetworkId): void {
   _networkPrefix = network;
@@ -35,6 +62,30 @@ export function setNetworkPrefix(network: NetworkId): void {
 
 export function setUserScope(userId: string | null): void {
   _userId = userId;
+}
+
+export function hasUserScope(): boolean {
+  return _userId != null;
+}
+
+/**
+ * Wait for storage init, then restore `_userId` from the network-scoped user
+ * record if the in-memory flag was never set or was wiped by a startup race.
+ */
+export async function ensureUserScope(): Promise<boolean> {
+  await whenStorageReady();
+  if (_userId != null) return true;
+  const user = await localStore.get('user');
+  if (!user?.id) return false;
+  setUserScope(user.id);
+  return true;
+}
+
+export function getStorageScope(): {
+  userId: string | null;
+  network: NetworkId;
+} {
+  return { userId: _userId, network: _networkPrefix };
 }
 
 function prefixKey(key: string): string {

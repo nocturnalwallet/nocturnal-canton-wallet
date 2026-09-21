@@ -1,5 +1,5 @@
 /**
- * CIP-0103 dApp API handler for Nocturnal wallet extension.
+ * CIP-0103 dApp API handler for the wallet extension.
  *
  * Implements the CIP-0103 dApp API methods:
  * - connect / disconnect / isConnected / status
@@ -8,7 +8,7 @@
  * - prepareExecute / prepareExecuteAndWait (via the CIP-0103 facade)
  * - ledgerApi (proxy to the backend Ledger API via the facade)
  *
- * Plus one Nocturnal-only extension method:
+ * Plus one brand-specific extension method:
  * - signTransaction — NON-STANDARD. Signs a raw base64-encoded transaction
  *   hash. Not in CIP-0103; not in the SWK extension reference
  *   (wallet-gateway/extension/src/dapp-api/controller.ts:20-80). Kept as a
@@ -16,7 +16,7 @@
  *   prepareExecuteAndWait when integrating new dApps — those cover
  *   prepare+sign+execute atomically.
  */
-import { signMessage, signTransactionHash, getPublicKeyFromPrivate } from '@canton-network/core-signing-lib';
+import brand from '@brand/brand';
 import {
   type SpliceMessage,
   WalletEvent,
@@ -34,8 +34,9 @@ import type {
 } from '@lib/dapp-api/gateway-types';
 import { sessionStore, localStore, networkStore } from '@lib/storage';
 import { NETWORKS, toCaip2NetworkId } from '@lib/network';
-import { getCachedPrivateKey, resetAutoLockTimer } from './session.handler';
+import { resetAutoLockTimer } from './session.handler';
 import { APPROVAL_REQUIRED_METHODS, requestApproval } from './approval.handler';
+import { signHashWithPassword, signMessageWithPassword } from '../signing/sign-with-password';
 import {
   gatewayFacadeDappRpc,
   gatewayFacadeUserRpc,
@@ -50,7 +51,7 @@ import {
 interface DappAccount {
   primary: boolean;
   partyId: string;
-  // CIP-0103 Wallet.status union — Nocturnal currently only writes 'allocated'
+  // CIP-0103 Wallet.status union — we currently only write 'allocated'
   // but advertises 'removed' for type parity with @canton-network/dapp-sdk's
   // Wallet type. Schema-validating SDKs reject status values outside the
   // spec union; widening the declared type here keeps future emissions
@@ -86,14 +87,8 @@ export async function buildDappAccount(): Promise<DappAccount | null> {
   const networkId = await networkStore.get();
 
   let publicKey = '';
-  try {
-    const privateKey = getCachedPrivateKey();
-    if (privateKey) {
-      publicKey = getPublicKeyFromPrivate(privateKey);
-    }
-  } catch {
-    // Non-critical: publicKey will be empty when locked
-  }
+  const keystore = await localStore.get('keystore');
+  if (keystore?.walletKey) publicKey = keystore.walletKey;
 
   return {
     primary: true,
@@ -103,10 +98,10 @@ export async function buildDappAccount(): Promise<DappAccount | null> {
     publicKey,
     namespace: namespace || '',
     // Wallet.networkId is a CAIP-2-compliant chain identifier per the spec
-    // schema at openrpc-dapp-api.json:874-877; we emit the converted form
-    // (e.g. `canton:devnet`), keeping the internal short ID for storage keys.
+    // schema at openrpc-dapp-api.json:874-877; we emit DA-canonical form
+    // (e.g. `canton:da-devnet`), keeping the internal short ID for storage keys.
     networkId: toCaip2NetworkId(networkId),
-    signingProviderId: 'nocturnal',
+    signingProviderId: brand.providerId,
   };
 }
 
@@ -192,8 +187,8 @@ export async function buildStatusEvent(): Promise<unknown> {
 
   return {
     provider: {
-      id: 'nocturnal',
-      version: '0.1.1',
+      id: brand.providerId,
+      version: brand.version,
       providerType: 'browser',
     },
     connection,
@@ -223,7 +218,7 @@ async function handleGetPrimaryAccount(): Promise<DappAccount> {
   return account;
 }
 
-async function handleSignMessage(params: unknown): Promise<{ signature: string }> {
+async function handleSignMessage(params: unknown, ctx?: DappCtx): Promise<{ signature: string }> {
   const { message } = (params || {}) as { message?: string };
   if (!message || typeof message !== 'string') {
     throw new RpcError(RpcErrorCodes.INVALID_PARAMS, 'Missing or invalid "message" parameter');
@@ -234,19 +229,17 @@ async function handleSignMessage(params: unknown): Promise<{ signature: string }
     throw new RpcError(RpcErrorCodes.UNAUTHORIZED, 'Wallet must be unlocked and onboarded to sign');
   }
 
-  const privateKey = getCachedPrivateKey();
-  if (!privateKey) {
-    throw new RpcError(RpcErrorCodes.UNAUTHORIZED, 'Private key not available — please unlock the wallet');
+  if (!ctx?.password) {
+    throw new RpcError(RpcErrorCodes.UNAUTHORIZED, 'Password required to sign');
   }
 
   // CIP-0103 canonical signMessage: Ed25519 over UTF-8(message) directly.
-  // The kernel's signMessage does nacl.sign.detached(utf8(message), sk) and
-  // base64-encodes the signature — the only shape any standard Ed25519
-  // verifier will accept against the bare message bytes.
+  // Decrypt-on-demand with the approval-supplied password — the decrypted
+  // key is never returned or persisted.
   //
   // Return shape is { signature } only per CIP-0103 OpenRPC schema and CIP text.
   // dApps source publicKey/partyId via getPrimaryAccount or listAccounts.
-  const signature = signMessage(message, privateKey);
+  const { signature } = await signMessageWithPassword(ctx.password, message);
 
   resetAutoLockTimer();
   return { signature };
@@ -262,7 +255,7 @@ const BASE64_PATTERN = /^[A-Za-z0-9+/_-]+={0,2}$/;
 const HEX_64_PATTERN = /^[0-9a-f]{64}$/;
 
 /**
- * signTransaction — Nocturnal extension method (NON-STANDARD).
+ * signTransaction — extension method (NON-STANDARD).
  *
  * Not part of CIP-0103. Not in the SWK extension reference's method catalog
  * (verified against wallet-gateway/extension/src/dapp-api/controller.ts:20-80
@@ -275,7 +268,7 @@ const HEX_64_PATTERN = /^[0-9a-f]{64}$/;
  * prepareExecute / prepareExecuteAndWait — those cover prepare + sign +
  * execute as a single atomic dApp call, with approval and tx lifecycle events.
  */
-async function handleSignTransaction(params: unknown): Promise<{
+async function handleSignTransaction(params: unknown, ctx?: DappCtx): Promise<{
   signature: string;
   publicKey: string;
   fingerprint: string;
@@ -296,13 +289,11 @@ async function handleSignTransaction(params: unknown): Promise<{
     throw new RpcError(RpcErrorCodes.UNAUTHORIZED, 'Wallet must be unlocked and onboarded');
   }
 
-  const privateKey = getCachedPrivateKey();
-  if (!privateKey) {
-    throw new RpcError(RpcErrorCodes.UNAUTHORIZED, 'Private key not available — unlock wallet');
+  if (!ctx?.password) {
+    throw new RpcError(RpcErrorCodes.UNAUTHORIZED, 'Password required to sign');
   }
 
-  const signature = signTransactionHash(transactionHash, privateKey);
-  const publicKey = getPublicKeyFromPrivate(privateKey);
+  const { signature, publicKey } = await signHashWithPassword(ctx.password, partyId, transactionHash);
   const fingerprint = partyId.split('::')[1];
 
   resetAutoLockTimer();
@@ -331,9 +322,6 @@ async function handlePrepareExecute(params: unknown): Promise<null> {
   const { partyId, isReady } = await getWalletState();
   if (!isReady || !partyId) throw new RpcError(RpcErrorCodes.UNAUTHORIZED, 'Wallet must be unlocked and onboarded');
 
-  const privateKey = getCachedPrivateKey();
-  if (!privateKey) throw new RpcError(RpcErrorCodes.UNAUTHORIZED, 'Private key not available — unlock wallet');
-
   const typedParams = params as PrepareExecuteParams;
 
   // 1. Forward to the facade dApp API
@@ -351,7 +339,7 @@ async function handlePrepareExecute(params: unknown): Promise<null> {
   if (!commandId) throw new RpcError(RpcErrorCodes.INTERNAL_ERROR, 'No commandId in Gateway response');
 
   // 3. Show approval popup
-  const approved = await requestApproval('prepareExecute', 'dApp', {
+  const { approved, password } = await requestApproval('prepareExecute', 'dApp', {
     transactionId,
     commandId,
     commands: typedParams.commands,
@@ -366,13 +354,15 @@ async function handlePrepareExecute(params: unknown): Promise<null> {
     }
     throw new RpcError(RpcErrorCodes.USER_REJECTED, 'User rejected the transaction');
   }
+  if (!password) {
+    throw new RpcError(RpcErrorCodes.UNAUTHORIZED, 'Password required to sign');
+  }
 
   // 4. Get prepared transaction details from the facade
   const tx = await gatewayFacadeUserRpc<GatewayTransaction>('getTransaction', { transactionId });
 
-  // 5. Sign locally
-  const { signTransactionHash } = await import('@canton-network/core-signing-lib');
-  const signature = signTransactionHash(tx.preparedTransactionHash, privateKey);
+  // 5. Sign locally, decrypting the key on demand with the approval password.
+  const { signature } = await signHashWithPassword(password, partyId, tx.preparedTransactionHash);
   const fingerprint = partyId.split('::')[1];
 
   // 6. Execute via the facade. Result is discarded — the spec defines
@@ -401,9 +391,6 @@ async function handlePrepareExecuteAndWait(params: unknown): Promise<PrepareExec
   const { partyId, isReady } = await getWalletState();
   if (!isReady || !partyId) throw new RpcError(RpcErrorCodes.UNAUTHORIZED, 'Wallet must be unlocked and onboarded');
 
-  const privateKey = getCachedPrivateKey();
-  if (!privateKey) throw new RpcError(RpcErrorCodes.UNAUTHORIZED, 'Private key not available — unlock wallet');
-
   const typedParams = params as PrepareExecuteParams;
 
   const { userUrl } = await gatewayFacadeDappRpc<PrepareExecuteResponse>('prepareExecute', typedParams);
@@ -414,7 +401,7 @@ async function handlePrepareExecuteAndWait(params: unknown): Promise<PrepareExec
   if (!transactionId) throw new RpcError(RpcErrorCodes.INTERNAL_ERROR, 'No transactionId in Gateway response');
   if (!commandId) throw new RpcError(RpcErrorCodes.INTERNAL_ERROR, 'No commandId in Gateway response');
 
-  const approved = await requestApproval('prepareExecuteAndWait', 'dApp', {
+  const { approved, password } = await requestApproval('prepareExecuteAndWait', 'dApp', {
     transactionId,
     commandId,
     commands: typedParams.commands,
@@ -428,11 +415,13 @@ async function handlePrepareExecuteAndWait(params: unknown): Promise<PrepareExec
     }
     throw new RpcError(RpcErrorCodes.USER_REJECTED, 'User rejected the transaction');
   }
+  if (!password) {
+    throw new RpcError(RpcErrorCodes.UNAUTHORIZED, 'Password required to sign');
+  }
 
   const tx = await gatewayFacadeUserRpc<GatewayTransaction>('getTransaction', { transactionId });
 
-  const { signTransactionHash } = await import('@canton-network/core-signing-lib');
-  const signature = signTransactionHash(tx.preparedTransactionHash, privateKey);
+  const { signature } = await signHashWithPassword(password, partyId, tx.preparedTransactionHash);
   const fingerprint = partyId.split('::')[1];
 
   const executeResult = await gatewayFacadeUserRpc<{
@@ -496,7 +485,8 @@ async function handleLedgerApi(params: unknown): Promise<unknown> {
 
 // -- Main dispatcher --
 
-type MethodHandler = (params?: unknown) => Promise<unknown>;
+type DappCtx = { password?: string };
+type MethodHandler = (params?: unknown, ctx?: DappCtx) => Promise<unknown>;
 
 const methods: Record<string, MethodHandler> = {
   connect: handleConnect,
@@ -507,7 +497,7 @@ const methods: Record<string, MethodHandler> = {
   listAccounts: handleListAccounts,
   getPrimaryAccount: handleGetPrimaryAccount,
   signMessage: handleSignMessage,
-  // Nocturnal extension, NOT in CIP-0103 — see JSDoc on handleSignTransaction.
+  // Extension method, NOT in CIP-0103 — see JSDoc on handleSignTransaction.
   // Prefer prepareExecute / prepareExecuteAndWait for new integrations.
   signTransaction: handleSignTransaction,
   prepareExecute: handlePrepareExecute,
@@ -539,16 +529,18 @@ export async function handleDappApiRequest(
   }
 
   // Gate sensitive methods through user approval popup
+  let approvalPassword: string | undefined;
   if (APPROVAL_REQUIRED_METHODS.has(method)) {
     const origin = senderOrigin || 'Unknown origin';
-    const approved = await requestApproval(method, origin, request.params);
+    const { approved, password } = await requestApproval(method, origin, request.params);
     if (!approved) {
       return jsonRpcError(id, RpcErrorCodes.USER_REJECTED, 'User rejected the request');
     }
+    approvalPassword = password;
   }
 
   try {
-    const result = await handler(request.params);
+    const result = await handler(request.params, { password: approvalPassword });
     return jsonRpcSuccess(id, result);
   } catch (e) {
     if (e instanceof FacadeAuthRequiredError) {

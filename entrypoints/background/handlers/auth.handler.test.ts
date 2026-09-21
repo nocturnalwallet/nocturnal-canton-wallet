@@ -4,13 +4,14 @@ vi.mock('@lib/storage', () => ({
   localStore: { get: vi.fn(), set: vi.fn() },
   sessionStore: { set: vi.fn(), setMany: vi.fn(), clear: vi.fn(), get: vi.fn() },
   setUserScope: vi.fn(),
+  whenStorageReady: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('../api-client', () => ({
   default: { get: vi.fn(), post: vi.fn() },
 }));
 
-vi.mock('./session.handler', () => ({ setCachedPrivateKey: vi.fn() }));
+vi.mock('./session.handler', () => ({ clearAutoRegisterKey: vi.fn() }));
 vi.mock('./keystore.handler', () => ({ clearPreapprovalCache: vi.fn() }));
 
 // chrome global stub
@@ -32,7 +33,7 @@ const fetchMock = vi.fn();
 
 import { handleGoogleAuth } from './auth.handler';
 import apiClient from '../api-client';
-import { localStore } from '@lib/storage';
+import { localStore, sessionStore } from '@lib/storage';
 
 // ── Constants ──
 const PK_BACKEND = 'E8EiDJyl6LIO4OHpGwBd4s3e8hfcqCjQ++4h2lwWsDo=';
@@ -59,9 +60,12 @@ const legacyKeystore = {
 };
 
 // ── Helpers ──
-function mockAuthMe(party: { partyId: string; publicKey: string; onboardingStatus: string } | null) {
+function mockAuthMe(
+  party: { partyId: string; publicKey: string; onboardingStatus: string } | null,
+  shouldAutoRegisterPreapproval?: boolean,
+) {
   vi.mocked(apiClient.get).mockResolvedValue({
-    data: { data: { party } },
+    data: { data: { party, shouldAutoRegisterPreapproval } },
   } as any);
 }
 
@@ -236,5 +240,32 @@ describe('handleGoogleAuth — keystore mismatch detection', () => {
     if (result.success) {
       expect(result.data.keyMismatch).toBe(false);
     }
+  });
+});
+
+describe('handleGoogleAuth — shouldAutoRegisterPreapproval', () => {
+  it('persists and returns shouldAutoRegisterPreapproval from /auth/me', async () => {
+    mockAuthMe({ partyId: 'p::1', publicKey: PK_BACKEND, onboardingStatus: 'SUCCESSFULLY' }, true);
+    vi.mocked(localStore.get).mockImplementation(async (key) => {
+      if (key === 'keystore') return null;
+      if (key === 'onboardingComplete') return true;
+      return null;
+    });
+
+    const result = await handleGoogleAuth();
+
+    expect(sessionStore.set).toHaveBeenCalledWith('shouldAutoRegisterPreapproval', true);
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.shouldAutoRegisterPreapproval).toBe(true);
+  });
+
+  it('captures the flag on first login even when party is null', async () => {
+    mockAuthMe(null, true);
+
+    const result = await handleGoogleAuth();
+
+    expect(sessionStore.set).toHaveBeenCalledWith('shouldAutoRegisterPreapproval', true);
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.shouldAutoRegisterPreapproval).toBe(true);
   });
 });

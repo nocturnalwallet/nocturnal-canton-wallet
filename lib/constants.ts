@@ -8,6 +8,11 @@ export const queryKey = {
   INCOMING_REQUESTS: 'INCOMING_REQUESTS',
   OUTGOING_REQUESTS: 'OUTGOING_REQUESTS',
   HISTORY_REQUESTS: 'HISTORY_REQUESTS',
+  ELFA_TRENDING_TOKENS: 'ELFA_TRENDING_TOKENS',
+  ELFA_NARRATIVES: 'ELFA_NARRATIVES',
+  ELFA_TOP_MENTIONS: 'ELFA_TOP_MENTIONS',
+  ELFA_KEYWORD_MENTIONS: 'ELFA_KEYWORD_MENTIONS',
+  ELFA_SMART_STATS: 'ELFA_SMART_STATS',
 } as const;
 
 // Daml Decimal type = Numeric 10 → 10 digits after the decimal point
@@ -34,6 +39,20 @@ export const SUPPORTED_TOKENS = [
     minAmount: '1',
   },
 ] as const;
+
+/**
+ * User-facing display name for an on-ledger instrument id. The id stays as-is on
+ * the ledger/API (e.g. 'Amulet'); we only rename the label the user sees
+ * ('Amulet' -> 'Canton Coin'). Falls back to the id for unknown instruments.
+ */
+export function tokenDisplayName(instrumentId: string): string {
+  return SUPPORTED_TOKENS.find((t) => t.id === instrumentId)?.chainName ?? instrumentId;
+}
+
+/** Short symbol for an instrument id (e.g. 'Amulet' -> 'CC'), for amount/unit labels. */
+export function tokenSymbol(instrumentId: string): string {
+  return SUPPORTED_TOKENS.find((t) => t.id === instrumentId)?.symbol ?? instrumentId;
+}
 
 export const AUTO_LOCK_MINUTES = Number(
   import.meta.env.VITE_AUTO_LOCK_MINUTES ?? '15',

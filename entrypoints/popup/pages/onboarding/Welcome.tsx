@@ -4,6 +4,7 @@ import { useGoogleAuth } from '../../hooks/useAuth';
 import { useNetwork } from '../../hooks/useNetwork';
 import { IconGoogle } from '@assets/icons/icon-google';
 import { IconLogo } from '@assets/icons/icon-logo';
+import brand from '@brand/brand';
 import { NETWORK_IDS, NETWORKS, type NetworkId } from '@lib/network';
 import type { GoogleAuthData } from '@lib/messaging';
 
@@ -93,14 +94,24 @@ export function Welcome({ onSuccess }: Props) {
     }
   };
 
+  const welcomeStyle = brand.welcomeBackgroundUrl
+    ? {
+        backgroundImage: `linear-gradient(to bottom, rgba(20,16,14,0.72), rgba(20,16,14,0.92)), url('${brand.welcomeBackgroundUrl}')`,
+      }
+    : undefined;
+
   return (
     <div
-      className="bg-background relative flex h-full flex-col items-center justify-between bg-cover bg-center p-6"
-      style={{ backgroundImage: "linear-gradient(to bottom, rgba(20,16,14,0.72), rgba(20,16,14,0.92)), url('/bg/skyline.jpg')" }}
+      className={
+        brand.welcomeBackgroundUrl
+          ? 'relative flex h-full flex-col items-center justify-between bg-cover bg-center p-6'
+          : 'bg-background flex h-full flex-col items-center justify-between p-6'
+      }
+      style={welcomeStyle}
     >
       <div className="flex flex-1 flex-col items-center justify-center gap-6">
         <IconLogo className="h-20 w-20" />
-        <h1 className="text-foreground text-2xl font-bold">Nocturnal</h1>
+        <h1 className="text-foreground text-2xl font-bold">{brand.displayName}</h1>
         <p className="text-muted-foreground text-center text-sm">
           Securely manage your Canton Network tokens
         </p>

@@ -20,8 +20,11 @@ PKCE flow via `chrome.identity.launchWebAuthFlow()`:
   so the OAuth client must be of type **Web application**.
 - The resulting Google **ID token** is forwarded to the backend `/auth/login`.
 
-The client ID and secret are read from `VITE_GOOGLE_CLIENT_ID` and
-`VITE_GOOGLE_CLIENT_SECRET` (see `.env` / `.env.example`).
+The client ID and secret are read from **`branding/nocturnal/.env`**
+(`VITE_GOOGLE_CLIENT_ID` / `VITE_GOOGLE_CLIENT_SECRET`). Copy
+`.env.example` → `.env` in this folder and fill them in. Do **not** put
+Nocturnal OAuth in the repo-root `.env` — that file is shared across brands
+and would contaminate Ginkgo builds.
 
 ## Step 1 — Create a new Google Cloud project for Nocturnal
 
@@ -63,14 +66,14 @@ The client ID and secret are read from `VITE_GOOGLE_CLIENT_ID` and
 
 ## Step 4 — Wire the credentials into the extension
 
-1. In `.env` (create it from `.env.example` if needed), set:
+1. In **`branding/nocturnal/.env`** (create it from `.env.example` in the same folder), set:
    ```
    VITE_GOOGLE_CLIENT_ID=<the Client ID from Step 3>
    VITE_GOOGLE_CLIENT_SECRET=<the Client secret from Step 3>
    ```
-   `.env` is gitignored — do not commit real secrets.
-2. Rebuild: `yarn build` (or restart `yarn dev`). Env vars are inlined at build time,
-   so a change to `.env` requires a rebuild.
+   That file is gitignored — do not commit real secrets. Do not put these in the repo-root `.env`.
+2. Rebuild: `yarn build:nocturnal` (or restart `yarn dev:nocturnal`). Env vars are
+   inlined at build time, so a change to the brand `.env` requires a rebuild.
 
 ## Step 5 — Verify
 

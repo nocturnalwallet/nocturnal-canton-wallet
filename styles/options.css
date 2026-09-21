@@ -1,47 +1,7 @@
 @import 'tailwindcss';
 
-@font-face {
-  font-family: 'Post Grotesk';
-  src: url('/fonts/PostGrotesk-Book.otf') format('opentype');
-  font-weight: 400; font-style: normal; font-display: swap;
-}
-@font-face {
-  font-family: 'Post Grotesk';
-  src: url('/fonts/PostGrotesk-Medium.otf') format('opentype');
-  font-weight: 500; font-style: normal; font-display: swap;
-}
-@font-face {
-  font-family: 'Post Grotesk';
-  src: url('/fonts/PostGrotesk-Bold.otf') format('opentype');
-  font-weight: 700; font-style: normal; font-display: swap;
-}
-
-/* Nocturnal Night — Full-tab options page — no fixed dimensions */
-:root {
-  --background: oklch(0.15 0.01 35);            /* #14100E warm near-black */
-  --foreground: oklch(0.92 0 0);                /* #E8E8E8 silver */
-  --card: oklch(0.19 0.012 35);                 /* #211A17 panel */
-  --card-foreground: oklch(0.92 0 0);
-  --popover: oklch(0.19 0.012 35);              /* #211A17 */
-  --popover-foreground: oklch(0.92 0 0);
-  --primary: oklch(0.70 0.175 27);              /* #F86858 Nocturnal coral */
-  --primary-foreground: oklch(0.16 0.02 30);    /* dark text on coral */
-  --secondary: oklch(0.19 0.012 35);            /* #211A17 */
-  --secondary-foreground: oklch(0.92 0 0);
-  --muted: oklch(0.19 0.012 35);                /* #211A17 */
-  --muted-foreground: oklch(0.65 0.01 40);      /* #9A9088 stone */
-  --accent: oklch(0.19 0.012 35);               /* #211A17 */
-  --accent-foreground: oklch(0.92 0 0);
-  --destructive: oklch(0.52 0.20 20);           /* #B7362C deep red (distinct from coral) */
-  --destructive-foreground: oklch(0.92 0 0);
-  --border: oklch(0.26 0.015 35);               /* #322824 warm-dark border */
-  --input: oklch(0.26 0.015 35);
-  --ring: oklch(0.70 0.175 27);                 /* coral focus ring */
-  --positive: oklch(0.76 0.17 155);             /* #2ECC71 mint — unchanged */
-  --positive-foreground: oklch(0.15 0.01 35);
-  --radius: 0.625rem;
-  --font-display: 'Futura', 'Century Gothic', 'Post Grotesk', system-ui, sans-serif;
-}
+/* Full-tab options page — no fixed dimensions.
+   Brand palette / fonts come from @brand/theme.css (imported in entrypoints). */
 
 @theme inline {
   --color-background: var(--background);
@@ -77,9 +37,5 @@
   }
   body {
     @apply bg-background text-foreground;
-    font-family: 'Post Grotesk', system-ui, -apple-system, sans-serif;
-  }
-  h1, h2, h3 {
-    font-family: var(--font-display);
   }
 }

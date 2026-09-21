@@ -1,22 +1,14 @@
-import { signTransactionHash, getPublicKeyFromPrivate } from '@canton-network/core-signing-lib';
 import { ok, err } from '@lib/messaging';
 import type { MessageResponse } from '@lib/messaging';
 import type {
   PrepareTransferResponse,
   PrepareTransferTokenStandardResponse,
+  TransferSubmitResult,
 } from '@lib/types';
-import { localStore, sessionStore } from '@lib/storage';
-import { getEncryptionProvider } from '../encryption';
+import { sessionStore } from '@lib/storage';
 import apiClient from '../api-client';
+import { signHashWithPassword } from '../signing/sign-with-password';
 import { resetAutoLockTimer } from './session.handler';
-
-async function decryptKey(password: string): Promise<string> {
-  const keystore = await localStore.get('keystore');
-  if (!keystore) throw new Error('No keystore found');
-
-  const provider = await getEncryptionProvider();
-  return provider.decryptKey(keystore, password);
-}
 
 async function verifyCurrentParty(expectedPartyId?: string): Promise<string> {
   const currentPartyId = await sessionStore.get('partyId');
@@ -28,64 +20,22 @@ async function verifyCurrentParty(expectedPartyId?: string): Promise<string> {
 }
 
 /**
- * Compute Canton fingerprint from a base64 public key and verify it matches
- * the fingerprint embedded in the partyId (format: hint::fingerprint).
- *
- * Fingerprint = hex(0x1220 || SHA256(int32_be(12) || raw_pubkey_bytes))
- */
-async function verifyKeyFingerprint(publicKeyBase64: string, partyId: string): Promise<void> {
-  // Decode base64 public key to raw bytes
-  const raw = atob(publicKeyBase64);
-  const pubKeyBytes = new Uint8Array(raw.length);
-  for (let i = 0; i < raw.length; i++) {
-    pubKeyBytes[i] = raw.charCodeAt(i);
-  }
-
-  // Prepend int32_be(12) = [0x00, 0x00, 0x00, 0x0c]
-  const prefixed = new Uint8Array(4 + pubKeyBytes.length);
-  prefixed[0] = 0x00;
-  prefixed[1] = 0x00;
-  prefixed[2] = 0x00;
-  prefixed[3] = 0x0c;
-  prefixed.set(pubKeyBytes, 4);
-
-  // SHA-256 hash
-  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', prefixed));
-
-  // Prepend 0x1220 and hex-encode
-  const fingerprint =
-    '1220' +
-    Array.from(digest)
-      .map((b) => b.toString(16).padStart(2, '0'))
-      .join('');
-
-  const expectedFingerprint = partyId.split('::')[1];
-  if (!expectedFingerprint || fingerprint !== expectedFingerprint) {
-    throw new Error(
-      'Key fingerprint mismatch — your signing key does not match your party ID.',
-    );
-  }
-}
-
-/**
  * Decrypt the private key, derive public key, verify fingerprint, and sign the hash.
- * Returns { signature, publicKey } for inclusion in submit requests.
+ * Returns the signature for inclusion in submit requests.
  */
 async function signAndVerify(
   password: string,
   partyId: string,
   preparedTransactionHash: string,
 ): Promise<string> {
-  const privateKey = await decryptKey(password);
-  const publicKey = getPublicKeyFromPrivate(privateKey);
-  await verifyKeyFingerprint(publicKey, partyId);
-  return signTransactionHash(preparedTransactionHash, privateKey);
+  const { signature } = await signHashWithPassword(password, partyId, preparedTransactionHash);
+  return signature;
 }
 
 export async function handleSignAndSubmitTransferPreapproval(payload: {
   password: string;
   preparedData: PrepareTransferResponse;
-}): Promise<MessageResponse<{ success: boolean }>> {
+}): Promise<MessageResponse<TransferSubmitResult>> {
   try {
     const { password, preparedData } = payload;
     const partyId = await verifyCurrentParty();
@@ -93,7 +43,7 @@ export async function handleSignAndSubmitTransferPreapproval(payload: {
       password, partyId, preparedData.preparedTransactionHash,
     );
 
-    await apiClient.post('/transfer-offer/submit', {
+    const { data } = await apiClient.post('/transfer-offer/submit', {
       preparedTransaction: preparedData.preparedTransaction,
       preparedTransactionHash: preparedData.preparedTransactionHash,
       hashingSchemeVersion: preparedData.hashingSchemeVersion,
@@ -101,7 +51,10 @@ export async function handleSignAndSubmitTransferPreapproval(payload: {
     });
 
     resetAutoLockTimer();
-    return ok({ success: true });
+    return ok({
+      success: true,
+      updateId: data?.data?.updateId as string | undefined,
+    });
   } catch (e: unknown) {
     return err(e instanceof Error ? e.message : 'Transfer failed');
   }
@@ -110,7 +63,7 @@ export async function handleSignAndSubmitTransferPreapproval(payload: {
 export async function handleSignAndSubmitTransferTokenStandard(payload: {
   password: string;
   preparedData: PrepareTransferTokenStandardResponse;
-}): Promise<MessageResponse<{ success: boolean }>> {
+}): Promise<MessageResponse<TransferSubmitResult>> {
   try {
     const { password, preparedData } = payload;
     const partyId = await verifyCurrentParty();
@@ -118,7 +71,7 @@ export async function handleSignAndSubmitTransferTokenStandard(payload: {
       password, partyId, preparedData.preparedTransactionHash,
     );
 
-    await apiClient.post('/transfer-offer/submit', {
+    const { data } = await apiClient.post('/transfer-offer/submit', {
       preparedTransaction: preparedData.preparedTransaction,
       preparedTransactionHash: preparedData.preparedTransactionHash,
       hashingSchemeVersion: preparedData.hashingSchemeVersion,
@@ -126,7 +79,10 @@ export async function handleSignAndSubmitTransferTokenStandard(payload: {
     });
 
     resetAutoLockTimer();
-    return ok({ success: true });
+    return ok({
+      success: true,
+      updateId: data?.data?.updateId as string | undefined,
+    });
   } catch (e: unknown) {
     return err(e instanceof Error ? e.message : 'Transfer failed');
   }

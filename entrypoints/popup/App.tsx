@@ -61,8 +61,10 @@ const APPROVAL_REQUEST_ID = searchParams.get('action') === 'dapp-approve' ? sear
 function TabLayout({ children }: { children: React.ReactNode }) {
   if (!IS_ONBOARDING_TAB) return <>{children}</>;
   return (
-    <div className="bg-background flex min-h-screen w-full items-center justify-center p-6">
-      <div className="border-border/40 h-[600px] w-full max-w-[420px] overflow-y-auto rounded-2xl border shadow-2xl shadow-black/40">
+    <div className="bg-background flex min-h-screen w-full items-center justify-center p-4">
+      {/* Fill the viewport height; width scales proportionally (2:3), so the
+          expanded tab uses the screen instead of a tiny fixed card. */}
+      <div className="border-border/40 aspect-[2/3] h-[calc(100dvh-2rem)] max-h-[960px] w-auto max-w-[95vw] overflow-y-auto rounded-2xl border shadow-2xl shadow-black/40">
         {children}
       </div>
     </div>
@@ -139,12 +141,9 @@ function MainApp() {
     // in the same React instance (with onboarding.partyStatus already pre-staged
     // by Welcome.onSuccess).
     if (authState.onboardingComplete && !postWipeRecovery) {
-      // Onboarding already complete — if we're in the onboarding tab,
-      // close it and let the user continue via the extension popup.
-      if (IS_ONBOARDING_TAB) {
-        window.close();
-        return;
-      }
+      // Onboarding already complete — show the unlock screen. In tab mode we keep
+      // the tab open (it previously auto-closed to push the user back to the
+      // popup, but the expanded tab is now a primary surface for lock/sign-in).
       setScreen('unlock');
     } else {
       setScreen('create-password');
@@ -184,10 +183,7 @@ function MainApp() {
               }
 
               if (data.onboardingComplete) {
-                if (IS_ONBOARDING_TAB) {
-                  window.close();
-                  return;
-                }
+                // Existing wallet — go straight to unlock, keeping the tab open.
                 setScreen('unlock');
               } else {
                 setOnboarding((prev) => ({

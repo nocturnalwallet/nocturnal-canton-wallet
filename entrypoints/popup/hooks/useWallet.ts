@@ -1,5 +1,10 @@
 import { sendMessage, MSG } from '@lib/messaging';
-import type { KeyPairData, OnboardingPrepareData, PreapprovalStatusData } from '@lib/messaging';
+import type {
+  AutoRegisterPreapprovalData,
+  KeyPairData,
+  OnboardingPrepareData,
+  PreapprovalStatusData,
+} from '@lib/messaging';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 export function useCreateKeypair() {
@@ -72,14 +77,32 @@ export function useRegisterPreapproval() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: () =>
+    mutationFn: (password: string) =>
       sendMessage<{ success: boolean }>({
         action: MSG.REGISTER_TRANSFER_PREAPPROVAL,
+        payload: { password },
       }),
     onSuccess: () => {
       // Invalidate so the next query hits the background handler, which
       // now returns true immediately via its in-memory flag.
       queryClient.invalidateQueries({ queryKey: ['preapprovalStatus'] });
+    },
+  });
+}
+
+export function useMaybeAutoRegisterPreapproval() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: () =>
+      sendMessage<AutoRegisterPreapprovalData>({
+        action: MSG.MAYBE_AUTO_REGISTER_PREAPPROVAL,
+      }),
+    onSuccess: (data) => {
+      // Only refresh the banner state if we actually registered.
+      if (data.registered) {
+        queryClient.invalidateQueries({ queryKey: ['preapprovalStatus'] });
+      }
     },
   });
 }

@@ -1,5 +1,6 @@
 import type { MSG } from './constants';
 import type { NetworkId, NetworkConfig } from '../network';
+import type { ElfaChatBlob } from '../elfa-chat';
 import type {
   AboutMeResponse,
   AutoApprovalPrepareResponse,
@@ -26,6 +27,7 @@ export type MessageRequest =
   | { action: typeof MSG.UNLOCK; payload: { password: string } }
   | { action: typeof MSG.LOCK }
   | { action: typeof MSG.GET_LOCK_STATE }
+  | { action: typeof MSG.VERIFY_PASSWORD; payload: { password: string } }
   // Network
   | { action: typeof MSG.GET_NETWORK }
   | { action: typeof MSG.SWITCH_NETWORK; payload: { network: NetworkId } }
@@ -54,8 +56,12 @@ export type MessageRequest =
   | { action: typeof MSG.DELETE_KEYSTORE }
   | { action: typeof MSG.RESET_KEYSTORE_FOR_RECOVERY }
   // Transfer pre-approval
-  | { action: typeof MSG.REGISTER_TRANSFER_PREAPPROVAL }
+  | {
+      action: typeof MSG.REGISTER_TRANSFER_PREAPPROVAL;
+      payload: { password: string };
+    }
   | { action: typeof MSG.GET_PREAPPROVAL_STATUS }
+  | { action: typeof MSG.MAYBE_AUTO_REGISTER_PREAPPROVAL }
   // Signing
   | {
       action: typeof MSG.SIGN_AND_SUBMIT_TRANSFER_PREAPPROVAL;
@@ -128,15 +134,31 @@ export type MessageRequest =
     }
   | { action: typeof MSG.FETCH_ABOUT_ME }
   | { action: typeof MSG.REQUEST_FAUCET; payload: { password: string; amount: string } }
+  | { action: typeof MSG.FETCH_ELFA_TRENDING_TOKENS; payload: { window: ElfaTimeWindow } }
+  | { action: typeof MSG.FETCH_ELFA_NARRATIVES; payload: { window: ElfaTimeWindow } }
+  | { action: typeof MSG.FETCH_ELFA_TOP_MENTIONS; payload: { ticker: string } }
+  | { action: typeof MSG.FETCH_ELFA_KEYWORD_MENTIONS; payload: { keywords: string } }
+  | { action: typeof MSG.FETCH_ELFA_SMART_STATS; payload: { username: string } }
+  | { action: typeof MSG.GET_ELFA_CHAT }
+  | { action: typeof MSG.ELFA_CHAT; payload: { message: string } }
+  | { action: typeof MSG.CLEAR_ELFA_CHAT }
   // dApp approval flow
   | { action: typeof MSG.GET_DAPP_APPROVAL; payload: { requestId: string } }
-  | { action: typeof MSG.DAPP_APPROVAL_RESULT; payload: { requestId: string; approved: boolean } };
+  | {
+      action: typeof MSG.DAPP_APPROVAL_RESULT;
+      payload: { requestId: string; approved: boolean; password?: string };
+    };
 
 // ── Response types ──
 
 export type MessageResponse<T = unknown> =
   | { success: true; data: T }
-  | { success: false; error: string };
+  | {
+      success: false;
+      error: string;
+      status?: number;
+      retryAfterSeconds?: number;
+    };
 
 // ── Response data by action ──
 
@@ -160,10 +182,15 @@ export interface GoogleAuthData {
   publicKey: string;
   onboardingComplete: boolean;
   keyMismatch: boolean;
+  shouldAutoRegisterPreapproval: boolean;
 }
 
 export interface LockStateData {
   unlocked: boolean;
+}
+
+export interface VerifyPasswordData {
+  valid: boolean;
 }
 
 export interface KeyPairData {
@@ -173,6 +200,80 @@ export interface KeyPairData {
 
 export interface BalancesData {
   balances: TokenBalance[];
+}
+
+// ── Elfa market intelligence (Phase 1, native data proxied via backend) ──
+
+export type { ElfaChatBlob };
+
+export interface ElfaChatResult {
+  sessionId: string;
+  message: string;
+  creditsConsumed: number;
+}
+
+/** Rolling window offered in the UI; mapped to Elfa params server-side
+ *  (timeWindow for tokens/news, timeFrame day|week for narratives). */
+export type ElfaTimeWindow = '24h' | '7d';
+
+export interface ElfaTrendingToken {
+  token: string;
+  current_count: number;
+  previous_count: number;
+  change_percent: number;
+}
+
+/** Canton Coin row injected server-side (Elfa doesn't track CC). */
+export interface ElfaCantonCoin {
+  token: string;
+  label: string;
+  priceUsd: string;
+}
+
+export interface ElfaTrendingTokensData {
+  total: number;
+  page: number;
+  pageSize: number;
+  data: ElfaTrendingToken[];
+  canton?: ElfaCantonCoin | null;
+}
+
+export interface ElfaNarrative {
+  narrative?: string;
+  theme?: string;
+  /** URLs of the posts that evidence this narrative. */
+  source_links?: string[];
+  tweet_ids?: string[];
+  [key: string]: unknown;
+}
+
+export interface ElfaNarrativesData {
+  trending_narratives: ElfaNarrative[];
+  metadata?: unknown;
+}
+
+/** A social mention. Shared shape for top-mentions and keyword-mentions
+ *  (top-mentions may omit `account`). */
+export interface ElfaMention {
+  tweetId: string;
+  link: string;
+  likeCount?: number;
+  repostCount?: number;
+  viewCount?: number;
+  mentionedAt: string;
+  type?: string;
+  account?: { username: string; isVerified: boolean };
+}
+
+export type ElfaTopMentionsData = ElfaMention[];
+export type ElfaKeywordMentionsData = ElfaMention[];
+
+export interface ElfaSmartStats {
+  smartFollowingCount: number;
+  smartFollowerCount: number;
+  averageEngagement: number;
+  averageReach: number;
+  followerCount: number;
 }
 
 export interface PaginatedOffersData {
@@ -195,6 +296,12 @@ export interface PrepareData {
 
 export interface PreapprovalStatusData {
   hasPreapproval: boolean;
+}
+
+export interface AutoRegisterPreapprovalData {
+  attempted: boolean;
+  registered: boolean;
+  reason?: string;
 }
 
 export interface OnboardingPrepareData {

@@ -1,10 +1,22 @@
 import { createKeyPair, getPublicKeyFromPrivate, signTransactionHash } from '@canton-network/core-signing-lib';
+import brand from '@brand/brand';
 import { ok, err } from '@lib/messaging';
-import type { MessageResponse, KeyPairData, OnboardingPrepareData, PreapprovalStatusData } from '@lib/messaging';
+import type {
+  MessageResponse,
+  KeyPairData,
+  OnboardingPrepareData,
+  PreapprovalStatusData,
+  AutoRegisterPreapprovalData,
+} from '@lib/messaging';
 import { localStore, sessionStore } from '@lib/storage';
 import { getEncryptionProvider } from '../encryption';
 import apiClient from '../api-client';
-import { setCachedPrivateKey, getCachedPrivateKey } from './session.handler';
+import {
+  getAutoRegisterKey,
+  clearAutoRegisterKey,
+  maybeCacheAutoRegisterKey,
+} from './session.handler';
+import { signHashWithKey } from '../signing/sign-with-password';
 
 interface PreparedExternalParty {
   partyId: string;
@@ -124,17 +136,20 @@ export async function handleCompleteOnboarding(payload: {
     bundle.walletKey = publicKey;
     await localStore.set('keystore', bundle);
 
-    // 2. Cache private key in memory (needed for transaction signing)
-    setCachedPrivateKey(privateKey);
+    // 2. Populate the scoped RAM key ONLY when a silent auto-register is
+    //    pending (no-op otherwise) — signing is password-on-demand everywhere else.
+    await maybeCacheAutoRegisterKey(privateKey);
 
     // Only run onboarding if the user is new (not already registered on the backend)
     const partyStatus = await sessionStore.get('partyStatus');
     if (partyStatus !== 'SUCCESSFULLY') {
-      const partyHint = import.meta.env.VITE_PARTY_HINT || 'nocturnal-wallet';
+      // Party hint is brand-owned (branding/<id>/brand.ts). Do not read
+      // VITE_PARTY_HINT — a shared .env would contaminate every VITE_BRAND build.
+      const partyHint = brand.partyHintDefault;
 
       // 3. Backend prepares a party-allocation topology transaction.
       //    Returns { partyId, namespace, multiHash, topologyTransactions }.
-      console.log(`[Nocturnal] POST /external-party/onboarding/prepare hint=${partyHint}`);
+      console.log(`${brand.logTag} POST /external-party/onboarding/prepare hint=${partyHint}`);
       const prepareResponse = await apiClient.post(
         '/external-party/onboarding/prepare',
         { publicKey, hint: partyHint },
@@ -150,7 +165,7 @@ export async function handleCompleteOnboarding(payload: {
       // 5. Backend submits the signed topology to Canton and flips the party's
       //    onboardingStatus to SUCCESSFULLY (which also persists the user↔party
       //    link — no separate /auth/register-party call needed).
-      console.log(`[Nocturnal] POST /external-party/onboarding/submit partyId=${prepared.partyId}`);
+      console.log(`${brand.logTag} POST /external-party/onboarding/submit partyId=${prepared.partyId}`);
       const submitResponse = await apiClient.post(
         '/external-party/onboarding/submit',
         { signedHash, preparedParty: prepared },
@@ -163,7 +178,7 @@ export async function handleCompleteOnboarding(payload: {
       // 6. Persist partyId + onboarding status for the rest of the runtime.
       await sessionStore.set('partyId', submitted.partyId);
       await sessionStore.set('partyStatus', 'SUCCESSFULLY');
-      console.log(`[Nocturnal] Onboarding complete: ${submitted.partyId}`);
+      console.log(`${brand.logTag} Onboarding complete: ${submitted.partyId}`);
     }
 
     // 7. Mark onboarding complete
@@ -193,20 +208,17 @@ export async function handleExportPrivateKey(
 }
 
 /**
- * Register transfer preapproval via dapp-core.
- * Flow: prepare → sign locally → submit (same pattern as faucet).
+ * Shared prepare → sign → submit body for transfer-preapproval registration.
+ * Both the manual (password-decrypted key) and silent auto-register (scoped
+ * RAM key) paths funnel through here; they differ ONLY in how they obtain the
+ * raw private key. The key is used to sign the prepared hash via
+ * `signHashWithKey` and is never persisted here.
  */
-export async function handleRegisterTransferPreapproval(): Promise<
-  MessageResponse<{ success: boolean }>
-> {
+async function registerPreapprovalWithKey(
+  partyId: string,
+  privateKey: string,
+): Promise<MessageResponse<{ success: boolean }>> {
   try {
-    const partyId = await sessionStore.get('partyId');
-    if (!partyId) return err('No party ID');
-
-    // Use cached private key (preferred) or fail — user must be unlocked
-    const privateKey = getCachedPrivateKey();
-    if (!privateKey) return err('Private key not available — please unlock the wallet');
-
     // Step 1: Prepare via dapp-core
     const { data: prepareRes } = await apiClient.post(
       '/wallet/transfer-preapproval/prepare',
@@ -217,8 +229,13 @@ export async function handleRegisterTransferPreapproval(): Promise<
       return err('Transfer preapproval prepare returned no transaction hash');
     }
 
-    // Step 2: Sign locally
-    const signature = signTransactionHash(prepared.preparedTransactionHash, privateKey);
+    // Step 2: Sign the prepared hash with the raw key (verifies the key
+    // fingerprint against partyId before signing).
+    const { signature } = await signHashWithKey(
+      privateKey,
+      partyId,
+      prepared.preparedTransactionHash,
+    );
 
     // Step 3: Submit signed transaction to dapp-core
     await apiClient.post('/wallet/transfer-preapproval/submit', {
@@ -229,8 +246,41 @@ export async function handleRegisterTransferPreapproval(): Promise<
       commandId: prepared.commandId,
     });
 
+    // Durable, network+user-scoped marker: survives service-worker restarts so a
+    // transient status-check failure can never re-trigger a duplicate registration.
+    // Submission has already succeeded, so a storage failure must not report the
+    // registration as failed and invite a duplicate retry.
+    try {
+      await localStore.set('preapprovalRegistered', true);
+    } catch {
+      // Best-effort persistence; the in-memory marker still protects this runtime.
+    }
     markPreapprovalRegistered();
     return ok({ success: true });
+  } catch (e: unknown) {
+    return err(e instanceof Error ? e.message : 'Transfer preapproval registration failed');
+  }
+}
+
+/**
+ * Register transfer preapproval via dapp-core (manual path).
+ * Flow: decrypt the keystore on demand with the supplied password →
+ * prepare → sign → submit. The decrypted key is used only to sign and is
+ * never persisted or cached.
+ */
+export async function handleRegisterTransferPreapproval(
+  password: string,
+): Promise<MessageResponse<{ success: boolean }>> {
+  try {
+    const partyId = await sessionStore.get('partyId');
+    if (!partyId) return err('No party ID');
+
+    const keystore = await localStore.get('keystore');
+    if (!keystore) return err('No keystore found');
+    const provider = await getEncryptionProvider();
+    const privateKey = await provider.decryptKey(keystore, password);
+
+    return await registerPreapprovalWithKey(partyId, privateKey);
   } catch (e: unknown) {
     return err(e instanceof Error ? e.message : 'Transfer preapproval registration failed');
   }
@@ -282,10 +332,64 @@ export async function handleGetPreapprovalStatus(): Promise<
   }
 }
 
+export async function handleMaybeAutoRegisterPreapproval(): Promise<
+  MessageResponse<AutoRegisterPreapprovalData>
+> {
+  try {
+    const shouldAuto = await sessionStore.get('shouldAutoRegisterPreapproval');
+    if (!shouldAuto) {
+      return ok({ attempted: false, registered: false, reason: 'disabled' });
+    }
+
+    // Silent path only: requires the scoped RAM key cached at unlock/onboarding.
+    // (This flow runs unattended, so it can never prompt for a password.)
+    const key = getAutoRegisterKey();
+    if (!key) {
+      return ok({ attempted: false, registered: false, reason: 'locked' });
+    }
+
+    // Durable defense-in-depth: if this account already recorded a successful
+    // registration, never re-attempt — even if the authoritative status check
+    // below transiently fails. (If the on-ledger preapproval legitimately
+    // disappears/expires the user can still register manually; renewal is out of scope.)
+    if (await localStore.get('preapprovalRegistered')) {
+      return ok({ attempted: false, registered: false, reason: 'durable' });
+    }
+
+    // Idempotent: never register if the party already has an active preapproval.
+    const status = await handleGetPreapprovalStatus();
+    if (status.success && status.data.hasPreapproval) {
+      // Confirmed on-ledger — the scoped key has served its purpose; drop it.
+      clearAutoRegisterKey();
+      return ok({ attempted: false, registered: false, reason: 'already-registered' });
+    }
+
+    const partyId = await sessionStore.get('partyId');
+    if (!partyId) return ok({ attempted: true, registered: false, reason: 'No party ID' });
+
+    const res = await registerPreapprovalWithKey(partyId, key);
+    if (res.success) {
+      // Registration confirmed — the scoped key has served its purpose; drop it.
+      clearAutoRegisterKey();
+      return ok({ attempted: true, registered: true });
+    }
+    return ok({ attempted: true, registered: false, reason: res.error });
+  } catch (e: unknown) {
+    // Best-effort: never throw out of the auto path.
+    return ok({
+      attempted: true,
+      registered: false,
+      reason: e instanceof Error ? e.message : 'auto-register failed',
+    });
+  }
+}
+
 export async function handleDeleteKeystore(): Promise<MessageResponse<void>> {
   try {
+    clearPreapprovalCache();
     await localStore.remove('keystore');
     await localStore.set('onboardingComplete', false);
+    await localStore.set('preapprovalRegistered', false);
     await sessionStore.clear();
     return ok(undefined);
   } catch (e: unknown) {
@@ -305,8 +409,10 @@ export async function handleDeleteKeystore(): Promise<MessageResponse<void>> {
  */
 export async function handleResetKeystoreForRecovery(): Promise<MessageResponse<null>> {
   try {
+    clearPreapprovalCache();
     await localStore.set('keystore', null);
     await localStore.set('onboardingComplete', false);
+    await localStore.set('preapprovalRegistered', false);
     return ok(null);
   } catch (e: unknown) {
     return err(e instanceof Error ? e.message : 'Failed to reset keystore for recovery');

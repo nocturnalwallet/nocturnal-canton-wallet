@@ -37,3 +37,18 @@ export const sessionSchema = z.object({
 });
 
 export type SessionData = z.infer<typeof sessionSchema>;
+
+export const elfaChatMessageSchema = z.object({
+  role: z.enum(['user', 'assistant']),
+  text: z.string(),
+  at: z.number(),
+});
+
+export type ElfaChatMessage = z.infer<typeof elfaChatMessageSchema>;
+
+export const elfaChatBlobSchema = z.object({
+  sessionId: z.string().nullable(),
+  messages: z.array(elfaChatMessageSchema),
+});
+
+export type ElfaChatBlob = z.infer<typeof elfaChatBlobSchema>;

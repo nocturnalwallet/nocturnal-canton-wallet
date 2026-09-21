@@ -1,9 +1,10 @@
 import { ok, err } from '@lib/messaging';
 import type { MessageResponse, AuthStateData, GoogleAuthData } from '@lib/messaging';
-import { localStore, setUserScope } from '@lib/storage';
+import { localStore, setUserScope, whenStorageReady } from '@lib/storage';
 import { sessionStore } from '@lib/storage';
+import brand from '@brand/brand';
 import apiClient from '../api-client';
-import { setCachedPrivateKey } from './session.handler';
+import { clearAutoRegisterKey } from './session.handler';
 import { clearPreapprovalCache } from './keystore.handler';
 
 // --- PKCE helpers ---
@@ -38,7 +39,7 @@ export async function handleGoogleAuth(): Promise<MessageResponse<GoogleAuthData
     if (!GOOGLE_CLIENT_SECRET) return err('VITE_GOOGLE_CLIENT_SECRET is not configured');
 
     const redirectUri = chrome.identity.getRedirectURL();
-    console.log('[Nocturnal] OAuth redirect URI:', redirectUri);
+    console.log(`${brand.logTag} OAuth redirect URI:`, redirectUri);
 
     // PKCE: generate verifier + challenge
     const codeVerifier = generateCodeVerifier();
@@ -89,7 +90,7 @@ export async function handleGoogleAuth(): Promise<MessageResponse<GoogleAuthData
 
     if (!tokenRes.ok) {
       const errBody = await tokenRes.text();
-      console.error('[Nocturnal] Token exchange failed:', errBody);
+      console.error(`${brand.logTag} Token exchange failed:`, errBody);
       return err('Token exchange failed');
     }
 
@@ -122,11 +123,13 @@ export async function handleGoogleAuth(): Promise<MessageResponse<GoogleAuthData
     const partyId = party?.partyId ?? null;
     const partyStatus = party?.onboardingStatus ?? 'PENDING';
     const publicKey = party?.publicKey ?? '';
+    const shouldAutoRegisterPreapproval = meData.data?.shouldAutoRegisterPreapproval === true;
 
     if (partyId) {
       await sessionStore.set('partyId', partyId);
     }
     await sessionStore.set('partyStatus', partyStatus);
+    await sessionStore.set('shouldAutoRegisterPreapproval', shouldAutoRegisterPreapproval);
 
     // Check if this user has already completed onboarding on this network
     const onboardingComplete = !!(await localStore.get('onboardingComplete'));
@@ -144,14 +147,14 @@ export async function handleGoogleAuth(): Promise<MessageResponse<GoogleAuthData
         existingKeystore.walletKey !== publicKey
       ) {
         keyMismatch = true;
-        console.warn('[Nocturnal] Keystore mismatch detected', {
+        console.warn(`${brand.logTag} Keystore mismatch detected`, {
           expected: publicKey.slice(0, 12) + '…',
           actual: existingKeystore.walletKey.slice(0, 12) + '…',
         });
       }
     } catch (e) {
       // Storage read failed — treat as no-mismatch (no regression vs. today's behavior)
-      console.warn('[Nocturnal] Could not read keystore for mismatch check:', e);
+      console.warn(`${brand.logTag} Could not read keystore for mismatch check:`, e);
     }
 
     return ok({
@@ -162,6 +165,7 @@ export async function handleGoogleAuth(): Promise<MessageResponse<GoogleAuthData
       publicKey,
       onboardingComplete,
       keyMismatch,
+      shouldAutoRegisterPreapproval,
     });
   } catch (e: unknown) {
     return err(e instanceof Error ? e.message : 'Google auth failed');
@@ -170,6 +174,7 @@ export async function handleGoogleAuth(): Promise<MessageResponse<GoogleAuthData
 
 export async function handleGetAuthState(): Promise<MessageResponse<AuthStateData>> {
   try {
+    await whenStorageReady();
     const token = await sessionStore.get('authToken');
     const user = await localStore.get('user'); // network-scoped
     const partyId = await sessionStore.get('partyId');
@@ -211,8 +216,8 @@ export async function handleRefreshToken(): Promise<MessageResponse<{ token: str
 
 export async function handleLogout(): Promise<MessageResponse<void>> {
   try {
-    // Clear cached private key, preapproval cache, and auto-lock alarm
-    setCachedPrivateKey(null);
+    // Clear the scoped auto-register key, preapproval cache, and auto-lock alarm
+    clearAutoRegisterKey();
     clearPreapprovalCache();
     chrome.alarms.clear('auto-lock');
 

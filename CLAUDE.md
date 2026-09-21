@@ -4,16 +4,21 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-Nocturnal is a **Canton Network wallet browser extension** (a rebranded fork of Ginkgo) (Chrome MV3 / Firefox MV2) built with [WXT](https://wxt.dev), React 19, TypeScript, and Tailwind CSS 4. It implements the CIP-0103 dApp API and manages keys, balances, transfers, and offers.
+This repo is the **Nocturnal Canton Network wallet browser extension** (Chrome MV3 / Firefox MV2) built with [WXT](https://wxt.dev), React 19, TypeScript, and Tailwind CSS 4. It implements the CIP-0103 dApp API and manages keys, balances, transfers, and offers.
+
+The single brand pack (`nocturnal`) lives under [`branding/`](branding/README.md), selected at build time with `VITE_BRAND=nocturnal` (the default). Core code imports the active pack via the `@brand` alias — kept pluggable so a new brand pack could be added later.
 
 ## Commands
 
 ```bash
 yarn install --ignore-engines   # --ignore-engines needed: a transitive dep declares node>=22
-yarn dev                        # Chrome with hot reload (opens browser, popup is 400x600)
-yarn dev:firefox                # Firefox with hot reload
-yarn build                      # Chrome production build -> build/
-yarn build:all                  # Chrome + Firefox
+yarn dev                        # Nocturnal Chrome hot reload (opens browser, popup is 400x600)
+yarn dev:firefox                # Nocturnal Firefox with hot reload
+yarn build                      # Nocturnal Chrome → build/nocturnal-chrome-mv3
+yarn build:prod                 # Nocturnal Mainnet-only → build/nocturnal-chrome-mv3-mainnet
+yarn build:firefox              # Nocturnal Firefox
+yarn build:all                  # Nocturnal Chrome + Firefox
+yarn zip                        # Package the Chrome build
 yarn lint                       # eslint .
 yarn typecheck                  # tsc --noEmit
 yarn test                       # vitest run (all tests)
@@ -22,7 +27,7 @@ yarn test path/to/file.test.ts  # run a single test file
 yarn test -t "name substring"   # run tests matching a name
 ```
 
-Tests run in a `node` environment (`globals: false`, so import `describe/it/expect/vi` from `vitest` explicitly). Tests live next to the code they cover (`*.test.ts`). After dependency changes, `postinstall` runs `wxt prepare` to regenerate `.wxt/` types.
+Tests run in a `node` environment (`globals: false`, so import `describe/it/expect/vi` from `vitest` explicitly). Tests live next to the code they cover (`*.test.ts`). After dependency changes, `postinstall` runs `wxt prepare` to regenerate `.wxt/` types. The `@brand` alias resolves to `branding/nocturnal`.
 
 ## Architecture
 
@@ -42,12 +47,15 @@ The extension has three runtime contexts that communicate by message passing —
 A single dapp-core backend at `NETWORKS[network].apiBaseUrl` serves both surfaces:
 
 - REST endpoints (`api-client.ts`, Axios) for balances/transfers/offers/auth/onboarding/faucet.
-- JSON-RPC 2.0 facade (`gateway-facade-client.ts`, `fetch`-based) at `/api/v0/dapp` and `/api/v0/user`, **authenticated with the same backend Bearer token** from `sessionStore.authToken` — no in-extension JWT minting, no signing relay. On a 401 the facade refreshes the token once (`refreshAuthTokenOnce`) and retries. See `docs/superpowers/specs/2026-06-09-ginkgo-cip-0103-facade-migration-design.md`.
+- JSON-RPC 2.0 facade (`gateway-facade-client.ts`, `fetch`-based) at `/api/v0/dapp` and `/api/v0/user`, **authenticated with the same backend Bearer token** from `sessionStore.authToken` — no in-extension JWT minting, no signing relay. On a 401 the facade refreshes the token once (`refreshAuthTokenOnce`) and retries.
 
 This replaced an earlier dual-backend design (separate Wallet Gateway + Socket.io signing relay with self-signed JWTs). `tools/signing-relay/` and `lib/dapp-api/gateway-types.ts` are leftovers from that design — kept in-tree for reference but **not part of the extension build**.
 
 ### Signing pattern (all on-ledger operations)
-Popup requests a `prepare` → background returns `{preparedTransaction, hash}` → popup sends the user's password → background decrypts the key (or uses the in-memory cached key while unlocked), signs the hash, and submits `{preparedTransaction, signature}`. Keys are never returned to the popup.
+**Password-on-demand.** Popup requests a `prepare` → background returns `{preparedTransaction, hash}` → popup sends the user's password → background decrypts the key **for that single signing operation via the shared `entrypoints/background/signing/sign-with-password.ts` helper, signs the hash, and drops the key reference** → submits `{preparedTransaction, signature}`. Keys are never returned to the popup and are never cached for general reuse. dApp signing (`signMessage`/`signTransaction`/`prepareExecute`) collects the password **in the CIP-0103 approval popup** (verify-on-approve via `MSG.VERIFY_PASSWORD`), which forwards it to the same helper. The one exception is **silent auto-register of transfer pre-approval**, the only flow with no user present to prompt: it uses a narrowly-scoped in-memory key (`_autoRegisterKey` in `session.handler.ts`) populated at unlock/onboarding **only when `shouldAutoRegisterPreapproval` is set**, and cleared on lock/logout/network-switch/auto-lock and once the pre-approval is confirmed.
+
+### Lock / auto-lock
+`unlocked` is a `chrome.storage.session` flag that survives service-worker restarts. Re-lock is **inactivity-timeout only**: the `chrome.alarms` auto-lock timer (`VITE_AUTO_LOCK_MINUTES`, default 15), plus explicit lock/logout/network-switch, are the only things that set `unlocked = false`. `handleGetLockState` is side-effect-free. (There is no longer a "cached key missing → force re-lock" reconciliation; because signing is password-on-demand, a restarted SW can still sign without a forced re-lock.)
 
 ### Storage (`lib/storage/`)
 - `localStore` — `chrome.storage.local`, **namespaced by `{network}:{userId}:`** so switching network/account never leaks data. Migrations (`migrateUnprefixedData`, `migrateToUserScoped`) run on background startup. Call `setNetworkPrefix()` / `setUserScope()` to change scope.

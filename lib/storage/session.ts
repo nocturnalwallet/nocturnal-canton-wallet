@@ -3,6 +3,7 @@ export interface SessionStorageSchema {
   refreshToken: string | null;
   partyId: string | null;
   partyStatus: string;
+  shouldAutoRegisterPreapproval: boolean;
   unlocked: boolean;
   lastActivity: number;
 }
@@ -12,6 +13,7 @@ const DEFAULTS: SessionStorageSchema = {
   refreshToken: null,
   partyId: null,
   partyStatus: 'PENDING',
+  shouldAutoRegisterPreapproval: false,
   unlocked: false,
   lastActivity: 0,
 };

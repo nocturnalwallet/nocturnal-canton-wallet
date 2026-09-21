@@ -1,8 +1,9 @@
 import axios from 'axios';
 import { sessionStore } from '@lib/storage';
 import { refreshAuthTokenOnce } from '@lib/auth-refresh';
+import { extractApiErrorMessage } from '@lib/api-error';
 
-let currentBaseUrl = import.meta.env.VITE_API_BASE_URL ?? '';
+let currentBaseUrl = '';
 
 export function setApiBaseUrl(url: string): void {
   currentBaseUrl = url;
@@ -37,6 +38,13 @@ apiClient.interceptors.response.use(
         originalRequest.headers.Authorization = `Bearer ${newToken}`;
         return apiClient(originalRequest);
       }
+    }
+    // Prefer backend `{ message }` over Axios's "Request failed with status code N"
+    // so popup handlers that surface `error.message` show actionable text
+    // (e.g. insufficient balance on /transfer-offer/prepare).
+    const apiMessage = extractApiErrorMessage(error.response?.data);
+    if (apiMessage) {
+      error.message = apiMessage;
     }
     return Promise.reject(error);
   },
