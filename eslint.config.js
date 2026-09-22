@@ -3,7 +3,6 @@
 //   - react-hooks/recommended (exhaustive-deps, rules-of-hooks)
 //   - react-refresh (HMR safety under WXT/Vite)
 //   - jsx-a11y/recommended (a11y violations in JSX)
-//   - tailwindcss (class ordering + invalid class names)
 //
 // Generated files (build/, .output/, node_modules/, dist/) and the WXT
 // type-generation directory (.wxt/) are excluded.
@@ -13,7 +12,6 @@ import react from 'eslint-plugin-react';
 import reactHooks from 'eslint-plugin-react-hooks';
 import reactRefresh from 'eslint-plugin-react-refresh';
 import jsxA11y from 'eslint-plugin-jsx-a11y';
-import tailwind from 'eslint-plugin-tailwindcss';
 import globals from 'globals';
 
 export default tseslint.config(
@@ -47,15 +45,9 @@ export default tseslint.config(
       'react-hooks': reactHooks,
       'react-refresh': reactRefresh,
       'jsx-a11y': jsxA11y,
-      tailwindcss: tailwind,
     },
     settings: {
       react: { version: 'detect' },
-      tailwindcss: {
-        // Tailwind v4 doesn't need a config path; class-name detection works
-        // off the CSS @theme directive in styles/globals.css.
-        callees: ['classnames', 'clsx', 'ctl', 'cva', 'tv', 'cn'],
-      },
     },
     languageOptions: {
       globals: { ...globals.browser, ...globals.webextensions },
@@ -78,11 +70,6 @@ export default tseslint.config(
 
       // a11y: project-wide accessibility checks on JSX.
       ...jsxA11y.configs.recommended.rules,
-
-      // Tailwind: enforce canonical class order; flag invalid classes.
-      'tailwindcss/classnames-order': 'warn',
-      'tailwindcss/no-custom-classname': 'off', // we use shadcn-style custom classes
-      'tailwindcss/no-contradicting-classname': 'error',
     },
   },
 

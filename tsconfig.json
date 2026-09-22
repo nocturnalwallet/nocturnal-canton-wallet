@@ -17,5 +17,13 @@
     "**/*.ts",
     "**/*.tsx",
     ".wxt/wxt.d.ts"
+  ],
+  "exclude": [
+    "build",
+    ".output",
+    // Self-contained Node project with its own tsconfig/package.json/deps and
+    // not part of the extension build (see CLAUDE.md). Typecheck it via its own
+    // `tsc` in tools/signing-relay, not the extension's `yarn typecheck`.
+    "tools"
   ]
 }

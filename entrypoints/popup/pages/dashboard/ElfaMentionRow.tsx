@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { ExternalLinkIcon, ChevronDownIcon, ChevronUpIcon } from 'lucide-react';
 import type { ElfaMention } from '@lib/messaging';
 import { useElfaSmartStats } from '../../hooks/useElfa';
-import { handleFromUrl, compactNumber, safeExternalUrl } from './elfa-shared';
+import { handleFromUrl, compactNumber, safeExternalUrl } from './elfa-utils';
 
 /**
  * A single social-mention row, shared by News, token drill-down, and Search.

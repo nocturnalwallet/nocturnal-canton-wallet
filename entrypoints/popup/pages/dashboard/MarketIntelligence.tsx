@@ -15,7 +15,8 @@ import {
 } from '../../hooks/useElfa';
 import type { ElfaNarrative, ElfaTimeWindow } from '@lib/messaging';
 import { IconCanton } from '@assets/icons/icon-canton';
-import { StateWrap, handleFromUrl, safeExternalUrl } from './elfa-shared';
+import { StateWrap } from './elfa-shared';
+import { handleFromUrl, safeExternalUrl } from './elfa-utils';
 import { ElfaTokenDetail } from './ElfaTokenDetail';
 import { ElfaSearch } from './ElfaSearch';
 import { ElfaChat } from './ElfaChat';

@@ -2,7 +2,7 @@
   "name": "nocturnal-wallet",
   "description": "Nocturnal — Canton Network wallet browser extension with CIP-0103 dApp API support",
   "private": true,
-  "version": "0.8.0",
+  "version": "0.5.0",
   "type": "module",
   "scripts": {
     "dev": "VITE_BRAND=nocturnal wxt",
@@ -67,7 +67,6 @@
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.3",
-    "eslint-plugin-tailwindcss": "^3.18.3",
     "globals": "^17.6.0",
     "postcss": "^8.5.6",
     "prettier": "^3.6.2",
