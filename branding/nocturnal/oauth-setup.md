@@ -5,8 +5,8 @@ Google Cloud **project** and OAuth **client**, and that client must list
 Nocturnal's redirect URI. Until this is done, Google sign-in fails with
 `redirect_uri_mismatch`; all non-OAuth flows work normally.
 
-- Extension ID: `iijglelilemfjgadbekgleiclimbaopf`
-- Redirect URI to register: `https://iijglelilemfjgadbekgleiclimbaopf.chromiumapp.org/`
+- Extension ID: `kipdkhhnfoggaalehloecmmlhpmbpkjk`
+- Redirect URI to register: `https://kipdkhhnfoggaalehloecmmlhpmbpkjk.chromiumapp.org/`
   (include the trailing slash — it must match `chrome.identity.getRedirectURL()` exactly)
 
 ## How the extension uses OAuth
@@ -60,7 +60,7 @@ and would contaminate Ginkgo builds.
    pattern.)
 3. Name: e.g. `Nocturnal extension`.
 4. Under **Authorized redirect URIs**, click **+ Add URI** and paste:
-   `https://iijglelilemfjgadbekgleiclimbaopf.chromiumapp.org/`
+   `https://kipdkhhnfoggaalehloecmmlhpmbpkjk.chromiumapp.org/`
    (exact, with the trailing slash).
 5. Click **Create**. Copy the **Client ID** and **Client secret** shown.
 
@@ -78,7 +78,7 @@ and would contaminate Ginkgo builds.
 ## Step 5 — Verify
 
 1. Load `build/nocturnal-chrome-mv3` unpacked at `chrome://extensions` (Developer mode on).
-   Confirm the extension ID shown is `iijglelilemfjgadbekgleiclimbaopf` — if it is
+   Confirm the extension ID shown is `kipdkhhnfoggaalehloecmmlhpmbpkjk` — if it is
    different, the redirect URI won't match and sign-in will fail. (The ID is pinned
    by the manifest `key`; do not change `key`.)
 2. Open onboarding and sign in with a Google account that is listed as a **Test user**
