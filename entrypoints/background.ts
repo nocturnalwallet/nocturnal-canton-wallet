@@ -123,7 +123,21 @@ export default defineBackground(() => {
     }
 
     if (message.type === WalletEvent.SPLICE_WALLET_EXT_OPEN) {
-      createCenteredPopup(message.url, 400, 600);
+      // The URL is page-controlled (relayed from a web page). Only open http(s)
+      // targets so a malicious page can't drive the extension to open
+      // javascript:/data:/file:/chrome: schemes in a privileged popup window.
+      let safeUrl: string | undefined;
+      try {
+        const u = new URL(message.url);
+        if (u.protocol === 'http:' || u.protocol === 'https:') safeUrl = message.url;
+      } catch {
+        // malformed URL — ignore
+      }
+      if (safeUrl) {
+        createCenteredPopup(safeUrl, 400, 600);
+      } else {
+        console.warn(`${brand.logTag} Ignored SPLICE_WALLET_EXT_OPEN with unsafe/invalid url`);
+      }
       sendResponse(null);
       return false;
     }
