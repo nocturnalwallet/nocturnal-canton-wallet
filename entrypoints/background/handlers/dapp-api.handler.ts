@@ -178,12 +178,19 @@ export async function buildStatusEvent(): Promise<unknown> {
   };
 
   // Session per spec (openrpc-dapp-api.json:819-834): { accessToken, userId }
-  // with additionalProperties: false. Omit entirely when the user hasn't signed in.
-  const authToken = await sessionStore.get('authToken');
-  const user = await localStore.get('user');
-  const session = authToken && user?.id
-    ? { accessToken: authToken, userId: user.id }
-    : undefined;
+  // with additionalProperties: false — so it's all-or-nothing, you cannot return
+  // userId without the token.
+  //
+  // We deliberately NEVER emit `session`. `status` is not approval-gated and the
+  // content script matches <all_urls>, so emitting session here would hand the
+  // backend Bearer token (sessionStore.authToken) to ANY origin the user visits,
+  // with no connect/approval — and also push it on every statusChanged event.
+  // `session` is optional on StatusEvent (required: ['provider','connection']),
+  // so omitting it is spec-conformant. dApps obtain ledger access through the
+  // wallet-proxied `ledgerApi` / `prepareExecute` methods, which use the token
+  // server-side inside the extension and never expose it to the page.
+  // Re-exposing session to connected origins would require a connected-sites
+  // allowlist + per-origin event routing (a separate, larger feature).
 
   return {
     provider: {
@@ -196,7 +203,6 @@ export async function buildStatusEvent(): Promise<unknown> {
       networkId: toCaip2NetworkId(networkId),
       ledgerApi: config.apiBaseUrl,
     },
-    ...(session ? { session } : {}),
   };
 }
 

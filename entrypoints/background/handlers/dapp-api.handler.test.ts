@@ -232,8 +232,9 @@ describe('handleStatus — CIP-0103 StatusEvent shape', () => {
   beforeEach(() => {
     setupUnlockedWallet(publicKey, privateKey);
     // setupUnlockedWallet already provides authToken via sessionStore mock.
-    // Add user.id via localStore mock so session emission has all required fields.
-     
+    // Add user.id via localStore mock so the wallet is fully signed in — this
+    // lets the test below prove `session` is withheld even when it COULD be emitted.
+
     vi.mocked(localStore.get).mockImplementation((async (key: string) => {
       if (key === 'keystore') {
         return { walletKey: publicKey, cantonKey: '', hashedKey: '', backend: 'webcrypto', version: 1 };
@@ -257,25 +258,24 @@ describe('handleStatus — CIP-0103 StatusEvent shape', () => {
     expect(typeof status.connection.networkReason).toBe('string');
   });
 
-  it('session has spec shape { accessToken, userId } per openrpc-dapp-api.json:819-834 (additionalProperties: false)', async () => {
+  it('NEVER emits session even when fully signed in — the backend token must not reach the page', async () => {
+    // Wallet is unlocked AND signed in (authToken + user.id present via the
+    // mocks above). The backend Bearer token must still not be exposed through
+    // the dApp API: `status` is unauthenticated/open to any <all_urls> origin.
     const res = await handleDappApiRequest(dappReq('status', {}));
-    const status = unwrapResult<{ session?: Record<string, unknown> }>(res);
-    expect(status.session).toBeDefined();
-    expect(Object.keys(status.session!).sort()).toEqual(['accessToken', 'userId']);
-    expect(status.session!.accessToken).toBe('test-token');
-    expect(status.session!.userId).toBe('test-user-id');
+    const status = unwrapResult<{ session?: unknown }>(res);
+    expect(status.session).toBeUndefined();
   });
 
-  it('omits session entirely when authToken is absent', async () => {
+  it('omits session when signed out too', async () => {
     vi.mocked(sessionStore.get).mockImplementation(async (key: string) => {
       if (key === 'partyId') return TEST_PARTY_ID;
       if (key === 'unlocked') return true;
       if (key === 'partyStatus') return 'SUCCESSFULLY';
-      // authToken returns null → no Google session → omit session field
       return null;
     });
     const res = await handleDappApiRequest(dappReq('status', {}));
-    const status = unwrapResult<{ session?: Record<string, unknown> }>(res);
+    const status = unwrapResult<{ session?: unknown }>(res);
     expect(status.session).toBeUndefined();
   });
 });
