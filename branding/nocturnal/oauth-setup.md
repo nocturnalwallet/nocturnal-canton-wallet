@@ -16,15 +16,24 @@ PKCE flow via `chrome.identity.launchWebAuthFlow()`:
 
 - Auth endpoint: `https://accounts.google.com/o/oauth2/v2/auth`
 - Scopes: `openid email profile`
-- Token exchange: `https://oauth2.googleapis.com/token` — sends `client_secret`,
-  so the OAuth client must be of type **Web application**.
-- The resulting Google **ID token** is forwarded to the backend `/auth/login`.
+- **Token exchange happens on the backend, not in the extension.** The extension
+  POSTs `{ code, codeVerifier, redirectUri }` to the backend
+  `/auth/login-with-google-code`; the backend holds the `client_secret` and
+  exchanges the code with Google. The OAuth client must still be of type
+  **Web application** (only that type accepts a `chromiumapp.org` redirect URI).
+- The `client_secret` is therefore **never bundled into the extension**.
 
-The client ID and secret are read from **`branding/nocturnal/.env`**
-(`VITE_GOOGLE_CLIENT_ID` / `VITE_GOOGLE_CLIENT_SECRET`). Copy
-`.env.example` → `.env` in this folder and fill them in. Do **not** put
-Nocturnal OAuth in the repo-root `.env` — that file is shared across brands
-and would contaminate Ginkgo builds.
+Only the public **client ID** is read from **`branding/nocturnal/.env`**
+(`VITE_GOOGLE_CLIENT_ID`). The **client secret** goes into the backend's
+environment (`GOOGLE_OAUTH_CLIENT_SECRET`). Copy `.env.example` → `.env` in this
+folder and fill in the client ID. Do **not** put Nocturnal OAuth in the repo-root
+`.env` — that file is shared across brands and would contaminate Ginkgo builds.
+
+> **Critical:** the backend's `GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET`
+> MUST be the **same** OAuth client as this `VITE_GOOGLE_CLIENT_ID`, with every
+> extension `chromiumapp.org` redirect URI (Chrome + Firefox) registered on it.
+> The auth code is bound to the initiating client, so a mismatch fails the
+> exchange with `invalid_grant` / `invalid_client`.
 
 ## Step 1 — Create a new Google Cloud project for Nocturnal
 
@@ -56,8 +65,8 @@ and would contaminate Ginkgo builds.
 1. **APIs & Services → Credentials → + Create credentials → OAuth client ID**.
 2. Application type: **Web application**.
    (Not "Chrome extension" — this flow uses `launchWebAuthFlow` with a
-   `chromiumapp.org` redirect and a client secret, which is the Web-application
-   pattern.)
+   `chromiumapp.org` redirect, which only the Web-application client type accepts.
+   The secret it issues lives on the backend, not in the extension.)
 3. Name: e.g. `Nocturnal extension`.
 4. Under **Authorized redirect URIs**, click **+ Add URI** and paste:
    `https://kipdkhhnfoggaalehloecmmlhpmbpkjk.chromiumapp.org/`
@@ -66,12 +75,15 @@ and would contaminate Ginkgo builds.
 
 ## Step 4 — Wire the credentials into the extension
 
-1. In **`branding/nocturnal/.env`** (create it from `.env.example` in the same folder), set:
+1. In **`branding/nocturnal/.env`** (create it from `.env.example` in the same folder), set
+   only the public client ID:
    ```
    VITE_GOOGLE_CLIENT_ID=<the Client ID from Step 3>
-   VITE_GOOGLE_CLIENT_SECRET=<the Client secret from Step 3>
    ```
-   That file is gitignored — do not commit real secrets. Do not put these in the repo-root `.env`.
+   The **Client secret from Step 3** does NOT go here — put it in the backend's
+   environment as `GOOGLE_OAUTH_CLIENT_SECRET` (alongside `GOOGLE_OAUTH_CLIENT_ID`
+   set to this same client ID). That file is gitignored — do not commit it. Do not
+   put OAuth values in the repo-root `.env`.
 2. Rebuild: `yarn build:nocturnal` (or restart `yarn dev:nocturnal`). Env vars are
    inlined at build time, so a change to the brand `.env` requires a rebuild.
 

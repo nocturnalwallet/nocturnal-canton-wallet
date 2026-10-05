@@ -34,9 +34,7 @@ function base64UrlEncode(bytes: Uint8Array): string {
 export async function handleGoogleAuth(): Promise<MessageResponse<GoogleAuthData>> {
   try {
     const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-    const GOOGLE_CLIENT_SECRET = import.meta.env.VITE_GOOGLE_CLIENT_SECRET;
     if (!GOOGLE_CLIENT_ID) return err('VITE_GOOGLE_CLIENT_ID is not configured');
-    if (!GOOGLE_CLIENT_SECRET) return err('VITE_GOOGLE_CLIENT_SECRET is not configured');
 
     const redirectUri = chrome.identity.getRedirectURL();
     console.log(`${brand.logTag} OAuth redirect URI:`, redirectUri);
@@ -74,33 +72,15 @@ export async function handleGoogleAuth(): Promise<MessageResponse<GoogleAuthData
     const code = url.searchParams.get('code');
     if (!code) return err('No authorization code in response');
 
-    // Step 2: Exchange code for tokens (client_secret required for "Web application" type)
-    const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        client_id: GOOGLE_CLIENT_ID,
-        client_secret: GOOGLE_CLIENT_SECRET,
-        code,
-        code_verifier: codeVerifier,
-        grant_type: 'authorization_code',
-        redirect_uri: redirectUri,
-      }),
-    });
-
-    if (!tokenRes.ok) {
-      const errBody = await tokenRes.text();
-      console.error(`${brand.logTag} Token exchange failed:`, errBody);
-      return err('Token exchange failed');
-    }
-
-    const tokenData = await tokenRes.json();
-    const idToken: string | undefined = tokenData.id_token;
-    if (!idToken) return err('No ID token from Google token exchange');
-
-    // Step 3: Send Google ID Token to backend (same credential format as the web app)
-    const { data: loginData } = await apiClient.post('/auth/login-with-google', {
-      credential: idToken,
+    // Step 2: Exchange the authorization code server-side. The backend holds the
+    // Google client_secret and performs the code→token exchange, so the secret is
+    // never bundled into the extension. We forward the PKCE code_verifier and the
+    // redirect_uri (Google re-validates both against the code).
+    // See: docs/superpowers/specs/2026-10-02-oauth-backend-proxy-design.md
+    const { data: loginData } = await apiClient.post('/auth/login-with-google-code', {
+      code,
+      codeVerifier,
+      redirectUri,
     });
 
     const { token, refreshToken, user } = loginData.data;

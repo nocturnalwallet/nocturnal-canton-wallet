@@ -75,20 +75,17 @@ const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 // ── Shared OAuth setup ──
 beforeEach(() => {
   vi.stubEnv('VITE_GOOGLE_CLIENT_ID', 'test-client-id');
-  vi.stubEnv('VITE_GOOGLE_CLIENT_SECRET', 'test-client-secret');
 
   // launchWebAuthFlow resolves with matching state + code
   (chrome.identity.launchWebAuthFlow as any).mockResolvedValue(
     `https://fake-extension-id.chromiumapp.org/?code=test-code&state=${FIXED_STATE}`,
   );
 
-  // fetch → token exchange
-  fetchMock.mockResolvedValue({
-    ok: true,
-    json: async () => ({ id_token: 'fake-id-token' }),
-  });
+  // fetch must NOT be used for a Google token exchange anymore (backend proxies it).
+  // Keep a stub so any stray call is observable rather than throwing.
+  fetchMock.mockReset();
 
-  // apiClient.post → /auth/login-with-google
+  // apiClient.post → /auth/login-with-google-code
   vi.mocked(apiClient.post).mockResolvedValue({
     data: { data: { token: 'tok', refreshToken: 'rtok', user: { id: 'u1', email: 'x@y' } } },
   } as any);
@@ -267,5 +264,62 @@ describe('handleGoogleAuth — shouldAutoRegisterPreapproval', () => {
     expect(sessionStore.set).toHaveBeenCalledWith('shouldAutoRegisterPreapproval', true);
     expect(result.success).toBe(true);
     if (result.success) expect(result.data.shouldAutoRegisterPreapproval).toBe(true);
+  });
+});
+
+describe('handleGoogleAuth — backend-proxy code exchange (no client_secret in client)', () => {
+  beforeEach(() => {
+    mockAuthMe({ partyId: 'p1', publicKey: PK_BACKEND, onboardingStatus: 'SUCCESSFULLY' });
+    vi.mocked(localStore.get).mockResolvedValue(null as any);
+  });
+
+  /** The single apiClient.post call to the code-exchange endpoint, if any. */
+  function codeExchangePayload(): Record<string, unknown> | undefined {
+    const call = vi
+      .mocked(apiClient.post)
+      .mock.calls.find(([url]) => url === '/auth/login-with-google-code');
+    return call?.[1] as Record<string, unknown> | undefined;
+  }
+
+  it('exchanges the code via POST /auth/login-with-google-code with { code, codeVerifier, redirectUri }', async () => {
+    const result = await handleGoogleAuth();
+    expect(result.success).toBe(true);
+
+    expect(apiClient.post).toHaveBeenCalledWith(
+      '/auth/login-with-google-code',
+      expect.objectContaining({
+        code: 'test-code',
+        redirectUri: 'https://fake-extension-id.chromiumapp.org/',
+        codeVerifier: expect.any(String),
+      }),
+    );
+
+    const payload = codeExchangePayload();
+    expect(typeof payload?.codeVerifier).toBe('string');
+    expect((payload?.codeVerifier as string).length).toBeGreaterThan(0);
+  });
+
+  it('never exchanges at Google and never posts to the old /auth/login-with-google endpoint', async () => {
+    await handleGoogleAuth();
+
+    const hitGoogle = fetchMock.mock.calls.some(
+      ([u]) => typeof u === 'string' && u.includes('oauth2.googleapis.com/token'),
+    );
+    expect(hitGoogle).toBe(false);
+
+    expect(apiClient.post).not.toHaveBeenCalledWith(
+      '/auth/login-with-google',
+      expect.anything(),
+    );
+  });
+
+  it('sends no client_secret / credential / grant_type anywhere', async () => {
+    await handleGoogleAuth();
+
+    const payload = codeExchangePayload();
+    expect(payload).toBeDefined();
+    expect(payload).not.toHaveProperty('client_secret');
+    expect(payload).not.toHaveProperty('credential');
+    expect(payload).not.toHaveProperty('grant_type');
   });
 });

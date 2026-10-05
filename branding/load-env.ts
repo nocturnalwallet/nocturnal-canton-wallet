@@ -1,14 +1,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-const OAUTH_KEYS = [
-  'VITE_GOOGLE_CLIENT_ID',
-  'VITE_GOOGLE_CLIENT_SECRET',
-] as const;
+// Only the public client_id is bundled. The client_secret stays on the backend,
+// which performs the Google auth-code exchange (see auth.handler.ts).
+const OAUTH_KEYS = ['VITE_GOOGLE_CLIENT_ID'] as const;
 
 export type BrandOauthEnv = {
   VITE_GOOGLE_CLIENT_ID: string;
-  VITE_GOOGLE_CLIENT_SECRET: string;
 };
 
 /**
@@ -48,7 +46,6 @@ export function loadBrandOauthEnv(brandRoot: string): BrandOauthEnv {
   }
   return {
     VITE_GOOGLE_CLIENT_ID: parsed.VITE_GOOGLE_CLIENT_ID ?? '',
-    VITE_GOOGLE_CLIENT_SECRET: parsed.VITE_GOOGLE_CLIENT_SECRET ?? '',
   };
 }
 

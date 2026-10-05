@@ -52,11 +52,10 @@ export default defineConfig({
       // Expose brand id for any runtime checks; primary selection is the @brand alias.
       'import.meta.env.VITE_BRAND': JSON.stringify(brandId),
       // Brand-pack OAuth always wins over root `.env` (empty if unset — no cross-brand leak).
+      // Only the public client_id is bundled; the client_secret lives on the backend,
+      // which performs the auth-code exchange (see auth.handler.ts).
       'import.meta.env.VITE_GOOGLE_CLIENT_ID': JSON.stringify(
         brandOauth.VITE_GOOGLE_CLIENT_ID,
-      ),
-      'import.meta.env.VITE_GOOGLE_CLIENT_SECRET': JSON.stringify(
-        brandOauth.VITE_GOOGLE_CLIENT_SECRET,
       ),
     },
     resolve: {
