@@ -26,7 +26,7 @@ const brand: BrandConfig = {
   networkApiBaseUrls: {
     localnet: 'http://localhost:3008/',
     devnet: 'https://wallet-api-devnet.nocturnal.xyz/',
-    testnet: 'https://api-testnet.donot.used/',
+    testnet: 'https://wallet-api-testnet.donot.use/',
     mainnet: 'https://wallet-api.nocturnal.xyz/',
   },
   welcomeBackgroundUrl: '/bg/skyline.jpg',

@@ -12,7 +12,6 @@ const brandOauth = loadBrandOauthEnv(brandRoot);
 
 const sharedHostPermissions = [
   'https://accounts.google.com/*',
-  'http://localhost/*',
 ];
 
 export default defineConfig({
