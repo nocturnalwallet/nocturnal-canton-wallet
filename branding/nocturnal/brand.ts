@@ -10,7 +10,7 @@ const brand: BrandConfig = {
   providerName: 'Nocturnal',
   partyHintDefault: 'nocturnal-wallet',
   logTag: '[Nocturnal]',
-  version: '0.5.1',
+  version: '0.5.2',
   // Aligned to the Chrome Web Store item's public key so the unpacked (local
   // dev) ID matches the published ID: kipdkhhnfoggaalehloecmmlhpmbpkjk.
   // OAuth redirect URI: https://kipdkhhnfoggaalehloecmmlhpmbpkjk.chromiumapp.org/
