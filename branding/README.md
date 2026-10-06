@@ -28,21 +28,21 @@ branding/<id>/
   public/           # toolbar icons, optional fonts/, bg/
   assets/           # PNGs imported by icon-logo (optional)
   .env.example      # tracked OAuth template
-  .env              # gitignored — VITE_GOOGLE_CLIENT_ID / SECRET for this brand only
+  .env              # gitignored — VITE_GOOGLE_CLIENT_ID for this brand (client secret is NOT bundled; it lives on the backend)
 ```
 
 `partyHintDefault` is the only onboarding party-hint source (do **not** set `VITE_PARTY_HINT` in root `.env`).
 
 ### Google OAuth (per brand)
 
-OAuth credentials must **not** live in the root `.env` — that would bake one client into every `VITE_BRAND` build. Instead:
+The OAuth **client ID** must **not** live in the root `.env` — that would bake one client into every `VITE_BRAND` build. Instead:
 
 ```bash
 cp branding/nocturnal/.env.example branding/nocturnal/.env
-# edit .env with the brand's Google Web-application client
+# edit .env with the brand's Google Web-application client ID (VITE_GOOGLE_CLIENT_ID)
 ```
 
-`wxt.config.ts` loads `branding/<active>/.env` and injects those values (empty if missing), so root `.env` cannot leak OAuth into the wrong brand.
+`wxt.config.ts` loads `branding/<active>/.env` and injects the client ID (empty if missing), so root `.env` cannot leak OAuth into the wrong brand. The Google **client secret is not bundled** — it lives on the backend (`GOOGLE_OAUTH_CLIENT_SECRET`), which exchanges the auth code via `POST /auth/login-with-google-code`; that backend client must match the brand's `VITE_GOOGLE_CLIENT_ID`.
 
 Shared contract: [`types.ts`](types.ts). Resolver used by `wxt.config.ts` / vitest:
 [`resolve.ts`](resolve.ts).
@@ -54,7 +54,7 @@ Shared contract: [`types.ts`](types.ts). Resolver used by `wxt.config.ts` / vite
 3. Drop icons/fonts/theme; implement `icon-logo.tsx`.
 4. Add `'fox'` to `BrandId` in `types.ts` and to `BRANDS` / `BRAND_IDS` in `resolve.ts`.
 5. Add scripts: `dev:fox`, `build:fox`, `build:prod:fox`.
-6. Register the OAuth redirect URI for the new extension ID; add `branding/fox/.env.example` and a local gitignored `.env` with that client's ID/secret.
+6. Register the OAuth redirect URI for the new extension ID; add `branding/fox/.env.example` and a local gitignored `.env` with that client's **ID only** (`VITE_GOOGLE_CLIENT_ID`). The client **secret is not bundled** — it goes on the backend, which performs the auth-code exchange via `POST /auth/login-with-google-code` (the backend's OAuth client must match this `VITE_GOOGLE_CLIENT_ID`).
 
 ## Future core-package split
 

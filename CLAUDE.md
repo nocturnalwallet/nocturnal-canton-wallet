@@ -40,7 +40,7 @@ The extension has three runtime contexts that communicate by message passing —
 
 ### Two messaging surfaces (both arrive at `background.ts`'s `onMessage` listeners)
 1. **Internal popup ↔ background** — `MessageRequest`/`MessageResponse` discriminated unions keyed on `action` (string constants in `lib/messaging/constants.ts` as `MSG`). The router is the `switch` in `routeMessage()`. Use `sendMessage<T>()` (popup) and `ok()`/`err()` (handlers) from `lib/messaging/protocol.ts`. **To add a feature:** add a `MSG.*` constant + request/response union member in `lib/messaging/`, write a handler in `entrypoints/background/handlers/`, and wire a `case` in `routeMessage()`.
-2. **CIP-0103 dApp API** — `SpliceMessage` objects from web pages, detected by `isSpliceMessage()` and dispatched in `dapp-api.handler.ts`. This listener is registered **first** so it intercepts dApp messages before the internal router.
+2. **CIP-0103 dApp API** — `SpliceMessage` objects from web pages, detected by `isSpliceMessage()` and dispatched in `dapp-api.handler.ts`. This listener is registered **first** so it intercepts dApp messages before the internal router. **Security note:** `buildStatusEvent()` deliberately **never emits the `session` object** — `status` is unauthenticated and reaches any `<all_urls>` origin, so returning `session.accessToken` (the backend Bearer token) would leak it. dApps reach the ledger via the wallet-proxied `ledgerApi`/`prepareExecute` methods instead. Don't re-add `session` without an origin allowlist.
 
 ### Backend (CIP-0103 facade — single backend per network)
 
@@ -70,7 +70,7 @@ This replaced an earlier dual-backend design (separate Wallet Gateway + Socket.i
 
 ## Conventions
 - Path aliases (in `wxt.config.ts` and `vitest.config.ts`): `@` (root), `@lib`, `@components`, `@assets`.
-- Auth: Google OAuth via `chrome.identity.launchWebAuthFlow()` with PKCE. The manifest `key` pins the extension ID so the OAuth redirect URI stays stable — **don't change `key`** without re-registering the redirect URI in Google Cloud Console.
+- Auth: Google OAuth via `chrome.identity.launchWebAuthFlow()` with PKCE. The authorization code is exchanged **server-side** — the extension POSTs `{code, codeVerifier, redirectUri}` to the backend `/auth/login-with-google-code`, which holds the Google `client_secret` and returns the session. **No `client_secret` is bundled into the extension.** The backend's OAuth client MUST be the same one as the brand's `VITE_GOOGLE_CLIENT_ID` (the code is client-bound), or `getToken` fails with `invalid_grant`. The manifest `key` pins the extension ID so the OAuth redirect URI stays stable — **don't change `key`** without re-registering the redirect URI in Google Cloud Console.
 - Validation with Zod (`lib/storage/schemas.ts`); state with Zustand; server state with TanStack Query.
 - The manifest is defined in `wxt.config.ts`, not a static `manifest.json`.
 

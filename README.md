@@ -11,7 +11,7 @@ Built with [WXT](https://wxt.dev), React 19, TypeScript, and Tailwind CSS 4. See
 - **Single-backend architecture** — one dapp-core service per network serves both the REST API (balances, transfers, offers, faucet, onboarding) and the CIP-0103 JSON-RPC facade (`prepareExecute`, `ledgerApi`). Both surfaces use the same backend Bearer token; the extension mints no JWTs and runs no signing relay.
 - **CIP-0103 dApp API** — Full Canton wallet standard: `connect`, `status`, `signMessage`, `prepareExecute`, `prepareExecuteAndWait`, `ledgerApi`, plus a non-standard `signTransaction` convenience method
 - **Local signing** — All transaction hashes are signed in the background service worker by extension-held keys; private keys never leave it
-- **Google OAuth sign-in** via `chrome.identity.launchWebAuthFlow()` with PKCE
+- **Google OAuth sign-in** via `chrome.identity.launchWebAuthFlow()` with PKCE (auth code exchanged server-side by the backend — no client secret in the bundle)
 - **Multi-network support** — Runtime switching between Localnet, Devnet, Testnet, and Mainnet, each with its own backend and explorer URL
 - **Per-user, per-network storage isolation** — Each user's keystore and onboarding state is scoped by `{network}:{userId}`, so switching networks or accounts never leaks data
 - **Token balances** — Amulet/CC, CBTC, USDCx with locked/unlocked breakdown
@@ -50,18 +50,18 @@ cp .env.example .env
 cp branding/nocturnal/.env.example branding/nocturnal/.env
 ```
 
-Fill Google OAuth into the **brand pack's** `.env` (`branding/nocturnal/.env`), not the root `.env`. Root `.env` holds shared non-secret build defaults (encryption, auto-lock). See [branding/README.md](branding/README.md).
+Fill the Google OAuth **client ID** into the **brand pack's** `.env` (`branding/nocturnal/.env`), not the root `.env`. The **client secret is not bundled** — it lives on the backend, which performs the auth-code exchange (see below). Root `.env` holds shared non-secret build defaults (encryption, auto-lock). See [branding/README.md](branding/README.md).
 
 ### Google OAuth Setup
 
-The extension uses `chrome.identity.launchWebAuthFlow()` to sign in with Google. This requires registering the extension's redirect URI in Google Cloud Console:
+The extension uses `chrome.identity.launchWebAuthFlow()` + PKCE to obtain a Google authorization code, then POSTs `{code, codeVerifier, redirectUri}` to the backend `POST /auth/login-with-google-code`. **The backend holds the `client_secret` and exchanges the code server-side** — the extension bundles only the public client ID. (The backend's OAuth client must be the *same* one as the brand's `VITE_GOOGLE_CLIENT_ID`, or the exchange fails with `invalid_grant`.) Registering the extension's redirect URI in Google Cloud Console:
 
 1. Go to [Google Cloud Console](https://console.cloud.google.com/) > APIs & Services > Credentials
-2. Edit the OAuth 2.0 Client ID used by the web app
+2. Edit the OAuth 2.0 Client ID (must be type **Web application**)
 3. Under **Authorized redirect URIs**, add:
 
    ```text
-   https://nedmfnmjfdneopknpheohpcngdaeipec.chromiumapp.org/
+   https://kipdkhhnfoggaalehloecmmlhpmbpkjk.chromiumapp.org/
    ```
 
    > This URI is derived from the `key` field in the manifest. If you change the key, the extension ID and redirect URI will change. Run the extension and check the service worker console for the logged redirect URI.
@@ -164,7 +164,7 @@ The extension uses dapp-core's REST endpoints for **all popup-driven wallet oper
 
 | Area | Endpoints | Description |
 | --- | --- | --- |
-| **Authentication** | `POST /auth/login-with-google` | Exchange Google ID token for session |
+| **Authentication** | `POST /auth/login-with-google-code` | Exchange Google auth code (+ PKCE verifier) for a session — backend does the Google token exchange server-side |
 | | `POST /auth/refresh-token` | Refresh expired JWT |
 | | `GET /auth/me` | Fetch user profile + party info |
 | **Onboarding** | `POST /external-party/onboarding/prepare` | Backend prepares a party-allocation topology tx (`{partyId, multiHash, topologyTransactions}`) |
@@ -318,8 +318,9 @@ Brand pack OAuth (gitignored `branding/nocturnal/.env`):
 
 | Variable | Description |
 | --- | --- |
-| `VITE_GOOGLE_CLIENT_ID` | Google OAuth client ID for the extension ID / redirect URI |
-| `VITE_GOOGLE_CLIENT_SECRET` | Google OAuth client secret (Web application client) |
+| `VITE_GOOGLE_CLIENT_ID` | Google OAuth client ID for the extension ID / redirect URI (public — the only OAuth value bundled) |
+
+> The Google **client secret is not bundled** into the extension. It lives on the backend (`GOOGLE_OAUTH_CLIENT_SECRET`), which performs the auth-code exchange via `POST /auth/login-with-google-code`. The backend's OAuth client must match this `VITE_GOOGLE_CLIENT_ID`.
 
 > **Note:** Backend URLs come from the selected network via the brand pack (`branding/nocturnal/brand.ts` → `networkApiBaseUrls`). Party hint also comes from `branding/nocturnal/brand.ts` (see [branding/README.md](branding/README.md)).
 
@@ -453,7 +454,7 @@ CIP-0103 dApp requests do **not** use the `MSG` protocol — they arrive as `Spl
 
 ```text
 Welcome -> Google sign-in
-  |  (1) POST /auth/login-with-google -> backend
+  |  (1) POST /auth/login-with-google-code -> backend (server-side code exchange)
   |  (2) GET /auth/me -> get party status
   -> CreatePassword (8+ chars, upper, lower, digit, special)
   -> KeySetup (auto-generate key pair)
@@ -610,7 +611,7 @@ Defined in `lib/constants.ts` (`SUPPORTED_TOKENS`). All three use Daml's `Numeri
 | `storage` | Encrypted keystore (`chrome.storage.local`) and session tokens (`chrome.storage.session`) |
 | `identity` | Google OAuth via `chrome.identity.launchWebAuthFlow()` |
 | `alarms` | Auto-lock timer |
-| `host_permissions` | Google OAuth, dapp-core backends (`*.kairo.ag`, plus per-brand extras e.g. `*.thanhle.space`), and localdev (`localhost`) |
+| `host_permissions` | Google OAuth (`accounts.google.com`) and the Nocturnal dapp-core backends (`*.nocturnal.xyz`, from the brand pack's `hostPermissions` / `networkApiBaseUrls`) |
 | `web_accessible_resources` | Lets dApp multi-wallet pickers fetch the brand icon from the `announceProvider` event |
 
 The manifest is built in `wxt.config.ts` from the active brand pack (name, version, `key`, host_permissions). Each brand's `manifestKey` pins a distinct extension ID / OAuth redirect — **do not change a pack's key** without re-registering the redirect URI.
