@@ -56,12 +56,16 @@ export async function handlePrepareTransferPreapproval(
   payload: PrepareTransferProps,
 ): Promise<MessageResponse<PrepareData>> {
   try {
-    const { data } = await apiClient.post('/transfer-offer/prepare', {
+    const body: Record<string, unknown> = {
       assetId: 'Amulet',
       assetAmount: String(payload.amount),
       receiverPartyId: payload.receiverPartyId,
-      reason: payload.reason,
-    });
+    };
+    // Optional public on-chain memo — include only when non-empty (never send an
+    // empty string; empty metadata still costs Canton traffic, billed per byte).
+    if (payload.reason) body.reason = payload.reason;
+
+    const { data } = await apiClient.post('/transfer-offer/prepare', body);
     return ok({ preparedData: data.data });
   } catch (e: unknown) {
     return err(getErrorMessage(e, 'Prepare transfer failed'));
@@ -72,10 +76,11 @@ export async function handlePrepareTransferTokenStandard(
   payload: PrepareTransferTokenStandardProps,
 ): Promise<MessageResponse<PrepareData>> {
   try {
-    const { data } = await apiClient.post(
-      '/transfer-offer/prepare',
-      payload,
-    );
+    // Drop an empty memo so no `reason` key reaches the wire (see note above).
+    const { reason, ...rest } = payload;
+    const body = reason ? { ...rest, reason } : rest;
+
+    const { data } = await apiClient.post('/transfer-offer/prepare', body);
     return ok({ preparedData: data.data });
   } catch (e: unknown) {
     return err(getErrorMessage(e, 'Prepare transfer failed'));

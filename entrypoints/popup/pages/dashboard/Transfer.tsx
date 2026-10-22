@@ -10,7 +10,6 @@ import {
 import { useBalances } from '../../hooks/useBalances';
 import { useNetwork } from '../../hooks/useNetwork';
 import { PreparedFeeSection } from '@components/common/PreparedFeeSection';
-import brand from '@brand/brand';
 import type {
   PrepareTransferResponse,
   PrepareTransferTokenStandardResponse,
@@ -18,9 +17,13 @@ import type {
 import { transactionExplorerUrl } from '@lib/network';
 import BigNumber from 'bignumber.js';
 
+// Memo is written to public on-chain metadata (billed per byte), so cap its length.
+const MEMO_MAX_LENGTH = 140;
+
 export function Transfer() {
   const [recipient, setRecipient] = useState('');
   const [amount, setAmount] = useState('');
+  const [memo, setMemo] = useState('');
   const [tokenId, setTokenId] = useState('Amulet');
   const [password, setPassword] = useState('');
   const [step, setStep] = useState<'form' | 'confirm' | 'success'>('form');
@@ -56,20 +59,22 @@ export function Transfer() {
 
   const handlePrepare = async () => {
     setError('');
+    // Optional public on-chain memo — omit entirely when blank (never send "").
+    const reason = memo.trim() || undefined;
     try {
       let result;
       if (isAmulet) {
         result = await prepareAmulet.mutateAsync({
           receiverPartyId: recipient,
           amount,
-          reason: `Transfer from ${brand.displayName}`,
+          reason,
         });
       } else {
         result = await prepareStandard.mutateAsync({
           assetId: tokenId,
           assetAmount: amount,
           receiverPartyId: recipient,
-          reason: `Transfer from ${brand.displayName}`,
+          reason,
           // milliseconds — backend computes executeBefore = now + maxTimeToExecute
           maxTimeToExecute: 24 * 60 * 60 * 1000,
         });
@@ -127,6 +132,7 @@ export function Transfer() {
             setStep('form');
             setRecipient('');
             setAmount('');
+            setMemo('');
             setPassword('');
             setPreparedData(null);
             setUpdateId(null);
@@ -156,6 +162,12 @@ export function Transfer() {
             <span className="text-muted-foreground">Recipient</span>
             <span className="text-foreground bg-background rounded-lg px-2 py-1.5 font-mono text-xs break-all">{recipient}</span>
           </div>
+          {memo.trim() && (
+            <div className="flex flex-col gap-1 pt-1">
+              <span className="text-muted-foreground">Memo (public)</span>
+              <span className="text-foreground bg-background rounded-lg px-2 py-1.5 text-xs break-words">{memo.trim()}</span>
+            </div>
+          )}
         </div>
 
         {preparedData?.fee && <PreparedFeeSection fee={preparedData.fee} />}
@@ -260,6 +272,29 @@ export function Transfer() {
             </button>
           )}
         </div>
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between">
+          <label htmlFor="transfer-memo" className="text-muted-foreground text-sm">
+            Memo (optional)
+          </label>
+          <span className="text-muted-foreground text-xs tabular-nums">
+            {memo.length}/{MEMO_MAX_LENGTH}
+          </span>
+        </div>
+        <input
+          id="transfer-memo"
+          type="text"
+          value={memo}
+          maxLength={MEMO_MAX_LENGTH}
+          onChange={(e) => setMemo(e.target.value.slice(0, MEMO_MAX_LENGTH))}
+          className="border-primary/20 bg-primary/5 text-foreground focus:border-primary focus:ring-primary mt-1 w-full rounded-lg border px-4 py-3 text-sm outline-none focus:ring-1"
+          placeholder="e.g. invoice #42"
+        />
+        <p className="text-muted-foreground mt-1 text-xs">
+          Visible on the public ledger — don&apos;t include anything private.
+        </p>
       </div>
 
       {error && (

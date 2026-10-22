@@ -1,7 +1,8 @@
 export interface PrepareTransferProps {
   receiverPartyId: string;
   amount: string | number;
-  reason: string;
+  /** Optional public on-chain memo. Omitted from the request when empty. */
+  reason?: string;
 }
 
 /** Display subset of backend FeeLine (kairo traffic-fee.types.ts). */
@@ -38,7 +39,8 @@ export interface PrepareTransferTokenStandardProps {
   assetId: string;
   assetAmount: string;
   receiverPartyId: string;
-  reason: string;
+  /** Optional public on-chain memo. Omitted from the request when empty. */
+  reason?: string;
   maxTimeToExecute: number;
 }
 

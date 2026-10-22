@@ -18,7 +18,11 @@ vi.mock('../signing/sign-with-password', () => ({
 import { sessionStore } from '@lib/storage';
 import apiClient from '../api-client';
 import { signHashWithPassword } from '../signing/sign-with-password';
-import { handleRequestFaucet } from './api.handler';
+import {
+  handleRequestFaucet,
+  handlePrepareTransferPreapproval,
+  handlePrepareTransferTokenStandard,
+} from './api.handler';
 
 describe('handleRequestFaucet', () => {
   beforeEach(() => {
@@ -88,5 +92,75 @@ describe('handleRequestFaucet', () => {
 
     expect(res).toEqual({ success: false, error: 'No party ID' });
     expect(apiClient.post).not.toHaveBeenCalled();
+  });
+});
+
+// The transfer memo is an optional, PUBLIC on-chain field (`reason`). It must be
+// sent only when the user typed one — never as an empty string (empty metadata
+// still costs Canton traffic, billed per byte).
+describe('transfer prepare — optional reason/memo', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(apiClient.post).mockResolvedValue({
+      data: { data: { preparedTransaction: 'TX', preparedTransactionHash: 'H' } },
+    } as never);
+  });
+
+  function postedBody(): Record<string, unknown> {
+    return vi.mocked(apiClient.post).mock.calls[0][1] as Record<string, unknown>;
+  }
+
+  describe('handlePrepareTransferPreapproval (Amulet)', () => {
+    it('includes reason when a memo is provided', async () => {
+      await handlePrepareTransferPreapproval({
+        receiverPartyId: 'party-x',
+        amount: '1.5',
+        reason: 'lunch money',
+      });
+      expect(postedBody()).toMatchObject({
+        assetId: 'Amulet',
+        assetAmount: '1.5',
+        receiverPartyId: 'party-x',
+        reason: 'lunch money',
+      });
+    });
+
+    it('omits reason when the memo is an empty string', async () => {
+      await handlePrepareTransferPreapproval({
+        receiverPartyId: 'party-x',
+        amount: '1.5',
+        reason: '',
+      });
+      expect('reason' in postedBody()).toBe(false);
+    });
+
+    it('omits reason when no memo is passed', async () => {
+      await handlePrepareTransferPreapproval({
+        receiverPartyId: 'party-x',
+        amount: '1.5',
+      });
+      expect('reason' in postedBody()).toBe(false);
+    });
+  });
+
+  describe('handlePrepareTransferTokenStandard', () => {
+    const base = {
+      assetId: 'CBTC',
+      assetAmount: '2',
+      receiverPartyId: 'party-y',
+      maxTimeToExecute: 86_400_000,
+    };
+
+    it('includes reason when a memo is provided', async () => {
+      await handlePrepareTransferTokenStandard({ ...base, reason: 'invoice #42' });
+      expect(postedBody()).toMatchObject({ ...base, reason: 'invoice #42' });
+    });
+
+    it('omits reason when empty, keeping the rest of the payload', async () => {
+      await handlePrepareTransferTokenStandard({ ...base, reason: '' });
+      const body = postedBody();
+      expect('reason' in body).toBe(false);
+      expect(body).toMatchObject(base);
+    });
   });
 });
